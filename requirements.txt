@@ -2,8 +2,9 @@ fastapi
 uvicorn[standard]
 httpx
 beautifulsoup4
-faiss-cpu
+pymilvus
 python-dotenv
 numpy
 sqlalchemy
 aiosqlite
+greenlet

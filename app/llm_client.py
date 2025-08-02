@@ -3,7 +3,7 @@ from typing import List
 from app.config import LLM_SERVICE_URL
 
 
-DEFAULT_CHAT_MODEL = "gpt-3.5-turbo"
+DEFAULT_CHAT_MODEL = "qwen/qwq-32b"
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
@@ -21,10 +21,10 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.2,
+        "temperature": 0.6,
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=600) as client:
         response = await client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()

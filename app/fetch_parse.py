@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 async def fetch_html(url: str, timeout: float = 10.0) -> str:
     """使用 httpx 异步获取网页原始 HTML。"""
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=True) as client:
         response = await client.get(url, timeout=timeout)
         response.raise_for_status()
         return response.text

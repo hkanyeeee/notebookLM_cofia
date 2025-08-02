@@ -1,65 +1,116 @@
 import os
-import numpy as np
-import faiss
 from typing import List, Tuple
+
+import numpy as np  # 仅用于类型提示，可按需移除
 from sqlalchemy import select
+
 from app.database import get_db
 from app.models import Chunk
+from app.config import MILVUS_HOST, MILVUS_PORT
 
-# FAISS 索引文件路径
-INDEX_PATH = "./data/faiss.index"
+# ---------------- Milvus ----------------
+from pymilvus import (
+    connections,
+    FieldSchema,
+    CollectionSchema,
+    DataType,
+    Collection,
+    utility,
+)
 
-def _get_index(dim: int):
-    """加载或创建 FAISS 索引，使用 IndexIDMap 来支持自定义 ID"""
-    if not hasattr(_get_index, "index"):
-        if os.path.exists(INDEX_PATH):
-            idx = faiss.read_index(INDEX_PATH)
-            if not isinstance(idx, faiss.IndexIDMap):
-                idx = faiss.IndexIDMap(idx)
-        else:
-            idx = faiss.IndexIDMap(faiss.IndexFlatL2(dim))
-        _get_index.index = idx
-    return _get_index.index
+COLLECTION_NAME = os.getenv("MILVUS_COLLECTION_NAME", "chunk_embeddings")
 
-def _save_index():
-    """将 FAISS 索引写回磁盘"""
-    faiss.write_index(_get_index.index, INDEX_PATH)
+
+def _connect_if_needed() -> None:
+    """确保与 Milvus 建立连接。"""
+    if not connections.has_connection("default"):
+        connections.connect(alias="default", host=MILVUS_HOST, port=MILVUS_PORT)
+
+
+def _get_collection(dim: int) -> Collection:
+    """获取（或创建）Milvus collection。"""
+    _connect_if_needed()
+
+    if COLLECTION_NAME in utility.list_collections():
+        col = Collection(name=COLLECTION_NAME)
+        # 校验维度是否匹配
+        existing_dim = next(
+            f.params["dim"] for f in col.schema.fields if f.name == "embedding"
+        )
+        if existing_dim != dim:
+            raise ValueError(
+                f"现有 Milvus collection 维度为 {existing_dim}，与当前嵌入向量维度 {dim} 不一致"
+            )
+    else:
+        id_field = FieldSchema(
+            name="id", dtype=DataType.INT64, is_primary=True, auto_id=False
+        )
+        emb_field = FieldSchema(
+            name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim
+        )
+        schema = CollectionSchema(fields=[id_field, emb_field], description="Chunk embeddings")
+        col = Collection(name=COLLECTION_NAME, schema=schema)
+        # 创建向量索引，提高检索性能（IVF_FLAT + L2）
+        index_params = {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 2048}}
+        col.create_index(field_name="embedding", index_params=index_params)
+    # 加载到内存，用于搜索
+    if utility.load_state(COLLECTION_NAME) != "Loaded":
+        col.load()
+    return col
+
 
 async def add_embeddings(url: str, chunks: List[str], embeddings: List[List[float]]) -> None:
-    """将 embeddings 存入 FAISS，并将 Chunk 元数据存入 SQLite"""
-    # 插入元数据到 SQLite
+    """将嵌入向量写入 Milvus，并把元数据写入 SQLite。"""
+    # 1. metadata -> SQLite
     async for session in get_db():
-        models = [Chunk(url=url, content=chunk) for chunk in chunks]
+        models = [Chunk(url=url, content=c) for c in chunks]
         session.add_all(models)
         await session.flush()
-        ids = [model.id for model in models]
+        ids = [m.id for m in models]  # 作为 Milvus 主键
         await session.commit()
         break
-    # 添加 vectors 到 FAISS
+
+    # 2. vectors -> Milvus
     dim = len(embeddings[0])
-    idx = _get_index(dim)
-    np_emb = np.array(embeddings, dtype="float32")
-    idx.add_with_ids(np_emb, np.array(ids, dtype="int64"))
-    _save_index()
+    col = _get_collection(dim)
+    entities = [ids, embeddings]
+    col.insert(entities)
+    col.flush()
+    print(f"Entities in collection after insert: {col.num_entities}")
+
 
 async def query_embeddings(query_embedding: List[float], top_k: int = 5) -> List[Tuple[Chunk, float]]:
-    """根据 query vector 从 FAISS 检索，返回最相似的 Chunk 及距离"""
+    """按向量相似度查询 Milvus，返回 (Chunk, distance) 列表。"""
     dim = len(query_embedding)
-    idx = _get_index(dim)
-    vec = np.array(query_embedding, dtype="float32").reshape(1, -1)
-    distances, ids = idx.search(vec, top_k)
+    col = _get_collection(dim)
+    
+    print(f"Entities in collection before search: {col.num_entities}")
 
-    id_list = ids[0].tolist()
-    # 查询元数据
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    results = col.search(
+        data=[query_embedding],
+        anns_field="embedding",
+        param=search_params,
+        limit=top_k,
+        output_fields=["id"],
+    )
+    hits = results[0]
+    if not hits:
+        return []
+        
+    id_list = [hit.id for hit in hits]
+    distance_list = [hit.distance for hit in hits]
+
+    # 3. metadata from SQLite
     async for session in get_db():
         stmt = select(Chunk).where(Chunk.id.in_(id_list))
         res = await session.execute(stmt)
         chunks = res.scalars().all()
         break
-    # 按搜索结果顺序构建输出
+
     id_to_chunk = {chunk.id: chunk for chunk in chunks}
-    result: List[Tuple[Chunk, float]] = []
-    for i, cid in enumerate(id_list):
-        if cid in id_to_chunk:
-            result.append((id_to_chunk[cid], float(distances[0][i])))
-    return result
+    return [
+        (id_to_chunk[cid], float(dist))
+        for cid, dist in zip(id_list, distance_list)
+        if cid in id_to_chunk
+    ]
