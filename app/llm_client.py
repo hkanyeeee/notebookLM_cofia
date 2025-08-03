@@ -3,6 +3,7 @@ from typing import List
 from app.config import LLM_SERVICE_URL
 
 
+# DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
 DEFAULT_CHAT_MODEL = "qwen/qwq-32b"
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:
