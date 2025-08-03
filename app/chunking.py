@@ -1,36 +1,33 @@
-import re
+import tiktoken
 from typing import List
 
-def chunk_text(text: str, sentences_per_chunk: int = 7, overlap_sentences: int = 2) -> List[str]:
-    """
-    使用正则表达式将文本按句子分割成多个重叠的块。
-    这是一个不依赖外部库的健壮实现。
 
-    :param text: 要分块的原始文本。
-    :param sentences_per_chunk: 每个块中大致包含的句子数量。
-    :param overlap_sentences: 块与块之间重叠的句子数量。
-    :return: 文本块的列表。
+def chunk_text(text: str, tokens_per_chunk: int = 1000, overlap_tokens: int = 100) -> List[str]:
     """
-    # 正则表达式，用于匹配句子结束符（.!?）以及换行符
-    # Positive lookbehind `(?<=[.!?\n])` 确保分隔符本身被保留在句子末尾
-    sentence_enders = re.compile(r'(?<=[.!?\n])\s+')
-    sentences = sentence_enders.split(text)
-    
-    # 过滤掉可能产生的空字符串
-    sentences = [s.strip() for s in sentences if s.strip()]
-    
+    使用 tiktoken 将文本编码为 token 后，按固定 token 数量切分为多个重叠块。
+
+    :param text: 原始文本
+    :param tokens_per_chunk: 每个 chunk 包含的 token 数，默认 1000
+    :param overlap_tokens: 相邻 chunk 之间重叠的 token 数，默认 100
+    :return: 文本块列表
+    """
+    # 获取 tiktoken 的 cl100k_base 编码器（与 OpenAI GPT-4 / 3.5 默认一致）
+    encoding = tiktoken.get_encoding("cl100k_base")
+    tokens = encoding.encode(text)
+
     chunks = []
-    start_index = 0
-    
-    # 使用滑动窗口的方式来创建重叠的块
-    while start_index < len(sentences):
-        end_index = min(start_index + sentences_per_chunk, len(sentences))
-        chunk = " ".join(sentences[start_index:end_index])
-        chunks.append(chunk)
-        
-        if end_index == len(sentences):
+    start = 0
+    while start < len(tokens):
+        end = min(start + tokens_per_chunk, len(tokens))
+        chunk_tokens = tokens[start:end]
+        chunk_text_str = encoding.decode(chunk_tokens)
+        chunks.append(chunk_text_str)
+
+        # 如果已经到了文本末尾，则退出循环
+        if end == len(tokens):
             break
-            
-        start_index += (sentences_per_chunk - overlap_sentences)
-        
+
+        # 滑动窗口步长，保证 chunk 之间有重叠部分
+        start += max(tokens_per_chunk - overlap_tokens, 1)
+
     return chunks

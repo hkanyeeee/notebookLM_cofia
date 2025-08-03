@@ -23,8 +23,14 @@ COLLECTION_NAME = os.getenv("MILVUS_COLLECTION_NAME", "chunk_embeddings")
 
 def _connect_if_needed() -> None:
     """确保与 Milvus 建立连接。"""
-    if not connections.has_connection("default"):
-        connections.connect(alias="default", host=MILVUS_HOST, port=MILVUS_PORT)
+    try:
+        if not connections.has_connection("default"):
+            print(f"正在连接 Milvus: {MILVUS_HOST}:{MILVUS_PORT}")
+            connections.connect(alias="default", host=MILVUS_HOST, port=MILVUS_PORT)
+            print("Milvus 连接成功")
+    except Exception as e:
+        print(f"Milvus 连接失败: {e}")
+        raise e
 
 
 def _get_collection(dim: int) -> Collection:
@@ -63,20 +69,31 @@ async def add_embeddings(url: str, chunks: List[str], embeddings: List[List[floa
     """将嵌入向量写入 Milvus，并把元数据写入 SQLite。"""
     # 1. metadata -> SQLite
     async for session in get_db():
-        models = [Chunk(url=url, content=c) for c in chunks]
-        session.add_all(models)
-        await session.flush()
-        ids = [m.id for m in models]  # 作为 Milvus 主键
-        await session.commit()
-        break
-
-    # 2. vectors -> Milvus
-    dim = len(embeddings[0])
-    col = _get_collection(dim)
-    entities = [ids, embeddings]
-    col.insert(entities)
-    col.flush()
-    print(f"Entities in collection after insert: {col.num_entities}")
+        try:
+            models = [Chunk(url=url, content=c) for c in chunks]
+            session.add_all(models)
+            await session.flush()
+            ids = [m.id for m in models]  # 作为 Milvus 主键
+            await session.commit()
+            
+            # 2. vectors -> Milvus
+            try:
+                dim = len(embeddings[0])
+                col = _get_collection(dim)
+                entities = [ids, embeddings]
+                col.insert(entities)
+                col.flush()
+                print(f"Entities in collection after insert: {col.num_entities}")
+            except Exception as e:
+                print(f"Milvus 插入失败: {e}")
+                # 如果 Milvus 插入失败，回滚 SQLite 事务
+                await session.rollback()
+                raise e
+            break
+        except Exception as e:
+            print(f"数据库操作失败: {e}")
+            await session.rollback()
+            raise e
 
 
 async def query_embeddings(query_embedding: List[float], top_k: int = 5) -> List[Tuple[Chunk, float]]:

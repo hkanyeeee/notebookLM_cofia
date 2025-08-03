@@ -5,5 +5,5 @@ class Chunk(Base):
     __tablename__ = "chunks"
 
     id = Column(Integer, primary_key=True, index=True)
-    url = Column(String, index=True)
+    url = Column(String(500), index=True)  # 添加长度限制
     content = Column(Text)
