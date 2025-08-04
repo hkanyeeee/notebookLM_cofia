@@ -377,8 +377,65 @@ function formatTime(date: Date) {
 }
 </style>
 <style>
+/* Markdown 内容的全局样式 */
 .message-text p {
   margin-top: 0;
+  margin-bottom: 1em;
+}
+.message-text h1,
+.message-text h2,
+.message-text h3,
+.message-text h4,
+.message-text h5,
+.message-text h6 {
+  margin-top: 1.5em;
+  margin-bottom: 1em;
+  font-weight: 600;
+}
+.message-text h1 {
+  font-size: 1.75em;
+}
+.message-text h2 {
+  font-size: 1.5em;
+}
+.message-text h3 {
+  font-size: 1.25em;
+}
+.message-text ul,
+.message-text ol {
+  padding-left: 2em;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+.message-text li {
   margin-bottom: 0.5em;
+}
+.message-text blockquote {
+  padding: 0.5em 1em;
+  margin: 1em 0;
+  color: #6b7280;
+  border-left: 0.25em solid #e5e7eb;
+  background: #f9fafb;
+}
+.message-text pre {
+  background: #f3f4f6;
+  padding: 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.message-text code {
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+  background-color: rgba(27, 31, 35, 0.05);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+}
+.message-text pre > code {
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+  background-color: transparent;
+  border-radius: 0;
 }
 </style>

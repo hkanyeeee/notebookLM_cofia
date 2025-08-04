@@ -1,9 +1,33 @@
-from sqlalchemy import Column, Integer, String, Text
-from app.database import Base
+from sqlalchemy import String, Integer, Text, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import List
+
+class Base(DeclarativeBase):
+    pass
+
+class Source(Base):
+    __tablename__ = "sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    url: Mapped[str] = mapped_column(String(500), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    session_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+
+    chunks: Mapped[List["Chunk"]] = relationship("Chunk", back_populates="source", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Source(id={self.id}, url='{self.url[:30]}...', session_id='{self.session_id}')>"
 
 class Chunk(Base):
     __tablename__ = "chunks"
 
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String(500), index=True)  # 添加长度限制
-    content = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
+    session_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+
+    source: Mapped["Source"] = relationship("Source", back_populates="chunks")
+
+    def __repr__(self) -> str:
+        return f"<Chunk(id={self.id}, source_id={self.source_id}, session_id='{self.session_id}')>"

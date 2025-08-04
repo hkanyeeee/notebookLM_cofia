@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useSessionStore } from '@/stores/session'
 
 // API基础配置
 const API_BASE_URL = 'http://localhost:8000'
@@ -7,20 +8,27 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 300000, // 300秒超时
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 })
 
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
+    const sessionStore = useSessionStore()
+    const sessionId = sessionStore.getSessionId()
+
+    if (sessionId && config.headers) {
+      config.headers['X-Session-ID'] = sessionId
+    }
+
     console.log('API请求:', config.method?.toUpperCase(), config.url, config.data)
     return config
   },
   (error) => {
     console.error('请求错误:', error)
     return Promise.reject(error)
-  },
+  }
 )
 
 // 响应拦截器
@@ -32,7 +40,7 @@ api.interceptors.response.use(
   (error) => {
     console.error('响应错误:', error.response?.status, error.response?.data)
     return Promise.reject(error)
-  },
+  }
 )
 
 // 接口类型定义
@@ -62,16 +70,24 @@ export interface QueryResponse {
 // API方法
 export const notebookApi = {
   // 添加文档（摄取网址内容）
-  async ingestDocument(url: string, embedding_model: string = 'Qwen/Qwen3-Embedding-4B', embedding_dimensions: number = 2560): Promise<IngestResponse> {
+  async ingestDocument(
+    url: string,
+    embedding_model: string = 'Qwen/Qwen3-Embedding-4B',
+    embedding_dimensions: number = 2560
+  ): Promise<IngestResponse> {
     try {
-      const response = await api.post<IngestResponse>('/ingest', { url, embedding_model, embedding_dimensions })
+      const response = await api.post<IngestResponse>('/ingest', {
+        url,
+        embedding_model,
+        embedding_dimensions
+      })
       return response.data
     } catch (error: any) {
       return {
         success: false,
         document_id: '',
         title: '',
-        message: error.message,
+        message: error.message
       }
     }
   },
@@ -81,7 +97,7 @@ export const notebookApi = {
     try {
       const response = await api.post<QueryResponse>('/query', {
         query,
-        document_ids: documentIds,
+        document_ids: documentIds
       })
       return response.data
     } catch (error: any) {
@@ -89,8 +105,19 @@ export const notebookApi = {
         success: false,
         answer: '',
         sources: [],
-        message: error.message,
+        message: error.message
       }
     }
-  },
+  }
+}
+
+/**
+ * 在页面关闭前，通知后端清理会话数据
+ * @param sessionId
+ */
+export function cleanupSession(sessionId: string) {
+  const url = `${API_BASE_URL}/api/session/cleanup`
+  const data = new Blob([JSON.stringify({ session_id: sessionId })], { type: 'application/json' })
+  navigator.sendBeacon(url, data)
+  console.log(`Sent cleanup beacon for session: ${sessionId}`)
 }

@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import os
 from sqlalchemy import text
 from app.database import engine, Base
 from app.models import Chunk

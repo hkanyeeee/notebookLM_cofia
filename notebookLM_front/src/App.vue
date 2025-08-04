@@ -1,10 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
+import { useSessionStore } from './stores/session'
+import { cleanupSession } from './api/notebook'
 
-// 控制侧边栏是否展开（响应式设计）
 const sidebarCollapsed = ref(false)
+const sessionStore = useSessionStore()
+
+onMounted(() => {
+  sessionStore.initializeSession()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+  const sessionId = sessionStore.getSessionId()
+  if (sessionId) {
+    // 使用 navigator.sendBeacon 来确保请求在页面关闭前能被发送
+    cleanupSession(sessionId)
+  }
+}
 </script>
 
 <template>

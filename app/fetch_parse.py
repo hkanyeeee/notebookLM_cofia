@@ -9,14 +9,14 @@ async def fetch_html(url: str, timeout: float = 10.0) -> str:
         return response.text
 
 
-def extract_text(html: str) -> str:
+def extract_text(html: str, selector: str = "article") -> str:
     """使用 BeautifulSoup 提取主要文本内容，优先 article 标签，后备 p 标签。"""
     soup = BeautifulSoup(html, "html.parser")
     # 移除不需要的标签
     for tag in soup(["script", "style", "header", "footer", "nav", "aside"]):
         tag.decompose()
-    # 尝试提取 article 标签中的内容
-    article = soup.find("article")
+    # 尝试提取 selector 中的内容
+    article = soup.find(selector)
     if article:
         return article.get_text(separator="\n", strip=True)
     # 后备：提取所有 p 标签

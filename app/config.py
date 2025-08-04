@@ -1,10 +1,29 @@
 from dotenv import dotenv_values
+import os
 
 # Load variables directly from project-root .env file
+# Use os.getenv as a fallback for containerized environments
 config = dotenv_values(".env")
-DATABASE_URL = config.get("DATABASE_URL")
-EMBEDDING_SERVICE_URL = config.get("EMBEDDING_SERVICE_URL")
-LLM_SERVICE_URL = config.get("LLM_SERVICE_URL")
-MILVUS_HOST = config.get("MILVUS_HOST")
-MILVUS_PORT = config.get("MILVUS_PORT")
-RERANKER_SERVICE_URL = config.get("RERANKER_SERVICE_URL")
+
+def get_config_value(key: str, default: str = None) -> str:
+    """Gets value from .env file or falls back to environment variables."""
+    return config.get(key) or os.getenv(key, default)
+
+DATABASE_URL = get_config_value("DATABASE_URL")
+EMBEDDING_SERVICE_URL = get_config_value("EMBEDDING_SERVICE_URL")
+LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")
+RERANKER_SERVICE_URL = get_config_value("RERANKER_SERVICE_URL")
+
+# Qdrant Configuration
+QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
+QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
+QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
+QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
+
+print("--- Application Configuration ---")
+print(f"DATABASE_URL: {DATABASE_URL}")
+print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
+print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
+print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
+print(f"QDRANT_URL: {QDRANT_URL}")
+print("-------------------------------")
