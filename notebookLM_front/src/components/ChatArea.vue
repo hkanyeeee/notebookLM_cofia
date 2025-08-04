@@ -2,7 +2,8 @@
 import { ref, nextTick } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
 import { ElInput, ElButton, ElMessage, ElIcon } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Promotion } from '@element-plus/icons-vue'
+import { marked } from 'marked'
 
 const store = useNotebookStore()
 
@@ -102,7 +103,7 @@ function formatTime(date: Date) {
         :class="message.type"
       >
         <div class="message-content">
-          <div class="message-text">{{ message.content }}</div>
+          <div class="message-text" v-html="marked(message.content)"></div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
         </div>
       </div>
@@ -129,8 +130,7 @@ function formatTime(date: Date) {
           :disabled="store.loading.querying"
           class="query-input"
           type="textarea"
-          :rows="1"
-          resize="none"
+          :rows="2"
         />
         <ElButton
           type="primary"
@@ -140,7 +140,7 @@ function formatTime(date: Date) {
           class="send-btn"
         >
           <ElIcon>
-            <Refresh />
+            <Promotion />
           </ElIcon>
         </ElButton>
       </div>
@@ -329,7 +329,7 @@ function formatTime(date: Date) {
 .input-container {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center;
   max-width: 800px;
   margin: 0 auto;
 }
@@ -374,5 +374,11 @@ function formatTime(date: Date) {
   .input-area {
     padding: 16px;
   }
+}
+</style>
+<style>
+.message-text p {
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 </style>
