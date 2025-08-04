@@ -11,7 +11,7 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
     url = f"{LLM_SERVICE_URL}/chat/completions"
 
     system_prompt = (
-        "你是一位严谨的助手，请阅读提供的参考资料、结合你自己的知识回答用户问题；"
+        "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，最终结合你自己的知识提供直击题干的回答；回答中不要带有可能、大概、也许这些不确定的词"
     )
     user_content = "参考资料：\n" + "\n".join(contexts) + f"\n\n用户问题：{question}"
 
@@ -21,7 +21,7 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.6,
+        "temperature": 0.1,
     }
 
     async with httpx.AsyncClient(timeout=600) as client:

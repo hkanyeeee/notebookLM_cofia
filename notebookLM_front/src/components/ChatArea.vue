@@ -61,7 +61,7 @@ function formatTime(date: Date) {
   <div class="chat-area">
     <!-- 头部 -->
     <header class="chat-header">
-      <h1>NotebookLM 对话</h1>
+      <h1>对话</h1>
       <div class="header-actions">
         <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0">
           <ElIcon>
@@ -76,8 +76,8 @@ function formatTime(date: Date) {
     <div ref="messageContainer" class="messages-container">
       <!-- 欢迎消息 -->
       <div v-if="store.messages.length === 0" class="welcome-message">
-        <h2>欢迎使用 NotebookLM</h2>
-        <p>请先在左侧添加一些网址文档，然后就可以基于这些内容进行对话了。</p>
+        <h2>欢迎</h2>
+        <p>请先在左侧添加一些文档，然后就可以基于这些内容进行对话了。</p>
         <div class="welcome-features">
           <div class="feature-item">
             <strong>💡 智能问答</strong>

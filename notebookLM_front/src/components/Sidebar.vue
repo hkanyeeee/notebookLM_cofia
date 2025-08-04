@@ -58,7 +58,7 @@ function handleRemoveDocument(id: string) {
     <!-- 头部 -->
     <div class="sidebar-header">
       <div v-if="!collapsed" class="logo">
-        <h2>NotebookLM</h2>
+        <h2>文档</h2>
       </div>
       <ElButton text @click="$emit('toggle')" class="toggle-btn">
         <ElIcon>
