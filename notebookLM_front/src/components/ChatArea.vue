@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
-import { ElInput, ElButton, ElMessage, ElIcon } from 'element-plus'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
 import { Refresh, Promotion } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 
@@ -10,6 +10,9 @@ const store = useNotebookStore()
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
+
+// 是否显示加载指示器
+const showLoadingIndicator = computed(() => store.loading.querying)
 
 // 发送查询
 async function handleSendQuery() {
@@ -105,6 +108,21 @@ function formatTime(date: Date) {
         <div class="message-content">
           <div class="message-text" v-html="marked(message.content)"></div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+
+          <!-- Sources (for assistant messages) -->
+          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="sources-section">
+            <ElCollapse>
+              <ElCollapseItem title="参考来源" name="sources">
+                <div v-for="(source, index) in message.sources" :key="index" class="source-item">
+                  <div class="source-header">
+                    <a :href="source.url" target="_blank" class="source-url">{{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}</a>
+                    <span class="source-score">分数: {{ source.score.toFixed(4) }}</span>
+                  </div>
+                  <pre class="source-content">{{ source.content }}</pre>
+                </div>
+              </ElCollapseItem>
+            </ElCollapse>
+          </div>
         </div>
       </div>
 
@@ -283,6 +301,62 @@ function formatTime(date: Date) {
 .message.assistant .message-time {
   text-align: left;
 }
+
+.sources-section {
+  margin-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
+.source-item {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.source-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.source-url {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4f46e5;
+  text-decoration: none;
+}
+.source-url:hover {
+  text-decoration: underline;
+}
+
+.source-score {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+.source-content {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap; /* Preserve whitespace and wrap text */
+}
+
+:deep(.el-collapse-item__header) {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+:deep(.el-collapse-item__content) {
+  padding-bottom: 0;
+}
+
 
 /* 打字指示器 */
 .typing-indicator {

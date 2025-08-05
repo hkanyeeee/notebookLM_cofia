@@ -47,7 +47,7 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 
 .main-content {
   flex: 1;
-  margin-left: 300px;
+  margin-left: 320px;
   transition: margin-left 0.3s ease;
 }
 

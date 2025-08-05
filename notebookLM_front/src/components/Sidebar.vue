@@ -23,27 +23,34 @@ const newUrl = ref('')
 
 // 添加文档
 async function handleAddDocument() {
-  if (!newUrl.value.trim()) {
-    ElMessage.warning('请输入有效的网址')
+  const urls = newUrl.value
+    .split('\n')
+    .map((url) => url.trim())
+    .filter((url) => url)
+
+  if (urls.length === 0) {
+    ElMessage.warning('请输入至少一个有效的网址')
     return
   }
 
-  // 简单的URL验证
-  try {
-    new URL(newUrl.value)
-  } catch {
-    ElMessage.error('请输入有效的网址格式')
-    return
+  // 验证所有URL格式
+  for (const url of urls) {
+    try {
+      new URL(url)
+    } catch {
+      ElMessage.error(`无效的网址格式: ${url}`)
+      return // 如果任何一个URL无效，则停止
+    }
   }
 
-  try {
-    await store.addDocument(newUrl.value)
-    ElMessage.success('文档添加成功')
-    newUrl.value = ''
+  // 为每个URL调用store action（串行）
+  for (const url of urls) {
     showAddDialog.value = false
-  } catch {
-    ElMessage.error('添加文档失败')
+    await store.addDocument(url);
   }
+  
+  // 清空输入并关闭对话框
+  newUrl.value = ''
 }
 
 // 删除文档
@@ -88,6 +95,21 @@ async function handleRemoveDocument(id: string) {
       </ElButton>
     </div>
 
+    <!-- Ingestion Progress Section -->
+    <div class="ingestion-progress-section" v-if="store.ingestionStatus.size > 0">
+      <h3>正在处理</h3>
+      <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="progress-item">
+        <div class="progress-info">
+          <span class="progress-url">{{ url }}</span>
+          <span class="progress-message">{{ status.message }}</span>
+        </div>
+        <ElProgress
+          :percentage="status.total > 0 ? Math.round((status.progress / status.total) * 100) : 0"
+          :status="status.error ? 'exception' : (status.inProgress ? '' : 'success')"
+        />
+      </div>
+    </div>
+
     <!-- 文档列表 -->
     <div class="documents-section" v-if="!collapsed">
       <h3>文档列表</h3>
@@ -118,8 +140,12 @@ async function handleRemoveDocument(id: string) {
     <ElDialog v-model="showAddDialog" title="添加网址" width="400px">
       <ElInput
         v-model="newUrl"
-        placeholder="请输入网址，例如：https://example.com"
-        @keyup.enter="handleAddDocument"
+        type="textarea"
+        :rows="5"
+        placeholder="每行输入一个网址，例如：
+https://example.com
+https://another-example.com"
+        @keyup.enter.native.stop
       />
       <template #footer>
         <ElButton @click="showAddDialog = false">取消</ElButton>
@@ -133,7 +159,7 @@ async function handleRemoveDocument(id: string) {
 
 <style scoped>
 .sidebar {
-  width: 300px;
+  width: 320px;
   background: white;
   border-right: 1px solid #e5e7eb;
   display: flex;
@@ -186,6 +212,45 @@ async function handleRemoveDocument(id: string) {
   margin: 0 auto;
   display: block;
 }
+
+.ingestion-progress-section {
+  padding: 0 20px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ingestion-progress-section h3 {
+  margin: 12px 0 12px 0;
+  color: #374151;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.progress-item {
+  margin-bottom: 16px;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.progress-url {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.progress-message {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 
 .documents-section {
   flex: 1;

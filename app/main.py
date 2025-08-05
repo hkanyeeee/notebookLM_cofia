@@ -1,8 +1,10 @@
 import asyncio
 import tiktoken
+import json
 from fastapi import FastAPI, Body, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Annotated
+from fastapi.responses import StreamingResponse
+from typing import List, Annotated, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -51,78 +53,87 @@ async def on_startup():
 
 # -- API Endpoints --
 
-@app.post("/ingest", summary="Ingest a document from a URL")
-async def ingest(
-    data: dict = Body(...),
-    session_id: str = Depends(get_session_id),
-    db: AsyncSession = Depends(get_db)
-):
+async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
+    """
+    Streams the progress of ingesting a document from a URL.
+    Yields Server-Sent Events (SSE) for progress updates.
+    """
     url = data.get("url")
     if not url:
-        raise HTTPException(status_code=400, detail="URL must be provided.")
+        yield f"data: {json.dumps({'type': 'error', 'message': 'URL must be provided.'})}\n\n"
+        return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 2560)
     
     try:
-        # Check if source already exists for this session
+        # 1. Check if source already exists
         stmt = select(Source).where(Source.url == url, Source.session_id == session_id)
         result = await db.execute(stmt)
-        source = result.scalars().first()
+        existing_source = result.scalars().first()
+        if existing_source:
+            yield f"data: {json.dumps({'type': 'complete', 'document_id': str(existing_source.id), 'title': existing_source.title, 'message': 'Document already exists.'})}\n\n"
+            return
 
-        if source:
-            return {
-                "success": True,
-                "document_id": str(source.id),
-                "title": source.title,
-                "message": "Document already exists for this session."
-            }
-
-        # Fetch, parse, and create source
+        # 2. Fetch and Parse
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching URL content...'})}\n\n"
         html = await fetch_html(url)
         text = extract_text(html)
         title = extract_text(html, selector='title') or url.split('/')[-1]
 
-        source = Source(url=url, title=title, session_id=session_id)
-        db.add(source)
-        await db.flush() # Flush to get the source.id for chunks
-
-        # Chunk text
+        # 3. Chunk Text
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Chunking text...'})}\n\n"
         chunks = chunk_text(text)
         if not chunks:
-            await db.rollback()
-            raise HTTPException(status_code=400, detail="Could not extract any content from the URL.")
+            raise ValueError("Could not extract any content from the URL.")
+        
+        total_chunks = len(chunks)
+        yield f"data: {json.dumps({'type': 'total_chunks', 'value': total_chunks})}\n\n"
 
-        # Create Chunk objects
+        # 4. Create Source and Chunk objects in DB
+        source = Source(url=url, title=title, session_id=session_id)
+        db.add(source)
+        await db.flush()
+
         chunk_objects = [
             Chunk(content=chunk_text, source_id=source.id, session_id=session_id)
             for chunk_text in chunks
         ]
         db.add_all(chunk_objects)
-        await db.flush() # Flush to get the chunk.id for vector DB points
+        await db.flush()
 
+        # 5. Embed and Add to Vector DB chunk by chunk
+        for i, chunk_obj in enumerate(chunk_objects):
+            # Embed
+            embedding = (await embed_texts([chunk_obj.content], model=embedding_model, dimensions=embedding_dimensions))[0]
+            
+            # Add to vector DB
+            await add_embeddings(source.id, [chunk_obj], [embedding])
 
-        # Embed chunks
-        embeddings = await embed_texts(
-            [c.content for c in chunk_objects], 
-            model=embedding_model, 
-            dimensions=embedding_dimensions
-        )
-        
-        # Add to vector DB with session_id in metadata
-        await add_embeddings(source.id, chunk_objects, embeddings)
-        
+            # Yield progress
+            yield f"data: {json.dumps({'type': 'progress', 'value': i + 1})}\n\n"
+            await asyncio.sleep(0.01) # Small delay to allow UI to update
+
         await db.commit()
+        
+        yield f"data: {json.dumps({'type': 'complete', 'document_id': str(source.id), 'title': title, 'message': f'Successfully ingested {total_chunks} chunks.'})}\n\n"
 
-        return {
-            "success": True, 
-            "document_id": str(source.id), 
-            "title": source.title,
-            "message": f"Successfully ingested {len(chunks)} chunks from {url}."
-        }
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e.__class__.__name__}: {str(e)}")
+        error_message = f"Ingestion failed: {e.__class__.__name__}: {str(e)}"
+        yield f"data: {json.dumps({'type': 'error', 'message': error_message})}\n\n"
+
+
+@app.post("/ingest", summary="Ingest a document from a URL and stream progress")
+async def ingest(
+    data: dict = Body(...),
+    session_id: str = Depends(get_session_id),
+    db: AsyncSession = Depends(get_db)
+):
+    return StreamingResponse(
+        stream_ingest_progress(data, session_id, db),
+        media_type="text/event-stream"
+    )
 
 
 @app.delete("/api/documents/{document_id}", summary="Delete a single document and its associated data")

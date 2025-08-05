@@ -69,6 +69,11 @@ export interface QueryResponse {
 
 // API方法
 export const notebookApi = {
+  // 获取API基础URL
+  getBaseUrl(): string {
+    return API_BASE_URL
+  },
+
   // 添加文档（摄取网址内容）
   async ingestDocument(
     url: string,
