@@ -55,10 +55,22 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   // 删除文档
-  function removeDocument(id: string) {
-    const index = documents.value.findIndex((doc) => doc.id === id)
-    if (index > -1) {
-      documents.value.splice(index, 1)
+  async function removeDocument(id: string) {
+    try {
+      const response = await notebookApi.deleteDocument(id)
+      if (response.success) {
+        const index = documents.value.findIndex((doc) => doc.id === id)
+        if (index > -1) {
+          documents.value.splice(index, 1)
+        }
+      } else {
+        // 如果后端返回 success: false，可以抛出错误或记录日志
+        throw new Error(response.message || 'Failed to delete document on the server.')
+      }
+    } catch (error) {
+      console.error('删除文档失败:', error)
+      // 重新抛出错误，以便UI层可以捕获并显示消息
+      throw error
     }
   }
 

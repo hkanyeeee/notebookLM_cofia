@@ -108,6 +108,19 @@ export const notebookApi = {
         message: error.message
       }
     }
+  },
+
+  // 删除单个文档
+  async deleteDocument(documentId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await api.delete(`/api/documents/${documentId}`)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message
+      }
+    }
   }
 }
 

@@ -79,7 +79,7 @@ async def add_embeddings(source_id: int, chunks: List[Chunk], embeddings: List[L
 
 async def query_embeddings(
     query_embedding: List[float],
-    top_k: int = 10,
+    top_k: int = 60,
     session_id: Optional[str] = None,
     source_ids: Optional[List[int]] = None
 ) -> List[Tuple[Chunk, float]]:

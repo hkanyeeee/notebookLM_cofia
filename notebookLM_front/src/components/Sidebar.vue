@@ -47,9 +47,14 @@ async function handleAddDocument() {
 }
 
 // 删除文档
-function handleRemoveDocument(id: string) {
-  store.removeDocument(id)
-  ElMessage.success('文档已删除')
+async function handleRemoveDocument(id: string) {
+  try {
+    await store.removeDocument(id)
+    ElMessage.success('文档已成功删除')
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('删除文档失败，请稍后重试')
+  }
 }
 </script>
 
