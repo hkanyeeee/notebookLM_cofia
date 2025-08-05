@@ -9,3 +9,6 @@ aiosqlite
 greenlet
 qdrant-client
 tiktoken
+readability-lxml
+playwright
+trafilatura

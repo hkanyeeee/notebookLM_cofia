@@ -11,9 +11,6 @@ const store = useNotebookStore()
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
 
-// 是否显示加载指示器
-const showLoadingIndicator = computed(() => store.loading.querying)
-
 // 发送查询
 async function handleSendQuery() {
   const query = queryInput.value.trim()
@@ -154,7 +151,7 @@ function formatTime(date: Date) {
           type="primary"
           @click="handleSendQuery"
           :disabled="store.loading.querying || !queryInput.trim()"
-          :loading="store.loading.querying"
+          :loading="store.loading.querying || store.ingestionStatus.size > 0"
           class="send-btn"
         >
           <ElIcon>

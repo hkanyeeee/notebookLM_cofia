@@ -11,7 +11,7 @@ from sqlalchemy.future import select
 
 from .config import DATABASE_URL, EMBEDDING_SERVICE_URL, LLM_SERVICE_URL, RERANKER_SERVICE_URL
 from .database import init_db, get_db
-from .fetch_parse import fetch_html, extract_text
+from .fetch_parse import fetch_html, extract_text, fetch_then_extract
 from .chunking import chunk_text
 from .embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from .llm_client import generate_answer
@@ -76,10 +76,10 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
             return
 
         # 2. Fetch and Parse
-        yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching URL content...'})}\n\n"
-        html = await fetch_html(url)
-        text = extract_text(html)
-        title = extract_text(html, selector='title') or url.split('/')[-1]
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching & parsing URL content...'})}\n\n"
+        text = await fetch_then_extract(url)
+        
+        title = url.split('/')[-1]
 
         # 3. Chunk Text
         yield f"data: {json.dumps({'type': 'status', 'message': 'Chunking text...'})}\n\n"

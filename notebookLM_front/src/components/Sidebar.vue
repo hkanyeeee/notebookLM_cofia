@@ -159,7 +159,7 @@ https://another-example.com"
 
 <style scoped>
 .sidebar {
-  width: 320px;
+  width: 400px;
   background: white;
   border-right: 1px solid #e5e7eb;
   display: flex;
