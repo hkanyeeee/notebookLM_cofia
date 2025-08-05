@@ -261,6 +261,28 @@ async def query(
                 all_reranked_hits = [item for sublist in reranked_results_with_scores for item in sublist]
                 all_reranked_hits.sort(key=lambda x: x[1], reverse=True) # Sort by score, descending
 
+                # Log rerank ranking changes
+                print("=== Rerank Ranking Changes ===")
+                ranking_changes = []
+                
+                # Create a mapping from chunk content to original rank
+                original_ranks = {}
+                for i, (chunk, _) in enumerate(hits):
+                    # Use chunk content as key (assuming content is unique enough)
+                    chunk_key = chunk.content[:100]  # Use first 100 chars as key
+                    original_ranks[chunk_key] = i + 1
+                
+                # Find new ranks and log changes
+                for i, (chunk, _) in enumerate(all_reranked_hits[:DEFAULT_RERANKER_TOP_K]):
+                    chunk_key = chunk.content[:100]
+                    original_rank = original_ranks.get(chunk_key, "N/A")
+                    new_rank = i + 1
+                    ranking_changes.append([original_rank, new_rank])
+                    print(f"Chunk {i+1}: Original rank {original_rank} -> New rank {new_rank}")
+                
+                print(f"Ranking changes: {ranking_changes}")
+                print("=== End Rerank Ranking Changes ===")
+
                 # final_hits now contains Chunk objects with their reranker scores
                 final_hits = all_reranked_hits[:DEFAULT_RERANKER_TOP_K]
 

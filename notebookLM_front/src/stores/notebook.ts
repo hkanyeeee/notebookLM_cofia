@@ -184,6 +184,7 @@ export const useNotebookStore = defineStore('notebook', () => {
         },
         body: JSON.stringify({
           query,
+          top_k: 60,
           document_ids: documents.value.map(doc => doc.id)
         }),
       });

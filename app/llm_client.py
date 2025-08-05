@@ -12,7 +12,7 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
     url = f"{LLM_SERVICE_URL}/chat/completions"
 
     system_prompt = (
-        "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，最终结合你自己的知识提供直击题干的回答；回答中不要带有可能、大概、也许这些不确定的词"
+        "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，最终结合你自己的知识提供直击题干的回答；回答中不要带有可能、大概、也许这些不确定的词;你拿到的文档通常是经过排序整理的，最靠前的文档通常是与问题最相关的文档"
     )
     user_content = "参考资料：\n" + "\n".join(contexts) + f"\n\n用户问题：{question}"
 

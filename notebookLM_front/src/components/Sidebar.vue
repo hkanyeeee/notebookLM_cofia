@@ -86,8 +86,8 @@ async function handleRemoveDocument(id: string) {
         type="primary"
         :icon="Plus"
         @click="showAddDialog = true"
-        :disabled="store.loading.addingDocument"
-        :loading="store.loading.addingDocument"
+        :disabled="store.loading.addingDocument || store.loading.querying"
+        :loading="store.loading.addingDocument || store.loading.querying"
         class="add-btn"
         :class="{ 'collapsed-btn': collapsed }"
       >
