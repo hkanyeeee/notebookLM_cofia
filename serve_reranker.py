@@ -39,21 +39,17 @@ def format_instruction(instruction: Optional[str], query: str, doc: str) -> str:
     return f"<Instruct>: {instr}\n<Query>: {query}\n<Document>: {doc}"
 
 def process_inputs(pairs: List[str]):
+    # combine prefix, text, and suffix at string level and tokenize with padding in one call
+    texts = [prefix + text + suffix for text in pairs]
     inputs = tokenizer(
-        pairs,
-        padding=False,
-        truncation="longest_first",
-        return_attention_mask=False,
-        max_length=MAX_LENGTH - len(prefix_tokens) - len(suffix_tokens)
+        texts,
+        padding=True,
+        truncation='longest_first',
+        max_length=MAX_LENGTH,
+        return_tensors='pt',
+        add_special_tokens=False
     )
-    # 插入前缀和后缀
-    for i, ele in enumerate(inputs["input_ids"]):
-        inputs["input_ids"][i] = prefix_tokens + ele + suffix_tokens
-    # 填充并转为张量
-    inputs = tokenizer.pad(inputs, padding=True, return_tensors="pt")
-    for key in inputs:
-        inputs[key] = inputs[key].to(model.device)
-    return inputs
+    return {k: v.to(model.device) for k, v in inputs.items()}
 
 @torch.no_grad()
 def compute_logits(inputs):
