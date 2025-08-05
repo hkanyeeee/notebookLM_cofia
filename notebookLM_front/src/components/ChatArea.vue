@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, watch } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
 import { Refresh, Promotion } from '@element-plus/icons-vue'
@@ -10,6 +10,21 @@ const store = useNotebookStore()
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
+
+// 监听消息变化，自动滚动到底部
+watch(() => store.messages.length, async () => {
+  await nextTick()
+  scrollToBottom()
+}, { flush: 'post' })
+
+// 监听loading状态变化，当查询完成时滚动
+watch(() => store.loading.querying, async (newVal, oldVal) => {
+  if (oldVal && !newVal) {
+    // 查询完成，滚动到底部
+    await nextTick()
+    scrollToBottom()
+  }
+}, { flush: 'post' })
 
 // 发送查询
 async function handleSendQuery() {
@@ -27,10 +42,6 @@ async function handleSendQuery() {
   try {
     queryInput.value = ''
     await store.sendQuery(query)
-
-    // 滚动到底部
-    await nextTick()
-    scrollToBottom()
   } catch {
     ElMessage.error('查询失败，请重试')
   }
