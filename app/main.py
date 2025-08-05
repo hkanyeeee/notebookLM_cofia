@@ -99,6 +99,8 @@ async def ingest(
             for chunk_text in chunks
         ]
         db.add_all(chunk_objects)
+        await db.flush() # Flush to get the chunk.id for vector DB points
+
 
         # Embed chunks
         embeddings = await embed_texts(
@@ -165,6 +167,7 @@ async def query(
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 2560)
     document_ids = data.get("document_ids", []) # Optional filtering by document
+    source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
     if not q:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
@@ -177,7 +180,7 @@ async def query(
             query_embedding, 
             top_k=top_k, 
             session_id=session_id,
-            source_ids=document_ids
+            source_ids=source_ids_int
         )
 
         final_hits = []
@@ -236,4 +239,26 @@ async def query(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{e.__class__.__name__}: {str(e)}")
+
+
+# -- Debug Endpoint --
+@app.get("/debug/qdrant-points", summary="Get all points from Qdrant for debugging")
+async def debug_qdrant_points():
+    from .vector_db_client import qdrant_client, COLLECTION_NAME
+    if not qdrant_client:
+        raise HTTPException(status_code=503, detail="Qdrant client not available")
+
+    try:
+        # Use scroll to get all points. Might be slow for large dbs.
+        points, _ = qdrant_client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=100,  # Limit to 100 points for now
+            with_payload=True,
+            with_vectors=False
+        )
+        payloads = [p.payload for p in points]
+        return {"points_payload": payloads}
+    except Exception as e:
+        # Handle case where collection might not exist yet
+        return {"error": str(e)}
 
