@@ -3,16 +3,16 @@ from typing import List
 from app.config import LLM_SERVICE_URL
 
 
-DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
-# DEFAULT_CHAT_MODEL = "qwen/qwq-32b"
-# DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
+# DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
+# DEFAULT_CHAT_MODEL = "gpt-oss-20b-mlx"
+DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
     url = f"{LLM_SERVICE_URL}/chat/completions"
 
     system_prompt = (
-        "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，最终结合你自己的知识提供直击题干的回答；回答中不要带有可能、大概、也许这些不确定的词"
+        "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，最终结合你自己的知识提供直击题干的回答；你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；回答中不要带有可能、大概、也许这些不确定的词"
     )
     user_content = "参考资料：\n" + "\n".join(contexts) + f"\n\n用户问题：{question}"
 
