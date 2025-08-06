@@ -43,11 +43,13 @@ async function handleAddDocument() {
     }
   }
 
-  // 为每个URL调用store action（串行）
-  for (const url of urls) {
-    showAddDialog.value = false
-    await store.addDocument(url);
-  }
+  // 并发处理多个URL
+  showAddDialog.value = false
+  const promises = urls.map((url) => store.addDocument(url))
+  // 使用 Promise.all 并发执行，但不阻塞 UI
+  Promise.all(promises).catch((err) => {
+    console.error('批量添加文档时发生错误:', err)
+  })
   
   // 清空输入并关闭对话框
   newUrl.value = ''

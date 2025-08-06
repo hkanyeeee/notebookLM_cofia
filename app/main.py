@@ -101,6 +101,8 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         ]
         db.add_all(chunk_objects)
         await db.flush()
+        # 提前提交，缩短事务占用时间，避免长时间写锁
+        await db.commit()
 
         # 5. Embed and Add to Vector DB chunk by chunk
         for i, chunk_obj in enumerate(chunk_objects):
