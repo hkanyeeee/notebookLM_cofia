@@ -25,6 +25,12 @@ services:
     build:
       context: ./notebookLM_front
       dockerfile: Dockerfile
+      args:
+        # 可选：构建时注入 npm 源与代理，解决 CI/网络限制
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
     container_name: notebooklm-frontend
     ports:
       - "9001:80"
