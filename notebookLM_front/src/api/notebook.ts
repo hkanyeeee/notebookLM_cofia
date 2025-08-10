@@ -77,8 +77,8 @@ export const notebookApi = {
   // 添加文档（摄取网址内容）
   async ingestDocument(
     url: string,
-    embedding_model: string = 'Qwen/Qwen3-Embedding-4B',
-    embedding_dimensions: number = 2560
+    embedding_model: string = 'Qwen/Qwen3-Embedding-0.6B',
+    embedding_dimensions: number = 1024
   ): Promise<IngestResponse> {
     try {
       const response = await api.post<IngestResponse>('/ingest', {

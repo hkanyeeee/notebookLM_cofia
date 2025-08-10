@@ -15,12 +15,12 @@ from .fetch_parse import fetch_html, extract_text, fetch_then_extract
 from .chunking import chunk_text
 from .embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from .llm_client import generate_answer
-from .vector_db_client import add_embeddings, query_embeddings, delete_vector_db_data
+from .vector_db_client import add_embeddings, query_embeddings, delete_vector_db_data, query_hybrid
 from .rerank_client import rerank, DEFAULT_RERANKER_TOP_K
 from .models import Source, Chunk
 
 # Constants
-RERANKER_MAX_TOKENS = 8192
+RERANKER_MAX_TOKENS = 6144
 
 app = FastAPI(title="NotebookLM-Py Backend")
 
@@ -64,7 +64,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 2560)
+    embedding_dimensions = data.get("embedding_dimensions", 1024)
     
     try:
         # 1. Check if source already exists
@@ -207,10 +207,11 @@ async def query(
     session_id: str = Depends(get_session_id),
 ):
     q = data.get("query", "")
-    top_k = data.get("top_k", 60)
+    top_k = data.get("top_k", 200)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 2560)
+    embedding_dimensions = data.get("embedding_dimensions", 1024)
     document_ids = data.get("document_ids", []) # Optional filtering by document
+    use_hybrid = data.get("use_hybrid", True)
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
     if not q:
@@ -219,13 +220,28 @@ async def query(
     try:
         query_embedding = (await embed_texts([q], model=embedding_model, dimensions=embedding_dimensions))[0]
         
-        # IMPORTANT: Pass session_id and document_ids to vector DB query
-        hits = await query_embeddings(
-            query_embedding, 
-            top_k=top_k, 
-            session_id=session_id,
-            source_ids=source_ids_int
-        )
+        # 稠密 or 混合检索
+        if use_hybrid:
+            from .database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                hits = await query_hybrid(
+                    query_text=q,
+                    query_embedding=query_embedding,
+                    top_k=top_k,
+                    session_id=session_id,
+                    source_ids=source_ids_int,
+                    hnsw_ef=256,
+                    k_dense=min(50, top_k),
+                    k_sparse=min(50, top_k),
+                    db=db,
+                )
+        else:
+            hits = await query_embeddings(
+                query_embedding, 
+                top_k=top_k, 
+                session_id=session_id,
+                source_ids=source_ids_int
+            )
 
         final_hits = []
         if RERANKER_SERVICE_URL and hits:

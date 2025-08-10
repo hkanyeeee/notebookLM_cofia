@@ -49,6 +49,44 @@ async def init_db():
     async with engine.begin() as conn:
         # await conn.run_sync(Base.metadata.drop_all)  # 如果需要，可以取消注释以在启动时清空数据库
         await conn.run_sync(Base.metadata.create_all)
+        # 若使用 SQLite，则创建 FTS5 表及触发器用于稀疏（BM25）检索
+        if is_sqlite:
+            # 创建基于 content 的 FTS5 虚表，使用外部内容模式，rowid 映射 chunks.id
+            await conn.exec_driver_sql(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts
+                USING fts5(
+                    content,
+                    content='chunks',
+                    content_rowid='id'
+                );
+                """
+            )
+            # 插入触发器
+            await conn.exec_driver_sql(
+                """
+                CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+                  INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
+                END;
+                """
+            )
+            # 删除触发器
+            await conn.exec_driver_sql(
+                """
+                CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+                  INSERT INTO chunks_fts(chunks_fts, rowid, content) VALUES ('delete', old.id, old.content);
+                END;
+                """
+            )
+            # 更新触发器
+            await conn.exec_driver_sql(
+                """
+                CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+                  INSERT INTO chunks_fts(chunks_fts, rowid, content) VALUES ('delete', old.id, old.content);
+                  INSERT INTO chunks_fts(rowid, content) VALUES (new.id, new.content);
+                END;
+                """
+            )
     print("Database tables created.")
 
 

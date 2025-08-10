@@ -39,6 +39,11 @@ async function handleSendQuery() {
     return
   }
 
+  if (store.ingestionStatus.size > 0) {
+    ElMessage.warning('正在处理文档，请稍后再试')
+    return
+  }
+
   try {
     queryInput.value = ''
     await store.sendQuery(query)

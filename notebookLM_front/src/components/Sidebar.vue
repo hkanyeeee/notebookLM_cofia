@@ -24,7 +24,7 @@ const newUrl = ref('')
 // 添加文档
 async function handleAddDocument() {
   const urls = newUrl.value
-    .split('\n')
+    .split(/[,，\n]+/)
     .map((url) => url.trim())
     .filter((url) => url)
 
@@ -65,6 +65,12 @@ async function handleRemoveDocument(id: string) {
     ElMessage.error('删除文档失败，请稍后重试')
   }
 }
+
+// 删除处理失败的URL
+function handleRemoveFailedUrl(url: string) {
+  store.ingestionStatus.delete(url)
+  ElMessage.success('已移除失败的URL')
+}
 </script>
 
 <template>
@@ -104,6 +110,19 @@ async function handleRemoveDocument(id: string) {
         <div class="progress-info">
           <span class="progress-url">{{ url }}</span>
           <span class="progress-message">{{ status.message }}</span>
+          <!-- 为处理失败的URL添加删除按钮 -->
+          <ElButton 
+            v-if="status.error" 
+            text 
+            type="danger" 
+            size="small"
+            @click="handleRemoveFailedUrl(url)"
+            class="remove-failed-btn"
+          >
+            <ElIcon>
+              <Delete />
+            </ElIcon>
+          </ElButton>
         </div>
         <ElProgress
           :percentage="status.total > 0 ? Math.round((status.progress / status.total) * 100) : 0"
@@ -144,9 +163,7 @@ async function handleRemoveDocument(id: string) {
         v-model="newUrl"
         type="textarea"
         :rows="5"
-        placeholder="每行输入一个网址，例如：
-https://example.com
-https://another-example.com"
+        placeholder="用逗号分隔多个网址，例如：https://example.com, https://another-example.com"
         @keyup.enter.native.stop
       />
       <template #footer>
@@ -234,8 +251,9 @@ https://another-example.com"
 .progress-info {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 6px;
+  gap: 8px;
 }
 
 .progress-url {
@@ -251,6 +269,16 @@ https://another-example.com"
 .progress-message {
   font-size: 12px;
   color: #6b7280;
+}
+
+.remove-failed-btn {
+  margin-left: 8px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.remove-failed-btn:hover {
+  opacity: 1;
 }
 
 

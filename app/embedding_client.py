@@ -4,7 +4,7 @@ import asyncio
 
 from app.config import EMBEDDING_SERVICE_URL
 
-DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B"
+DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
 async def _embed_batch(texts: List[str], model: str, client: httpx.AsyncClient, dimensions: Optional[int] = None) -> List[List[float]]:
     """帮助函数，用于嵌入单批次的文本。"""

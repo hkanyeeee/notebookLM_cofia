@@ -9,7 +9,7 @@ import uvicorn
 # 本地模型路径
 MODEL_DIR = "/Users/hewenxin/mlx_models/qwen3_rerank_0.6"
 HOST = os.getenv("RERANK_HOST", "0.0.0.0")
-PORT = 8022
+PORT = 7998
 MAX_LENGTH = 32000
 
 app = FastAPI()
