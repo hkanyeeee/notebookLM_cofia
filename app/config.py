@@ -20,10 +20,16 @@ QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
 QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
 
+# Proxy configuration (optional)
+HTTP_PROXY = get_config_value("HTTP_PROXY")
+HTTPS_PROXY = get_config_value("HTTPS_PROXY")
+PROXY_URL = get_config_value("PROXY_URL") or HTTP_PROXY or HTTPS_PROXY
+
 print("--- Application Configuration ---")
 print(f"DATABASE_URL: {DATABASE_URL}")
 print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
 print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
 print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
 print(f"QDRANT_URL: {QDRANT_URL}")
+print(f"PROXY_URL: {PROXY_URL}")
 print("-------------------------------")

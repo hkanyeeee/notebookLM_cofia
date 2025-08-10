@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: notebooklm-backend
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///data/app.db
+      # 指向已部署的 Qdrant（Mac/Win 推荐 host.docker.internal；也可改成 192.168.31.125）
+      - QDRANT_HOST=${QDRANT_HOST:-host.docker.internal}
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      # 爬取代理（HTTP/HTTPS），如需直连可删除这三行
+      - PROXY_URL=${PROXY_URL:-http://192.168.31.167:7890}
+      # 如使用本机 LM Studio/OpenAI 兼容接口，请根据需要修改以下两项:
+      - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-http://host.docker.internal:1234/v1}
+      - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://host.docker.internal:1234/v1}
+      # 可选：启用重排网关，例如 http://rerank-gateway:7999
+      - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-}
+    volumes:
+      - ./data:/app/data
+    # 已外部部署 Qdrant，无需依赖内部服务
+  frontend:
+    build:
+      context: ./notebookLM_front
+      dockerfile: Dockerfile
+    container_name: notebooklm-frontend
+    ports:
+      - "9001:80"
+    depends_on:
+      - backend
+
+volumes: {}
+
+

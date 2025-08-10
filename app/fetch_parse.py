@@ -3,6 +3,7 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from app.config import PROXY_URL
 
 # =========================
 # 1) 原有：抓原始 HTML（轻改：更稳的等待 & UA）
@@ -18,15 +19,20 @@ async def fetch_html(url: str, timeout: float = 30.0) -> str:
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     }
     try:
-        async with httpx.AsyncClient(trust_env=True, headers=headers) as client:
+        proxy = PROXY_URL if PROXY_URL else None
+        async with httpx.AsyncClient(trust_env=True, headers=headers, proxies=proxy) as client:
             resp = await client.get(url, timeout=timeout)
             resp.raise_for_status()
             return resp.text
     except Exception:
         # httpx 获取失败，使用 Playwright 进行渲染（静态 DOM）
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(user_agent=headers["User-Agent"])
+            launch_kwargs = {"headless": True}
+            browser = await p.chromium.launch(**launch_kwargs)
+            context_kwargs = {"user_agent": headers["User-Agent"]}
+            if PROXY_URL:
+                context_kwargs["proxy"] = {"server": PROXY_URL}
+            context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
             try:
                 # 不用 networkidle（WS 永远忙），用 domcontentloaded
@@ -64,7 +70,11 @@ async def fetch_rendered_text(
     }
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent=headers["User-Agent"])
+        context_kwargs = {"user_agent": headers["User-Agent"]}
+        if PROXY_URL:
+            # Playwright 代理应设置在 context 层
+            context_kwargs["proxy"] = {"server": PROXY_URL}
+        context = await browser.new_context(**context_kwargs)
         page = await context.new_page()
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
