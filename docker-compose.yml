@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   backend:
+    restart: always
     build:
       context: .
       dockerfile: Dockerfile.backend
@@ -22,6 +23,7 @@ services:
       - ./data:/app/data
     # 已外部部署 Qdrant，无需依赖内部服务
   frontend:
+    restart: always
     build:
       context: ./notebookLM_front
       dockerfile: Dockerfile
