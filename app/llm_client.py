@@ -4,8 +4,8 @@ from app.config import LLM_SERVICE_URL
 
 
 # DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
-DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
-# DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
+# DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
