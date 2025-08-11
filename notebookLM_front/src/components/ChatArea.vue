@@ -157,7 +157,6 @@ function formatTime(date: Date) {
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."
-          @keyup.enter="handleSendQuery"
           :disabled="store.loading.querying"
           class="query-input"
           type="textarea"
