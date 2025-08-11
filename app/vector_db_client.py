@@ -15,7 +15,7 @@ COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "notebooklm_prod")
 # Global Qdrant Client
 # Use a global client to avoid reconnecting on every request
 try:
-    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
+    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=300)
     print("Qdrant client initialized successfully.")
 except Exception as e:
     print(f"Failed to initialize Qdrant client: {e}")

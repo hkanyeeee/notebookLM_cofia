@@ -15,7 +15,7 @@ BACKENDS = os.getenv(
 ).split(",")
 
 ENDPOINT = "/rerank"
-TIMEOUT_S = float(os.getenv("RERANK_TIMEOUT", "20"))
+TIMEOUT_S = float(os.getenv("RERANK_TIMEOUT", "300"))
 HOST = os.getenv("GATEWAY_HOST", "0.0.0.0")
 PORT = int(os.getenv("GATEWAY_PORT", "7999"))
 

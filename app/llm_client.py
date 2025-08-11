@@ -27,7 +27,7 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
 
     print(len(contexts), "contexts")
 
-    async with httpx.AsyncClient(timeout=600) as client:
+    async with httpx.AsyncClient(timeout=300) as client:
         response = await client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()

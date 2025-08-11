@@ -29,7 +29,7 @@ async def embed_texts(texts: List[str], model: str = DEFAULT_EMBEDDING_MODEL, ba
     支持分批处理以避免单个请求过大。
     """
     all_embeddings = []
-    async with httpx.AsyncClient(timeout=60, http2=False) as client:
+    async with httpx.AsyncClient(timeout=300, http2=False) as client:
         # 将文本列表分割成多个批次
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]

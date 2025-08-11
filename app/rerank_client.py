@@ -29,7 +29,7 @@ async def rerank(query: str, hits_batch: List[Tuple[Chunk, float]], model: str =
     async with httpx.AsyncClient() as client:
         api_url = f"{RERANKER_SERVICE_URL.rstrip('/')}/rerank"
         
-        response = await client.post(api_url, json=payload, timeout=180) # Increased timeout for potentially large batches
+        response = await client.post(api_url, json=payload, timeout=300) # 5分钟超时
         response.raise_for_status() # Raises HTTPStatusError for 4xx/5xx responses
         
         data = response.json()

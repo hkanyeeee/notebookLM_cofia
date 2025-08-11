@@ -58,7 +58,11 @@ export const useNotebookStore = defineStore('notebook', () => {
       error: false,
     });
 
+    let timeoutId: number | undefined;
+    let controller: AbortController | null = null;
     try {
+      controller = new AbortController();
+      timeoutId = window.setTimeout(() => controller?.abort(), 300000);
       const response = await fetch(`${notebookApi.getBaseUrl()}/ingest`, {
         method: 'POST',
         headers: {
@@ -66,6 +70,7 @@ export const useNotebookStore = defineStore('notebook', () => {
           'X-Session-ID': sessionStore.getSessionId() || '',
         },
         body: JSON.stringify({ url }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -144,6 +149,9 @@ export const useNotebookStore = defineStore('notebook', () => {
         status.inProgress = false;
         status.error = true;
       }
+    } finally {
+      // 清理超时定时器
+      try { if (timeoutId !== undefined) clearTimeout(timeoutId); } catch {}
     }
   }
 
@@ -175,7 +183,11 @@ export const useNotebookStore = defineStore('notebook', () => {
     
     loading.querying = true
 
+    let timeoutId: number | undefined;
+    let controller: AbortController | null = null;
     try {
+      controller = new AbortController();
+      timeoutId = window.setTimeout(() => controller?.abort(), 300000);
       const response = await fetch(`${notebookApi.getBaseUrl()}/query`, {
         method: 'POST',
         headers: {
@@ -187,6 +199,7 @@ export const useNotebookStore = defineStore('notebook', () => {
           top_k: 60,
           document_ids: documents.value.map(doc => doc.id)
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -214,6 +227,7 @@ export const useNotebookStore = defineStore('notebook', () => {
       });
     } finally {
       loading.querying = false;
+      try { if (timeoutId !== undefined) clearTimeout(timeoutId); } catch {}
     }
   }
 
