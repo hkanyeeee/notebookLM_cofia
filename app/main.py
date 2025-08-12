@@ -28,7 +28,7 @@ from .models import Source, Chunk
 import httpx
 
 # Constants
-RERANKER_MAX_TOKENS = 6144
+RERANKER_MAX_TOKENS = 2048
 
 app = FastAPI(title="NotebookLM-Py Backend")
 
