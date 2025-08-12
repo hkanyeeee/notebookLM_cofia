@@ -199,7 +199,6 @@ export const useNotebookStore = defineStore('notebook', () => {
   async function generateCandidatesFromTopic() {
     const topic = topicInput.value.trim()
     if (!topic) return
-    if (documents.value.length > 0) return // 一旦有文档，课题区域禁用
     generating.value = true
     candidateUrls.value = []
     try {

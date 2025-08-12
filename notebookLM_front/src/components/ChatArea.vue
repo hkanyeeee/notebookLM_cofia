@@ -5,6 +5,12 @@ import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElToo
 import { Refresh, Promotion } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 
+// 启用 GitHub 风格 Markdown（GFM），支持表格等语法
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+})
+
 const store = useNotebookStore()
 
 // 查询输入
@@ -622,5 +628,30 @@ function formatTime(date: Date) {
   font-size: inherit;
   background-color: transparent;
   border-radius: 0;
+}
+
+/* 表格样式（GFM） */
+.message-text table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  margin: 1em 0;
+}
+.message-text thead th {
+  background: #f3f4f6;
+}
+.message-text th,
+.message-text td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+.message-text tr:nth-child(even) td {
+  background: #fafafa;
+}
+.message-text {
+  overflow-x: auto; /* 表格超宽时允许横向滚动 */
 }
 </style>
