@@ -4,6 +4,7 @@ from itertools import cycle
 from typing import List
 
 import httpx
+import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, JSONResponse
 
@@ -12,7 +13,7 @@ from fastapi.responses import Response, JSONResponse
 RERANK_BACKENDS: List[str] = os.getenv(
     "RERANK_BACKENDS",
     # 默认两台机器（注意：这里是示例地址，可通过环境变量覆盖）
-    "http://192.168.31.98:7997,http://192.168.31.231:7999",
+    "http://192.168.31.98:7997,http://192.168.31.231:7995",
 ).split(",")
 
 PUBLIC_ENDPOINTS = ["/rerank", "/v1/rerank"]
@@ -30,6 +31,7 @@ PORT = int(os.getenv("RERANK_GATEWAY_PORT", "7996"))
 QUEUE_WAIT_TIMEOUT_S = float(os.getenv("RERANK_QUEUE_WAIT_TIMEOUT", "300"))
 
 app = FastAPI(title="Rerank Gateway")
+logger = logging.getLogger("rerank_gateway")
 
 
 class BackendState:
@@ -44,7 +46,7 @@ _backend_cycle = cycle(_backend_states)
 _cycle_lock = asyncio.Lock()
 
 # 复用连接的 httpx 客户端
-client = httpx.AsyncClient(timeout=TIMEOUT_S)
+client = httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT_S, connect=min(10.0, TIMEOUT_S)))
 
 
 async def pick_backend() -> BackendState:
@@ -79,29 +81,35 @@ async def rerank_proxy(req: Request):
     body = await req.body()
     headers = dict(req.headers)
 
-    tried_hosts: List[str] = []
+    tried_hosts: List[str] = []  # 累计记录所有尝试过的后端（用于返回调试信息）
     last_exc = None
 
     # 在队列等待窗口内不断尝试找到可用后端
     end_time = asyncio.get_event_loop().time() + QUEUE_WAIT_TIMEOUT_S
 
     while True:
-        # 先尝试所有后端是否立即可用
+        # 每一轮只尝试每个后端一次
+        tried_in_round = set()
         for _ in range(len(_backend_states)):
             backend = await pick_backend()
-            if backend.base_url in tried_hosts:
-                # 本次循环中已经尝试过该后端
+            if backend.base_url in tried_in_round:
                 continue
+            tried_in_round.add(backend.base_url)
             acquired = await _try_acquire_immediately(backend.semaphore)
             if not acquired:
+                # 当前后端已满，跳过
                 continue
             # 已获得并发额度，尝试转发
             try:
+                logger.info(f"forward to {backend.base_url}{FORWARD_ENDPOINT}")
                 resp = await try_forward(body, headers, backend.base_url)
+                logger.info(f"ok from {backend.base_url}")
                 return resp
             except Exception as e:
                 last_exc = e
-                tried_hosts.append(backend.base_url)
+                if backend.base_url not in tried_hosts:
+                    tried_hosts.append(backend.base_url)
+                logger.warning(f"error from {backend.base_url}: {e}")
                 continue
             finally:
                 # 无论成功失败，都在完成一次转发尝试后释放并发额度
@@ -144,7 +152,11 @@ async def _shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-
+    logger.setLevel(logging.INFO)
+    logging.basicConfig(level=logging.INFO)
+    logger.info(
+        f"Start gateway on {HOST}:{PORT}, backends={ [b.base_url for b in _backend_states] }, per_backend={PER_BACKEND_CONCURRENCY}, timeout={TIMEOUT_S}s"
+    )
     uvicorn.run("rerank_gateway:app", host=HOST, port=PORT, reload=False)
 
 
