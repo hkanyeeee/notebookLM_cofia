@@ -89,12 +89,64 @@ function formatTime(date: Date) {
       </div>
     </header>
 
-    <!-- 消息列表 -->
+    <!-- 消息列表 / 欢迎与课题输入 -->
     <div ref="messageContainer" class="messages-container">
-      <!-- 欢迎消息 -->
-      <div v-if="store.messages.length === 0" class="welcome-message">
+      <!-- 欢迎与课题输入：当没有文档时显示 -->
+      <div v-if="store.messages.length === 0 && store.documents.length === 0" class="welcome-message">
         <h2>欢迎</h2>
-        <p>请先在左侧添加一些文档，然后就可以基于这些内容进行对话了。</p>
+        <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
+        <div class="topic-input">
+          <ElInput
+            v-model="store.topicInput"
+            placeholder="请输入课题，例如：Sora 2025 能力与限制"
+            :disabled="store.generating || store.ingestionStatus.size > 0"
+            @keyup.enter.native.stop="store.generateCandidatesFromTopic()"
+          />
+          <ElButton
+            type="primary"
+            @click="store.generateCandidatesFromTopic()"
+            :loading="store.generating"
+            :disabled="!store.topicInput.trim() || store.generating"
+            class="topic-send-btn"
+          >生成搜索</ElButton>
+        </div>
+
+        <!-- 候选URL按钮区 -->
+        <div v-if="store.candidateUrls.length > 0" class="candidates">
+          <h3>候选网址</h3>
+          <div class="candidate-grid">
+            <ElButton
+              v-for="item in store.candidateUrls"
+              :key="item.url"
+              class="candidate-item"
+              @click="store.addCandidate(item.url)"
+            >
+              <div class="candidate-title">{{ item.title }}</div>
+              <div class="candidate-url">{{ item.url }}</div>
+            </ElButton>
+          </div>
+        </div>
+
+        <div class="welcome-features">
+          <div class="feature-item">
+            <strong>💡 智能问答</strong>
+            <p>基于您添加的文档内容回答问题</p>
+          </div>
+          <div class="feature-item">
+            <strong>📚 文档总结</strong>
+            <p>快速获取文档的核心要点</p>
+          </div>
+          <div class="feature-item">
+            <strong>🔍 深度分析</strong>
+            <p>深入分析文档中的关键信息</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 当已有文档，显示原欢迎提示（不含课题输入）且允许对话 -->
+      <div v-else-if="store.messages.length === 0" class="welcome-message">
+        <h2>欢迎</h2>
+        <p>请在下方输入您的问题，系统将根据已添加的文档进行回答。</p>
         <div class="welcome-features">
           <div class="feature-item">
             <strong>💡 智能问答</strong>
@@ -151,13 +203,13 @@ function formatTime(date: Date) {
       </div>
     </div>
 
-    <!-- 输入区域 -->
+    <!-- 输入区域：当无文档时禁用提问 -->
     <div class="input-area">
       <div class="input-container">
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."
-          :disabled="store.loading.querying"
+          :disabled="store.loading.querying || store.documents.length === 0 || store.ingestionStatus.size > 0"
           class="query-input"
           type="textarea"
           :rows="2"
@@ -165,7 +217,7 @@ function formatTime(date: Date) {
         <ElButton
           type="primary"
           @click="handleSendQuery"
-          :disabled="store.loading.querying || !queryInput.trim()"
+          :disabled="store.loading.querying || !queryInput.trim() || store.documents.length === 0 || store.ingestionStatus.size > 0"
           :loading="store.loading.querying || store.ingestionStatus.size > 0"
           class="send-btn"
         >
@@ -223,6 +275,46 @@ function formatTime(date: Date) {
   max-width: 600px;
   margin: 60px auto;
   color: #374151;
+}
+
+.topic-input {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.topic-send-btn {
+  white-space: nowrap;
+}
+
+.candidates {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.candidate-item {
+  display: block;
+  text-align: left;
+  height: auto;
+  padding: 12px;
+}
+
+.candidate-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #111827;
+}
+
+.candidate-url {
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
 }
 
 .welcome-message h2 {

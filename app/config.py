@@ -13,6 +13,7 @@ DATABASE_URL = get_config_value("DATABASE_URL")
 EMBEDDING_SERVICE_URL = get_config_value("EMBEDDING_SERVICE_URL")
 LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")
 RERANKER_SERVICE_URL = get_config_value("RERANKER_SERVICE_URL")
+SEARXNG_QUERY_URL = get_config_value("SEARXNG_QUERY_URL", "http://localhost:8080/search")
 
 # Qdrant Configuration
 QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
@@ -32,4 +33,5 @@ print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
 print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
 print(f"QDRANT_URL: {QDRANT_URL}")
 print(f"PROXY_URL: {PROXY_URL}")
+print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
 print("-------------------------------")

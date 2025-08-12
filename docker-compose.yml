@@ -19,6 +19,8 @@ services:
       - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://host.docker.internal:1234/v1}
       # 可选：启用重排网关，例如 http://rerank-gateway:7999
       - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-}
+      # SearxNG 查询接口（如使用本机 searxng，请调整端口，默认 8080）
+      - SEARXNG_QUERY_URL=${SEARXNG_QUERY_URL:-http://host.docker.internal:8080/search}
     volumes:
       - ./data:/app/data
     # 已外部部署 Qdrant，无需依赖内部服务

@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 
-from .config import DATABASE_URL, EMBEDDING_SERVICE_URL, LLM_SERVICE_URL, RERANKER_SERVICE_URL
+from .config import (
+    DATABASE_URL,
+    EMBEDDING_SERVICE_URL,
+    LLM_SERVICE_URL,
+    RERANKER_SERVICE_URL,
+    SEARXNG_QUERY_URL,
+)
 from .database import init_db, get_db
 from .fetch_parse import fetch_html, extract_text, fetch_then_extract
 from .chunking import chunk_text
@@ -18,6 +24,7 @@ from .llm_client import generate_answer
 from .vector_db_client import add_embeddings, query_embeddings, delete_vector_db_data, query_hybrid
 from .rerank_client import rerank, DEFAULT_RERANKER_TOP_K
 from .models import Source, Chunk
+import httpx
 
 # Constants
 RERANKER_MAX_TOKENS = 6144
@@ -137,6 +144,98 @@ async def ingest(
         media_type="text/event-stream"
     )
 
+
+@app.post("/api/search/generate", summary="Generate web search queries from a topic using LLM")
+async def generate_search_queries(
+    data: dict = Body(...),
+):
+    """根据用户输入的课题，调用已配置的 LLM 服务生成 3 个搜索查询。
+    返回 {queries: [str, str, str]}。
+    """
+    topic = data.get("topic", "").strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="topic cannot be empty")
+
+    # 使用现有 LLM 服务，以系统提示约束返回 JSON
+    prompt_system = (
+        "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的中文查询。"
+        "返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
+    )
+    user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{ '{"queries": ["...", "...", "..."]}' }"
+
+    payload = {
+        "model": "qwen3_8b_awq",
+        "messages": [
+            {"role": "system", "content": prompt_system},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.3,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            # 尝试解析为 JSON
+            import json as _json
+
+            try:
+                parsed = _json.loads(content)
+                queries = parsed.get("queries") or parsed.get("Queries")
+                if not isinstance(queries, list):
+                    raise ValueError("Invalid schema: queries not list")
+                queries = [str(q).strip() for q in queries if str(q).strip()][:3]
+                if not queries:
+                    raise ValueError("Empty queries")
+                # 填满 3 个
+                while len(queries) < 3:
+                    queries.append(topic)
+                return {"queries": queries[:3]}
+            except Exception:
+                # 兜底：简单拆分
+                queries = [s.strip() for s in content.split("\n") if s.strip()][:3]
+                if not queries:
+                    queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
+                return {"queries": queries[:3]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generate queries failed: {e}")
+
+
+@app.post("/api/search/searxng", summary="Search web via SearxNG for a given query")
+async def search_searxng_api(data: dict = Body(...)):
+    """调用 SearxNG /search 接口，返回前4条结果的标题与URL。"""
+    query = data.get("query", "").strip()
+    count = int(data.get("count", 4))
+    lang = data.get("language", "zh-CN")
+    if not query:
+        raise HTTPException(status_code=400, detail="query cannot be empty")
+
+    params = {
+        "q": query,
+        "format": "json",
+        "language": lang,
+        "safesearch": 1,
+        "categories": "general",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(SEARXNG_QUERY_URL, params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+            results = payload.get("results", [])
+            items = []
+            for r in results[:max(1, count)]:
+                title = r.get("title") or r.get("name") or "Untitled"
+                url = r.get("url") or r.get("link")
+                if not url:
+                    continue
+                items.append({"title": title, "url": url})
+            return {"items": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SearxNG request failed: {e}")
 
 @app.delete("/api/documents/{document_id}", summary="Delete a single document and its associated data")
 async def delete_document(

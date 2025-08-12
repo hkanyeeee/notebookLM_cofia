@@ -67,6 +67,19 @@ export interface QueryResponse {
   message?: string
 }
 
+export interface GenerateQueriesResponse {
+  queries: string[]
+}
+
+export interface SearxItem {
+  title: string
+  url: string
+}
+
+export interface SearxResponse {
+  items: SearxItem[]
+}
+
 // API方法
 export const notebookApi = {
   // 获取API基础URL
@@ -126,6 +139,18 @@ export const notebookApi = {
         message: error.response?.data?.detail || error.message
       }
     }
+  },
+
+  // 生成搜索查询（课题 -> 3个搜索词）
+  async generateSearchQueries(topic: string): Promise<GenerateQueriesResponse> {
+    const resp = await api.post<GenerateQueriesResponse>('/api/search/generate', { topic })
+    return resp.data
+  },
+
+  // 调用 SearxNG 搜索（返回前4条标题+URL）
+  async searchSearxng(query: string, count = 4): Promise<SearxResponse> {
+    const resp = await api.post<SearxResponse>('/api/search/searxng', { query, count })
+    return resp.data
   }
 }
 

@@ -41,6 +41,10 @@ export const useNotebookStore = defineStore('notebook', () => {
 
   const documents = ref<Document[]>([])
   const messages = ref<Message[]>([])
+  // 课题模式：在未添加任何网址时，允许输入课题并生成候选URL
+  const topicInput = ref<string>('')
+  const candidateUrls = ref<{ title: string; url: string }[]>([])
+  const generating = ref<boolean>(false)
   
   const loading = reactive({
     querying: false,
@@ -172,6 +176,39 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
+  // ---- 课题工作流：生成查询 -> SearxNG 并发搜索 -> 展示候选URL按钮 ----
+  async function generateCandidatesFromTopic() {
+    const topic = topicInput.value.trim()
+    if (!topic) return
+    if (documents.value.length > 0) return // 一旦有文档，课题区域禁用
+    generating.value = true
+    candidateUrls.value = []
+    try {
+      const { queries } = await notebookApi.generateSearchQueries(topic)
+      // 并发请求 searxng，每个取4条
+      const tasks = queries.map((q) => notebookApi.searchSearxng(q, 4))
+      const results = await Promise.allSettled(tasks)
+      const items: { title: string; url: string }[] = []
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          for (const it of r.value.items || []) {
+            if (it.url && !items.find((x) => x.url === it.url)) {
+              items.push({ title: it.title, url: it.url })
+            }
+          }
+        }
+      }
+      candidateUrls.value = items.slice(0, 12)
+    } finally {
+      generating.value = false
+    }
+  }
+
+  // 选择一个候选URL，触发 addDocument
+  async function addCandidate(url: string) {
+    await addDocument(url)
+  }
+
   async function sendQuery(query: string) {
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -240,9 +277,14 @@ export const useNotebookStore = defineStore('notebook', () => {
     messages,
     loading,
     ingestionStatus,
+    topicInput,
+    candidateUrls,
+    generating,
     addDocument,
     removeDocument,
     sendQuery,
     clearMessages,
+    generateCandidatesFromTopic,
+    addCandidate,
   }
 })

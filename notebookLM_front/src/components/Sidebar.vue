@@ -152,7 +152,7 @@ function handleRemoveFailedUrl(url: string) {
 
         <div v-if="store.documents.length === 0" class="empty-state">
           <p>还没有添加任何文档</p>
-          <p class="empty-hint">点击上方按钮添加网址</p>
+          <p class="empty-hint">可在右侧输入课题，或点击上方按钮添加网址</p>
         </div>
       </div>
     </div>
