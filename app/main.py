@@ -13,7 +13,7 @@ from .config import (
     DATABASE_URL,
     EMBEDDING_SERVICE_URL,
     LLM_SERVICE_URL,
-    QUERY_GENERATER_SERVICE_URL,
+    LLM_SERVICE_URL,
     RERANKER_SERVICE_URL,
     SEARXNG_QUERY_URL,
 )
@@ -175,7 +175,7 @@ async def generate_search_queries(
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{QUERY_GENERATER_SERVICE_URL}/chat/completions", json=payload)
+            resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
