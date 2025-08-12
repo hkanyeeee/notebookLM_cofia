@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, watch } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip } from 'element-plus'
 import { Refresh, Promotion } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 
@@ -91,8 +91,7 @@ function formatTime(date: Date) {
 
     <!-- 消息列表 / 欢迎与课题输入 -->
     <div ref="messageContainer" class="messages-container">
-      <!-- 欢迎与课题输入：当没有文档时显示 -->
-      <div v-if="store.messages.length === 0 && store.documents.length === 0" class="welcome-message">
+      <div v-if="store.messages.length === 0" class="welcome-message">
         <h2>欢迎</h2>
         <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
         <div class="topic-input">
@@ -114,17 +113,28 @@ function formatTime(date: Date) {
         <div v-if="store.candidateUrls.length > 0" class="candidates">
           <h3>候选网址</h3>
           <div class="candidate-grid">
-            <ElButton
+            <ElTooltip
               v-for="item in store.candidateUrls"
               :key="item.url"
-              class="candidate-item"
-              @click="store.addCandidate(item.url)"
+              placement="top"
+              effect="dark"
             >
-              <div class="candidate-item-content">
-                <div class="candidate-title">{{ item.title }}</div>
-                <div class="candidate-url">{{ item.url }}</div>
-              </div>
-            </ElButton>
+              <template #content>
+                <div>
+                  <div>{{ item.title }}</div>
+                  <div>{{ item.url }}</div>
+                </div>
+              </template>
+              <ElButton
+                class="candidate-item"
+                @click="store.addCandidate(item.url)"
+              >
+                <div class="candidate-item-content">
+                  <div class="candidate-title">{{ item.title }}</div>
+                  <div class="candidate-url">{{ item.url }}</div>
+                </div>
+              </ElButton>
+            </ElTooltip>
           </div>
         </div>
 
@@ -144,25 +154,6 @@ function formatTime(date: Date) {
         </div>
       </div>
 
-      <!-- 当已有文档，显示原欢迎提示（不含课题输入）且允许对话 -->
-      <div v-else-if="store.messages.length === 0" class="welcome-message">
-        <h2>欢迎</h2>
-        <p>请在下方输入您的问题，系统将根据已添加的文档进行回答。</p>
-        <div class="welcome-features">
-          <div class="feature-item">
-            <strong>💡 智能问答</strong>
-            <p>基于您添加的文档内容回答问题</p>
-          </div>
-          <div class="feature-item">
-            <strong>📚 文档总结</strong>
-            <p>快速获取文档的核心要点</p>
-          </div>
-          <div class="feature-item">
-            <strong>🔍 深度分析</strong>
-            <p>深入分析文档中的关键信息</p>
-          </div>
-        </div>
-      </div>
 
       <!-- 对话消息 -->
       <div
@@ -309,9 +300,9 @@ function formatTime(date: Date) {
   text-align: left;
   height: auto;
   padding: 12px;
-  width: 300px;
+  width: 320px;
   .candidate-item-content {
-    width: 300px;
+    width: 320px;
   }
 }
 
@@ -319,7 +310,7 @@ function formatTime(date: Date) {
   font-weight: 600;
   margin-bottom: 4px;
   color: #111827;
-  width: 280px;
+  width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -329,7 +320,7 @@ function formatTime(date: Date) {
   font-size: 12px;
   color: #6b7280;
   word-break: break-all;
-  width: 280px;
+  width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

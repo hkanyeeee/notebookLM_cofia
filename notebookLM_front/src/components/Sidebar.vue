@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
-import { ElButton, ElInput, ElMessage, ElDialog, ElIcon } from 'element-plus'
+import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip } from 'element-plus'
 import { Plus, Document, Delete, Fold, Expand } from '@element-plus/icons-vue'
 
 interface Props {
@@ -135,20 +135,33 @@ function handleRemoveFailedUrl(url: string) {
     <div class="documents-section" v-if="!collapsed">
       <h3>文档列表</h3>
       <div class="documents-list">
-        <div v-for="doc in store.documents" :key="doc.id" class="document-item">
-          <ElIcon class="doc-icon">
-            <Document />
-          </ElIcon>
-          <div class="doc-info">
-            <div class="doc-title">{{ doc.title }}</div>
-            <div class="doc-url">{{ doc.url }}</div>
-          </div>
-          <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="delete-btn">
-            <ElIcon>
-              <Delete />
+        <ElTooltip
+          v-for="doc in store.documents"
+          :key="doc.id"
+          placement="right"
+          effect="dark"
+        >
+          <template #content>
+            <div>
+              <div>{{ doc.title }}</div>
+              <div>{{ doc.url }}</div>
+            </div>
+          </template>
+          <div class="document-item">
+            <ElIcon class="doc-icon">
+              <Document />
             </ElIcon>
-          </ElButton>
-        </div>
+            <div class="doc-info">
+              <div class="doc-title">{{ doc.title }}</div>
+              <div class="doc-url">{{ doc.url }}</div>
+            </div>
+            <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="delete-btn">
+              <ElIcon>
+                <Delete />
+              </ElIcon>
+            </ElButton>
+          </div>
+        </ElTooltip>
 
         <div v-if="store.documents.length === 0" class="empty-state">
           <p>还没有添加任何文档</p>
@@ -331,6 +344,9 @@ function handleRemoveFailedUrl(url: string) {
   color: #111827;
   font-size: 14px;
   margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-url {
