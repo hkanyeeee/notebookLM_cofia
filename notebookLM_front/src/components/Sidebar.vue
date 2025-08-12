@@ -110,13 +110,12 @@ function handleRemoveFailedUrl(url: string) {
         <div class="progress-info">
           <span class="progress-url">{{ url }}</span>
           <span class="progress-message">{{ status.message }}</span>
-          <!-- 为处理失败的URL添加删除按钮 -->
+          <!-- 进行中或失败时均支持删除/取消，以优化体验 -->
           <ElButton 
-            v-if="status.error" 
             text 
             type="danger" 
             size="small"
-            @click="handleRemoveFailedUrl(url)"
+            @click="status.inProgress ? store.cancelIngestion(url) : handleRemoveFailedUrl(url)"
             class="remove-failed-btn"
           >
             <ElIcon>

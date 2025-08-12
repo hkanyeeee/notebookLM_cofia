@@ -52,6 +52,8 @@ export const useNotebookStore = defineStore('notebook', () => {
   })
 
   const ingestionStatus = reactive<Map<string, IngestionProgress>>(new Map())
+  // 跟踪每个 URL 的 AbortController，用于取消进行中的摄取
+  const controllers = new Map<string, AbortController>()
 
   async function addDocument(url: string) {
     ingestionStatus.set(url, {
@@ -66,6 +68,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     let controller: AbortController | null = null;
     try {
       controller = new AbortController();
+      controllers.set(url, controller);
       timeoutId = window.setTimeout(() => controller?.abort(), 300000);
       const response = await fetch(`${notebookApi.getBaseUrl()}/ingest`, {
         method: 'POST',
@@ -146,17 +149,33 @@ export const useNotebookStore = defineStore('notebook', () => {
         }
       }
     } catch (err: any) {
-      console.error('Ingestion failed:', err);
-      const status = ingestionStatus.get(url);
-      if (status) {
-        status.message = err.message || '与服务器连接失败';
-        status.inProgress = false;
-        status.error = true;
+      // 若为用户主动取消（AbortError），静默处理，不视为错误
+      const isAbort = (controller?.signal?.aborted === true) ||
+        (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || ''))));
+      if (!isAbort) {
+        console.error('Ingestion failed:', err);
+        const status = ingestionStatus.get(url);
+        if (status) {
+          status.message = err?.message || '与服务器连接失败';
+          status.inProgress = false;
+          status.error = true;
+        }
       }
     } finally {
       // 清理超时定时器
       try { if (timeoutId !== undefined) clearTimeout(timeoutId); } catch {}
+      controllers.delete(url)
     }
+  }
+
+  // 取消并移除正在进行中的摄取记录
+  function cancelIngestion(url: string) {
+    const c = controllers.get(url)
+    if (c) {
+      try { c.abort() } catch {}
+    }
+    controllers.delete(url)
+    ingestionStatus.delete(url)
   }
 
   async function removeDocument(id: string) {
@@ -314,6 +333,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     candidateUrls,
     generating,
     addDocument,
+    cancelIngestion,
     removeDocument,
     sendQuery,
     clearMessages,
