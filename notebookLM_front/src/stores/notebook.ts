@@ -212,7 +212,7 @@ export const useNotebookStore = defineStore('notebook', () => {
         queries = [String(topic), `${topic} 关键点`, `${topic} 最新进展`]
       }
       // 并发请求 searxng，每个取4条；如果某个失败，不影响其它
-      const tasks = queries.map(async (q) => {
+      const tasks = queries.map(async (q: string) => {
         try {
           return await notebookApi.searchSearxng(q, 4)
         } catch (e) {
