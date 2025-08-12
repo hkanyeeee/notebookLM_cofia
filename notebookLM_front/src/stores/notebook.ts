@@ -184,14 +184,47 @@ export const useNotebookStore = defineStore('notebook', () => {
     generating.value = true
     candidateUrls.value = []
     try {
-      const { queries } = await notebookApi.generateSearchQueries(topic)
-      // 并发请求 searxng，每个取4条
-      const tasks = queries.map((q) => notebookApi.searchSearxng(q, 4))
+      const resp = await notebookApi.generateSearchQueries(topic)
+      let queries = resp?.queries as any
+      // 兼容不规范返回：若 queries 为字符串，尝试解析/提取
+      if (typeof queries === 'string') {
+        let parsed: any = null
+        const text = queries.trim()
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          try {
+            // 去掉可能的 ```json 包裹
+            const stripped = text.replace(/^```(?:json)?\s*|\s*```$/g, '')
+            // 尝试提取首个 {...} 对象
+            const m = stripped.match(/\{[\s\S]*\}/)
+            if (m) parsed = JSON.parse(m[0].replace(/'/g, '"'))
+          } catch {}
+        }
+        if (parsed && Array.isArray(parsed.queries)) {
+          queries = parsed.queries
+        } else {
+          // 再退一步：按行切分
+          queries = text.split(/\n+/).map((s: string) => s.trim()).filter(Boolean)
+        }
+      }
+      if (!Array.isArray(queries)) {
+        queries = [String(topic), `${topic} 关键点`, `${topic} 最新进展`]
+      }
+      // 并发请求 searxng，每个取4条；如果某个失败，不影响其它
+      const tasks = queries.map(async (q) => {
+        try {
+          return await notebookApi.searchSearxng(q, 4)
+        } catch (e) {
+          console.warn('searxng search failed for query:', q, e)
+          return { items: [] }
+        }
+      })
       const results = await Promise.allSettled(tasks)
       const items: { title: string; url: string }[] = []
       for (const r of results) {
-        if (r.status === 'fulfilled') {
-          for (const it of r.value.items || []) {
+        if (r.status === 'fulfilled' && r.value) {
+          for (const it of (r.value as any).items || []) {
             if (it.url && !items.find((x) => x.url === it.url)) {
               items.push({ title: it.title, url: it.url })
             }

@@ -180,9 +180,20 @@ async def generate_search_queries(
             content = data["choices"][0]["message"]["content"]
             # 尝试解析为 JSON
             import json as _json
+            import re as _re
 
             try:
-                parsed = _json.loads(content)
+                # 去掉可能的代码块包裹 ```json ... ``` / ``` ... ```
+                content_stripped = content.strip()
+                if content_stripped.startswith("```"):
+                    content_stripped = _re.sub(r"^```(?:json)?\\s*|\\s*```$", "", content_stripped)
+
+                # 如果包含 JSON 对象子串，只取第一个对象
+                m = _re.search(r"\{[\s\S]*\}", content_stripped)
+                json_candidate = m.group(0) if m else content_stripped
+
+                # 先尝试严格 JSON
+                parsed = _json.loads(json_candidate)
                 queries = parsed.get("queries") or parsed.get("Queries")
                 if not isinstance(queries, list):
                     raise ValueError("Invalid schema: queries not list")
@@ -194,8 +205,32 @@ async def generate_search_queries(
                     queries.append(topic)
                 return {"queries": queries[:3]}
             except Exception:
-                # 兜底：简单拆分
-                queries = [s.strip() for s in content.split("\n") if s.strip()][:3]
+                # 宽松处理：把单引号换成双引号再试一次
+                try:
+                    relaxed = json_candidate.replace("'", '"')
+                    parsed2 = _json.loads(relaxed)
+                    qs = parsed2.get("queries") or parsed2.get("Queries")
+                    if isinstance(qs, list):
+                        qs = [str(q).strip() for q in qs if str(q).strip()][:3]
+                        while len(qs) < 3:
+                            qs.append(topic)
+                        return {"queries": qs[:3]}
+                except Exception:
+                    pass
+
+                # 兜底：按行拆分，过滤可能的 JSON 包裹
+                lines = [s.strip() for s in content.split("\n") if s.strip()]
+                # 如果第一行就是一个对象字符串，尝试再解析一次
+                if lines and (lines[0].startswith("{") and lines[0].endswith("}")):
+                    try:
+                        obj = _json.loads(lines[0].replace("'", '"'))
+                        if isinstance(obj.get("queries"), list):
+                            arr = [str(q).strip() for q in obj["queries"] if str(q).strip()]
+                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:3]}
+                    except Exception:
+                        pass
+
+                queries = lines[:3]
                 if not queries:
                     queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
                 return {"queries": queries[:3]}
