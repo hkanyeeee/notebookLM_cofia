@@ -13,6 +13,7 @@ from .config import (
     DATABASE_URL,
     EMBEDDING_SERVICE_URL,
     LLM_SERVICE_URL,
+    QUERY_GENERATER_SERVICE_URL,
     RERANKER_SERVICE_URL,
     SEARXNG_QUERY_URL,
 )
@@ -34,7 +35,7 @@ app = FastAPI(title="NotebookLM-Py Backend")
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=["*"],  # 允许所有来源，解决本地开发跨域问题
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -164,7 +165,7 @@ async def generate_search_queries(
     user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
     payload = {
-        "model": "qwen3_8b_awq",
+        "model": "openai/gpt-oss-20b",
         "messages": [
             {"role": "system", "content": prompt_system},
             {"role": "user", "content": user_prompt},
@@ -174,7 +175,7 @@ async def generate_search_queries(
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
+            resp = await client.post(f"{QUERY_GENERATER_SERVICE_URL}/chat/completions", json=payload)
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
@@ -477,3 +478,4 @@ async def debug_qdrant_points():
     except Exception as e:
         # Handle case where collection might not exist yet
         return {"error": str(e)}
+
