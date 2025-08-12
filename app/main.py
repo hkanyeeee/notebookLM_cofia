@@ -72,7 +72,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", 2560)
     
     try:
         # 1. Check if source already exists
@@ -363,7 +363,7 @@ async def query(
     q = data.get("query", "")
     top_k = data.get("top_k", 200)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", 2560)
     document_ids = data.get("document_ids", []) # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
