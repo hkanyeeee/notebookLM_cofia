@@ -114,7 +114,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         await db.commit()
 
         # 5. 并发地进行嵌入与落库（按批并发、完成即写入并推送进度）
-        MAX_PARALLEL = int(os.getenv("EMBEDDING_MAX_CONCURRENCY", "6"))
+        MAX_PARALLEL = int(os.getenv("EMBEDDING_MAX_CONCURRENCY", "2"))
         BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
 
         # 分批构造任务：每个任务只发起一次 /embeddings 请求（将 batch_size 传为该批大小）
