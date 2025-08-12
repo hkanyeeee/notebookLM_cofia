@@ -1,4 +1,5 @@
 import asyncio
+import os
 import tiktoken
 import json
 from fastapi import FastAPI, Body, HTTPException, Header, Depends
@@ -112,17 +113,58 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         # 提前提交，缩短事务占用时间，避免长时间写锁
         await db.commit()
 
-        # 5. Embed and Add to Vector DB chunk by chunk
-        for i, chunk_obj in enumerate(chunk_objects):
-            # Embed
-            embedding = (await embed_texts([chunk_obj.content], model=embedding_model, dimensions=embedding_dimensions))[0]
-            
-            # Add to vector DB
-            await add_embeddings(source.id, [chunk_obj], [embedding])
+        # 5. 并发地进行嵌入与落库（按批并发、完成即写入并推送进度）
+        MAX_PARALLEL = int(os.getenv("EMBEDDING_MAX_CONCURRENCY", "6"))
+        BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
 
-            # Yield progress
-            yield f"data: {json.dumps({'type': 'progress', 'value': i + 1})}\n\n"
-            await asyncio.sleep(0.01) # Small delay to allow UI to update
+        # 分批构造任务：每个任务只发起一次 /embeddings 请求（将 batch_size 传为该批大小）
+        chunk_batches = [
+            chunk_objects[i : i + BATCH_SIZE]
+            for i in range(0, len(chunk_objects), BATCH_SIZE)
+        ]
+
+        sem = asyncio.Semaphore(MAX_PARALLEL)
+
+        async def embed_batch_worker(batch_index: int, batch_chunks: List[Chunk]):
+            async with sem:
+                texts = [c.content for c in batch_chunks]
+                # 让每个任务只发一次请求
+                embeddings = await embed_texts(
+                    texts,
+                    model=embedding_model,
+                    batch_size=len(texts),
+                    dimensions=embedding_dimensions,
+                )
+                return batch_index, embeddings
+
+        tasks = [
+            asyncio.create_task(embed_batch_worker(idx, batch))
+            for idx, batch in enumerate(chunk_batches)
+        ]
+
+        completed = 0
+        for coro in asyncio.as_completed(tasks):
+            try:
+                batch_index, embeddings = await coro
+                batch_chunks = chunk_batches[batch_index]
+                if not embeddings or len(embeddings) != len(batch_chunks):
+                    # 本批失败或数量不一致：跳过并记录
+                    print(
+                        f"Embedding batch {batch_index} failed or size mismatch: got {len(embeddings) if embeddings else 0}, expected {len(batch_chunks)}"
+                    )
+                    continue
+
+                # 将该批结果写入向量库
+                await add_embeddings(source.id, batch_chunks, embeddings)
+
+                # 推送每条完成的进度
+                for _ in batch_chunks:
+                    completed += 1
+                    yield f"data: {json.dumps({'type': 'progress', 'value': completed})}\n\n"
+                    await asyncio.sleep(0.005)
+            except Exception as e:
+                print(f"Embedding task failed: {e}")
+                # 不中断整体流程，继续其他批次
 
         await db.commit()
         
