@@ -7,10 +7,10 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import uvicorn
 
 # 本地模型路径
-MODEL_DIR = "/Users/hewenxin/mlx_models/qwen3_rerank_0.6"
+MODEL_DIR = "/Users/cofiavcin/mlx_models/qwen3_rerank_0.6"
 HOST = os.getenv("RERANK_HOST", "0.0.0.0")
-PORT = 7998
-MAX_LENGTH = 8192
+PORT = 7999
+MAX_LENGTH = 4096
 
 app = FastAPI()
 

@@ -30,6 +30,9 @@ import httpx
 
 # Constants
 RERANKER_MAX_TOKENS = 3072
+# 限制对重排服务的客户端侧并发，建议为 （后端机器数 × 每机并发）
+RERANK_CLIENT_MAX_CONCURRENCY = int(os.getenv("RERANK_CLIENT_MAX_CONCURRENCY", "4"))
+_rerank_client_semaphore = asyncio.Semaphore(RERANK_CLIENT_MAX_CONCURRENCY)
 
 app = FastAPI(title="NotebookLM-Py Backend")
 
@@ -467,8 +470,12 @@ async def query(
 
                 print(f"Created {len(batches)} batches for reranking.")
 
-                # Rerank batches concurrently
-                rerank_tasks = [rerank(q, batch) for batch in batches]
+                # Rerank batches with限流的并发控制，避免压满后端
+                async def rerank_with_limit(batch):
+                    async with _rerank_client_semaphore:
+                        return await rerank(q, batch)
+
+                rerank_tasks = [asyncio.create_task(rerank_with_limit(batch)) for batch in batches]
                 reranked_results_with_scores = await asyncio.gather(*rerank_tasks)
                 
                 # Flatten the list of lists and sort by the new score
