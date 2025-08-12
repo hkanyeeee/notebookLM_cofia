@@ -158,10 +158,10 @@ async def generate_search_queries(
 
     # 使用现有 LLM 服务，以系统提示约束返回 JSON
     prompt_system = (
-        "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的中文查询。"
+        "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的英文查询。"
         "返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
     )
-    user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{ '{"queries": ["...", "...", "..."]}' }"
+    user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
     payload = {
         "model": "qwen3_8b_awq",
@@ -477,4 +477,3 @@ async def debug_qdrant_points():
     except Exception as e:
         # Handle case where collection might not exist yet
         return {"error": str(e)}
-

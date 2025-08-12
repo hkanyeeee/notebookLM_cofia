@@ -99,7 +99,7 @@ function formatTime(date: Date) {
           <ElInput
             v-model="store.topicInput"
             placeholder="请输入课题，例如：Sora 2025 能力与限制"
-            :disabled="store.generating || store.ingestionStatus.size > 0"
+            :disabled="store.generating"
             @keyup.enter.native.stop="store.generateCandidatesFromTopic()"
           />
           <ElButton
@@ -121,8 +121,10 @@ function formatTime(date: Date) {
               class="candidate-item"
               @click="store.addCandidate(item.url)"
             >
-              <div class="candidate-title">{{ item.title }}</div>
-              <div class="candidate-url">{{ item.url }}</div>
+              <div class="candidate-item-content">
+                <div class="candidate-title">{{ item.title }}</div>
+                <div class="candidate-url">{{ item.url }}</div>
+              </div>
             </ElButton>
           </div>
         </div>
@@ -290,12 +292,17 @@ function formatTime(date: Date) {
 .candidates {
   margin-top: 24px;
   text-align: left;
+  width: 1000px;
+  margin-left: -200px;
 }
 
 .candidate-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
+  .candidate-item:first-child {
+    margin-left: 12px;
+  }
 }
 
 .candidate-item {
@@ -303,18 +310,30 @@ function formatTime(date: Date) {
   text-align: left;
   height: auto;
   padding: 12px;
+  width: 300px;
+  .candidate-item-content {
+    width: 300px;
+  }
 }
 
 .candidate-title {
   font-weight: 600;
   margin-bottom: 4px;
   color: #111827;
+  width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .candidate-url {
   font-size: 12px;
   color: #6b7280;
   word-break: break-all;
+  width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .welcome-message h2 {
