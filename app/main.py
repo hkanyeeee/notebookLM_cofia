@@ -241,29 +241,48 @@ async def generate_search_queries(
 
 @app.post("/api/search/searxng", summary="Search web via SearxNG for a given query")
 async def search_searxng_api(data: dict = Body(...)):
-    """调用 SearxNG /search 接口，返回前4条结果的标题与URL。"""
+    """调用 SearxNG /search 接口，按 Open WebUI 行为对齐：
+    - 语言固定 en-US
+    - time_range / categories 为空
+    - 传递 pageno=1、theme=simple、image_proxy=0、safesearch=1
+    - 设置与 Open WebUI 相同的请求头
+    - 对返回 results 按 score 降序并截断至 count
+    """
     query = data.get("query", "").strip()
     count = int(data.get("count", 4))
-    lang = data.get("language", "zh-CN")
     if not query:
         raise HTTPException(status_code=400, detail="query cannot be empty")
 
     params = {
         "q": query,
         "format": "json",
-        "language": lang,
-        "safesearch": 1,
-        "categories": "general",
+        "pageno": 1,
+        "safesearch": "1",
+        "language": "en-US",
+        "time_range": "",
+        "categories": "",
+        "theme": "simple",
+        "image_proxy": 0,
+    }
+
+    headers = {
+        "User-Agent": "Open WebUI (https://github.com/open-webui/open-webui) RAG Bot",
+        "Accept": "text/html",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Connection": "keep-alive",
     }
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(SEARXNG_QUERY_URL, params=params)
+            resp = await client.get(SEARXNG_QUERY_URL, params=params, headers=headers)
             resp.raise_for_status()
             payload = resp.json()
             results = payload.get("results", [])
+            # 对齐 Open WebUI：按 score 降序
+            results_sorted = sorted(results, key=lambda x: x.get("score", 0), reverse=True)
             items = []
-            for r in results[:max(1, count)]:
+            for r in results_sorted[:max(1, count)]:
                 title = r.get("title") or r.get("name") or "Untitled"
                 url = r.get("url") or r.get("link")
                 if not url:
