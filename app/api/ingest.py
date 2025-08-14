@@ -46,7 +46,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching & parsing URL content...'})}\n\n"
         text = await fetch_then_extract(url)
 
-        title = url.split('/')[-1]
+        title = url.split('/')[-1] or url
 
         # 3. Chunk Text
         yield f"data: {json.dumps({'type': 'status', 'message': 'Chunking text...'})}\n\n"
@@ -62,13 +62,11 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         db.add(source)
         await db.flush()
 
-        # 为每个chunk生成唯一的chunk_id
-        import uuid
         chunk_objects = []
-        for chunk_text in chunks:
+        for index, text in enumerate(chunks):
             chunk_obj = Chunk(
-                chunk_id=str(uuid.uuid4()),  # 生成唯一的chunk_id
-                content=chunk_text, 
+                chunk_id=str(index),
+                content=text, 
                 source_id=source.id, 
                 session_id=session_id
             )

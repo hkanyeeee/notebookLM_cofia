@@ -140,7 +140,7 @@ async def query(
         answer = await generate_answer(q, contexts)
 
         sources = [
-            {"id": chunk.source.id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
+            {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
             for chunk, score in final_hits
         ]
         return {"answer": answer, "sources": sources, "success": True}

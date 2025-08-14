@@ -48,7 +48,7 @@ async def ensure_collection_exists(vector_size: int):
 
 async def add_embeddings(source_id: int, chunks: List[Chunk], embeddings: List[List[float]]):
     """
-    Adds embeddings to Qdrant with associated metadata (session_id, source_id, content).
+    Adds embeddings to Qdrant with associated metadata (session_id, source_id, content, chunk_id).
     """
     if not qdrant_client:
         raise ConnectionError("Qdrant client is not available.")
@@ -65,7 +65,8 @@ async def add_embeddings(source_id: int, chunks: List[Chunk], embeddings: List[L
             payload={
                 "session_id": chunk.session_id,
                 "source_id": chunk.source_id,
-                "content": chunk.content
+                "content": chunk.content,
+                "chunk_id": chunk.chunk_id
             }
         )
         for chunk, embedding in zip(chunks, embeddings) if chunk.id is not None
@@ -80,7 +81,6 @@ async def add_embeddings(source_id: int, chunks: List[Chunk], embeddings: List[L
         points=points,
         wait=True 
     )
-    print(f"Upserted {len(points)} points to Qdrant for source_id {source_id}.")
 
 
 async def query_embeddings(
@@ -89,6 +89,7 @@ async def query_embeddings(
     session_id: Optional[str] = None,
     source_ids: Optional[List[int]] = None,
     hnsw_ef: int = 256,
+    db: Optional[AsyncSession] = None,
 ) -> List[Tuple[Chunk, float]]:
     """
     Queries Qdrant for similar vectors, filtering by session_id and optionally source_ids.
@@ -120,15 +121,33 @@ async def query_embeddings(
     # Reconstruct Chunk objects from the payload
     hits = []
     for point in search_result:
-        # Create a mock Source and Chunk object. The ORM relationships might not be fully loaded,
-        # but we have the necessary data for the context.
-        source = Source(id=point.payload['source_id'], session_id=point.payload['session_id'], url="", title="")
+        # Get complete source information from database
+        source = None
+        if db is not None:
+            try:
+                # Ensure we properly handle the source object within the session
+                result = await db.execute(select(Source).where(Source.id == point.payload['source_id']))
+                source = result.scalar_one_or_none()
+                
+                # If we fetched a source, make sure it's in the session to avoid warnings
+                if source is not None:
+                    # This ensures the source is attached to the session
+                    await db.merge(source)
+            except Exception as e:
+                print(f"Failed to fetch source {point.payload['source_id']}: {e}")
+        
+        # If we couldn't get the source from DB, create a minimal one
+        if source is None:
+            # Create a minimal source without session association for fallback
+            source = Source(id=point.payload['source_id'], session_id=point.payload['session_id'], url="", title="")
+        
         chunk = Chunk(
             id=point.id, 
             content=point.payload['content'],
             source_id=point.payload['source_id'],
             session_id=point.payload['session_id'],
-            source=source
+            source=source,
+            chunk_id=point.payload.get('chunk_id')  # Add chunk_id from payload
         )
         hits.append((chunk, point.score))
         
@@ -149,7 +168,7 @@ async def query_bm25(
     # 基于 FTS 的匹配先取一批候选，再关联原表限定 session/source
     # 注意：bm25(chunks_fts) 分数越小越好（更相关），此处取负数作为统一的“越大越好”分值
     base_sql = (
-        "SELECT c.id, c.content, c.source_id, c.session_id, -bm25(chunks_fts) AS score "
+        "SELECT c.id, c.content, c.source_id, c.session_id, c.chunk_id, -bm25(chunks_fts) AS score "
         "FROM chunks_fts JOIN chunks c ON chunks_fts.rowid = c.id "
         "WHERE chunks_fts MATCH :q AND c.session_id = :sid"
     )
@@ -170,10 +189,30 @@ async def query_bm25(
         return []
     hits: List[Tuple[Chunk, float]] = []
     for row in rows:
-        # row: (id, content, source_id, session_id, score)
-        source = Source(id=row[2], session_id=row[3], url="", title="")
+        # row: (id, content, source_id, session_id, chunk_id, score)
+        # Get complete source information from database
+        source = None
+        try:
+            # Ensure we properly handle the source object within the session
+            result = await db.execute(select(Source).where(Source.id == row[2]))
+            source = result.scalar_one_or_none()
+            
+            # If we fetched a source, make sure it's in the session to avoid warnings
+            if source is not None:
+                # This ensures the source is attached to the session
+                await db.merge(source)
+        except Exception as e:
+            print(f"Failed to fetch source {row[2]}: {e}")
+        
+        # If we couldn't get the source from DB, create a minimal one
+        if source is None:
+            # Create a minimal source without session association for fallback
+            source = Source(id=row[2], session_id=row[3], url="", title="")
+        
         chunk = Chunk(id=row[0], content=row[1], source_id=row[2], session_id=row[3], source=source)
-        hits.append((chunk, float(row[4])))
+        # 从数据库获取chunk_id
+        chunk.chunk_id = row[4]  # row[4] is chunk_id from the query
+        hits.append((chunk, float(row[5])))  # row[5] is the score
     return hits
 
 
@@ -235,6 +274,7 @@ async def query_hybrid(
         session_id=session_id,
         source_ids=source_ids,
         hnsw_ef=hnsw_ef,
+        db=db,
     )
 
     sparse_hits: List[Tuple[Chunk, float]] = []
