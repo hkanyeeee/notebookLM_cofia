@@ -48,7 +48,8 @@ export const useNotebookStore = defineStore('notebook', () => {
   
   const loading = reactive({
     querying: false,
-    addingDocument: false
+    addingDocument: false,
+    exporting: false
   })
 
   const ingestionStatus = reactive<Map<string, IngestionProgress>>(new Map())
@@ -323,6 +324,44 @@ export const useNotebookStore = defineStore('notebook', () => {
     messages.value = []
   }
 
+  async function exportConversation() {
+    const sessionId = sessionStore.getSessionId()
+    if (!sessionId) {
+      throw new Error('No session ID found')
+    }
+    
+    loading.exporting = true
+    try {
+      const response = await fetch(`${notebookApi.getBaseUrl()}/export/conversation/${sessionId}`, {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `conversation_export_${sessionId}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Export failed:', error)
+      throw error
+    } finally {
+      loading.exporting = false
+    }
+  }
+
   return {
     documents,
     messages,
@@ -338,5 +377,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     clearMessages,
     generateCandidatesFromTopic,
     addCandidate,
+    exportConversation,
   }
 })

@@ -21,6 +21,17 @@ const store = useNotebookStore()
 const showAddDialog = ref(false)
 const newUrl = ref('')
 
+// 导出对话历史
+async function handleExportConversation() {
+  try {
+    await store.exportConversation()
+    ElMessage.success('导出成功')
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败，请重试')
+  }
+}
+
 // 添加文档
 async function handleAddDocument() {
   const urls = newUrl.value
@@ -185,6 +196,20 @@ function handleRemoveFailedUrl(url: string) {
         </ElButton>
       </template>
     </ElDialog>
+
+    <!-- 导出按钮 -->
+    <div class="export-section" v-if="!collapsed">
+      <ElButton
+        type="success"
+        @click="handleExportConversation"
+        :disabled="store.documents.length === 0 || store.loading.querying"
+        :loading="store.loading.exporting"
+        class="export-btn"
+        style="width: 100%; margin-top: 10px;"
+      >
+        导出对话历史
+      </ElButton>
+    </div>
   </aside>
 </template>
 
