@@ -140,7 +140,7 @@ async def query(
         answer = await generate_answer(q, contexts)
 
         sources = [
-            {"url": chunk.source.url, "content": chunk.content, "score": score}
+            {"id": chunk.source.id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
             for chunk, score in final_hits
         ]
         return {"answer": answer, "sources": sources, "success": True}
@@ -167,5 +167,3 @@ async def debug_qdrant_points():
     except Exception as e:
         # Handle case where collection might not exist yet
         return {"error": str(e)}
-
-

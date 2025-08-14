@@ -22,6 +22,7 @@ class Chunk(Base):
     __tablename__ = "chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chunk_id: Mapped[str] = mapped_column(String, unique=True, index=True)  # 添加chunk_id字段
     content: Mapped[str] = mapped_column(Text, nullable=False)
     
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
@@ -30,4 +31,4 @@ class Chunk(Base):
     source: Mapped["Source"] = relationship("Source", back_populates="chunks")
 
     def __repr__(self) -> str:
-        return f"<Chunk(id={self.id}, source_id={self.source_id}, session_id='{self.session_id}')>"
+        return f"<Chunk(id={self.id}, chunk_id={self.chunk_id}, source_id={self.source_id}, session_id='{self.session_id}')>"

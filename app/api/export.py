@@ -56,29 +56,56 @@ async def export_conversation(
     """
     
     try:
-        # 1. 获取会话相关的源文档（Source）
-        stmt = select(Source).where(Source.session_id == session_id)
-        result = await db.execute(stmt)
-        sources = result.scalars().all()
+        # 1. 获取对话中相关的chunks（从messages中的sources信息）
+        all_chunk_sources = []
+        for message in data.messages:
+            if message.sources:
+                all_chunk_sources.extend(message.sources)
         
-        if not sources:
-            raise HTTPException(status_code=404, detail="No documents found for this session")
+        # 去重并限制为top5个chunks
+        unique_sources = {}
+        chunk_ids = []  # 新增：用于存储chunk_id列表
+        for source in all_chunk_sources:
+            # 使用chunk_id作为唯一标识
+            chunk_id = source.get('id') or source.get('chunk_id')
+            if chunk_id and chunk_id not in unique_sources:
+                unique_sources[chunk_id] = source
+                chunk_ids.append(chunk_id)
         
-        # 2. 获取所有相关的chunks
-        source_ids = [source.id for source in sources]
-        stmt = select(Chunk).where(
-            Chunk.source_id.in_(source_ids),
-            Chunk.session_id == session_id
-        )
-        result = await db.execute(stmt)
-        chunks = result.scalars().all()
+        # 限制为top5个
+        top5_sources = list(unique_sources.values())[:5]
+        
+        # 2. 根据chunk_id获取chunks（修改这里，直接用chunk_id查询）
+        if chunk_ids:
+            stmt = select(Chunk).where(
+                Chunk.chunk_id.in_(chunk_ids),
+                Chunk.session_id == session_id
+            )
+            result = await db.execute(stmt)
+            chunks = result.scalars().all()
+        else:
+            # 如果没有找到相关chunk，使用session_id直接查询chunks
+            stmt = select(Chunk).where(Chunk.session_id == session_id)
+            result = await db.execute(stmt)
+            chunks = result.scalars().all()
         
         # 3. 获取所有相关的文档内容
         document_contents = {}
-        for source in sources:
-            # 获取该文档的所有chunks
+        # 创建一个映射：chunk_id -> source_id，用于正确关联
+        chunk_to_source_map = {}
+        for source in top5_sources:
+            source_id = source.get('id') or source.get('source_id')
+            chunk_id = source.get('id') or source.get('chunk_id')
+            if chunk_id:
+                chunk_to_source_map[chunk_id] = source_id
+        
+        for source in top5_sources:
+            # 获取该source的所有chunks
+            source_id = source.get('id') or source.get('source_id')
+            
+            # 通过chunk_id来查找相关chunks，而不是source_id
             stmt = select(Chunk).where(
-                Chunk.source_id == source.id,
+                Chunk.source_id == source_id,
                 Chunk.session_id == session_id
             )
             result = await db.execute(stmt)
@@ -95,11 +122,23 @@ async def export_conversation(
                     # 如果有编码错误，跳过该chunk或用占位符替代
                     content_parts.append("[无法读取的文档内容]")
             
-            content = "\n".join(content_parts)
-            document_contents[source.id] = {
-                "title": source.title,
-                "url": source.url,
-                "content": content,
+            # 获取正确的source信息，包括url
+            title = source.get('title', 'Untitled')
+            
+            # 从第一个chunk中获取url信息（因为所有chunk应该来自同一个source）
+            url = source.get('url', '')
+            if not url and source_chunks:
+                # 如果前端没有提供url，尝试从source表获取
+                stmt = select(Source).where(Source.id == source_id)
+                result = await db.execute(stmt)
+                source_obj = result.scalar_one_or_none()
+                if source_obj:
+                    url = source_obj.url
+            
+            document_contents[source_id] = {
+                "title": title,
+                "url": url,
+                "content": "\n".join(content_parts),
                 "chunks_count": len(source_chunks)
             }
         
@@ -108,7 +147,7 @@ async def export_conversation(
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             # 5. 创建主Markdown文件（对话历史）
-            conversation_md = create_conversation_markdown(session_id, sources, data.messages)
+            conversation_md = create_conversation_markdown(session_id, top5_sources, data.messages)
             # 确保Markdown内容是UTF-8编码
             try:
                 conversation_md.encode('utf-8')
@@ -124,8 +163,16 @@ async def export_conversation(
                 summary = await generate_document_summary(doc_info["content"])
                 
                 # 8. 创建文档概述文件
+                # 获取chunk_id而不是source_id，确保正确显示chunk的id
+                chunk_id_for_display = None
+                for source in top5_sources:
+                    if (source.get('id') or source.get('source_id')) == source_id:
+                        chunk_id_for_display = source.get('id') or source.get('chunk_id')
+                        break
+                
                 doc_md = create_document_markdown(
-                    source_id, 
+                    session_id,
+                    chunk_id_for_display or source_id, 
                     i, 
                     doc_info["title"], 
                     doc_info["url"], 
@@ -178,7 +225,7 @@ async def generate_document_summary(content: str) -> str:
     except Exception as e:
         return f"无法生成概述: {str(e)}"
 
-def create_conversation_markdown(session_id: str, sources: List[Source], messages: List[Message]) -> str:
+def create_conversation_markdown(session_id: str, sources: List[Dict], messages: List[Message]) -> str:
     """
     创建对话历史的Markdown文件
     """
@@ -187,7 +234,10 @@ def create_conversation_markdown(session_id: str, sources: List[Source], message
     markdown_content += "## 相关文档列表\n\n"
     
     for i, source in enumerate(sources, 1):
-        markdown_content += f"{i}. [{source.title}]({source.url})\n"
+        # 修改：使用正确的文件名格式指向文档概述文件
+        source_id = source.get('id') or source.get('source_id', i)
+        source_title = source.get('title', f'Untitled Document {i}')
+        markdown_content += f"{i}. [{source_title}](document_{source_id}_{i-1}.md)\n"
     
     # 添加对话历史
     markdown_content += "\n## 对话历史\n\n"
@@ -210,7 +260,8 @@ def create_conversation_markdown(session_id: str, sources: List[Source], message
     return markdown_content
 
 def create_document_markdown(
-    source_id: int, 
+    session_id: str,
+    source_id: str, 
     index: int, 
     title: str, 
     url: str, 
@@ -234,9 +285,9 @@ def create_document_markdown(
     markdown_content += f"## 概述\n\n"
     markdown_content += f"{safe_summary}\n\n"
     
-    markdown_content += f"## 关联链接\n\n"
-    markdown_content += f"- [查看完整文档](document_{source_id}_{index}.md)\n"
-    markdown_content += f"- [返回对话历史](conversation_{source_id}.md)\n\n"
+    # 移除"查看完整文档"的关联链接，只保留概述
+    markdown_content += f"## 关联说明\n\n"
+    markdown_content += f"此文档概述由大模型生成，包含核心主题、关键要点和主要结论。\n\n"
     
     markdown_content += f"## 完整内容预览\n\n"
     # 限制预览内容长度并处理编码

@@ -62,10 +62,18 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         db.add(source)
         await db.flush()
 
-        chunk_objects = [
-            Chunk(content=chunk_text, source_id=source.id, session_id=session_id)
-            for chunk_text in chunks
-        ]
+        # 为每个chunk生成唯一的chunk_id
+        import uuid
+        chunk_objects = []
+        for chunk_text in chunks:
+            chunk_obj = Chunk(
+                chunk_id=str(uuid.uuid4()),  # 生成唯一的chunk_id
+                content=chunk_text, 
+                source_id=source.id, 
+                session_id=session_id
+            )
+            chunk_objects.append(chunk_obj)
+        
         db.add_all(chunk_objects)
         await db.flush()
         # 提前提交，缩短事务占用时间，避免长时间写锁
@@ -144,5 +152,3 @@ async def ingest(
         stream_ingest_progress(data, session_id, db),
         media_type="text/event-stream",
     )
-
-
