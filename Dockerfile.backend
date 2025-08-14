@@ -1,38 +1,37 @@
-FROM python:3.11-slim
+# backend/Dockerfile（建议版）
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 安装系统依赖（playwright chromium 运行时等）
-# 使用正确的字体包名和完整的依赖列表
+# 换 Debian 源为清华镜像，加速国内 apt
+RUN sed -i -E 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g; s@security.debian.org@mirrors.tuna.tsinghua.edu.cn/debian-security@g' /etc/apt/sources.list
+
+# Playwright/Chromium 运行依赖 + 字体（bookworm 包名）
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
     apt-get update && apt-get install -y --no-install-recommends \
-    curl wget gnupg ca-certificates xdg-utils \
-    # Playwright/Chromium 运行依赖
+    ca-certificates curl wget gnupg xdg-utils \
     libasound2 libatk1.0-0 libcairo2 libcups2 libdrm2 libgbm1 \
-    libgtk-3-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 \
-    libxrandr2 libxshmfence1 libx11-xcb1 libx11-6 libxext6 libxss1 \
-    libxtst6 libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-0 \
-    # 字体包（使用正确的包名）
-    fonts-ubuntu fonts-unifont fonts-noto-color-emoji fonts-liberation \
+    libglib2.0-0 libgtk-3-0 libnspr4 libnss3 \
+    libx11-6 libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+    libxrandr2 libxshmfence1 libxss1 libxtst6 \
+    libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-0 \
+    fonts-unifont fonts-noto-cjk fonts-noto-color-emoji fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 
-# 使用清华源安装Python依赖
+# 用清华 PyPI 源加速
 RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 只安装浏览器，不使用--with-deps避免依赖问题
+# 只装浏览器本体（不要 --with-deps，以免再次触发包名错配）
 RUN python -m playwright install chromium
 
 COPY app ./app
 COPY rerank_gateway.py serve_reranker.py ./
 
 EXPOSE 8000
-
 CMD ["sh", "-lc", "uvicorn app.main:app --host 0.0.0.0 --port 8000"]
-
-
