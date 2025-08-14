@@ -22,8 +22,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 COPY requirements.txt ./
 
-# 使用清华源安装Python依赖，使用host网络加速
-RUN --network=host pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 使用清华源安装Python依赖
+RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 只安装浏览器，不使用--with-deps避免依赖问题
 RUN python -m playwright install chromium
