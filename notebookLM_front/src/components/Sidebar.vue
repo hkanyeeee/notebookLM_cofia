@@ -198,14 +198,14 @@ function handleRemoveFailedUrl(url: string) {
     </ElDialog>
 
     <!-- 导出按钮 -->
-    <div class="export-section" v-if="!collapsed">
+    <div class="export-section" style="text-align: center;" v-if="!collapsed">
       <ElButton
         type="success"
         @click="handleExportConversation"
-        :disabled="store.documents.length === 0 || store.loading.querying"
+        :disabled="store.documents.length === 0 || store.messages.length === 0 || store.loading.querying"
         :loading="store.loading.exporting"
         class="export-btn"
-        style="width: 100%; margin-top: 10px;"
+        style="width: 90%; height: 40px; margin: 10px 0px;"
       >
         导出对话历史
       </ElButton>

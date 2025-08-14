@@ -2,11 +2,12 @@ import zipfile
 import io
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ..models import Source, Chunk
 from ..database import get_db
@@ -15,6 +16,18 @@ from ..llm_client import generate_answer
 from ..config import LLM_SERVICE_URL
 
 router = APIRouter()
+
+# 对话消息的Pydantic模型
+class Message(BaseModel):
+    id: str
+    type: str  # 'user' 或 'assistant'
+    content: str
+    timestamp: datetime
+    sources: Optional[List[Dict]] = None
+
+# 对话历史的Pydantic模型
+class ConversationExportRequest(BaseModel):
+    messages: List[Message]
 
 # 用于存储对话历史的简单模型（基于现有结构）
 class ConversationMessage:
@@ -31,6 +44,7 @@ logger = logging.getLogger(__name__)
 @router.post("/export/conversation/{session_id}", summary="Export conversation history and related documents to zip")
 async def export_conversation(
     session_id: str,
+    data: ConversationExportRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -59,11 +73,7 @@ async def export_conversation(
         result = await db.execute(stmt)
         chunks = result.scalars().all()
         
-        # 3. 生成对话历史（从前端存储的会话数据）
-        # 这里需要从数据库中获取对话历史，但当前系统没有专门的对话历史表
-        # 我们可以先创建一个简单的实现，返回相关文档信息
-        
-        # 4. 获取所有相关的文档内容
+        # 3. 获取所有相关的文档内容
         document_contents = {}
         for source in sources:
             # 获取该文档的所有chunks
@@ -93,12 +103,12 @@ async def export_conversation(
                 "chunks_count": len(source_chunks)
             }
         
-        # 5. 创建zip文件
+        # 4. 创建zip文件
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # 6. 创建主Markdown文件（对话历史）
-            conversation_md = create_conversation_markdown(session_id, sources)
+            # 5. 创建主Markdown文件（对话历史）
+            conversation_md = create_conversation_markdown(session_id, sources, data.messages)
             # 确保Markdown内容是UTF-8编码
             try:
                 conversation_md.encode('utf-8')
@@ -108,12 +118,12 @@ async def export_conversation(
             
             zip_file.writestr(f"conversation_{session_id}.md", conversation_md)
             
-            # 7. 为每个文档创建概述文件
+            # 6. 为每个文档创建概述文件
             for i, (source_id, doc_info) in enumerate(document_contents.items()):
-                # 8. 使用大模型生成文档概述
+                # 7. 使用大模型生成文档概述
                 summary = await generate_document_summary(doc_info["content"])
                 
-                # 9. 创建文档概述文件
+                # 8. 创建文档概述文件
                 doc_md = create_document_markdown(
                     source_id, 
                     i, 
@@ -132,7 +142,7 @@ async def export_conversation(
                 
                 zip_file.writestr(f"document_{source_id}_{i}.md", doc_md)
         
-        # 10. 返回zip文件
+        # 9. 返回zip文件
         zip_buffer.seek(0)
         return StreamingResponse(
             zip_buffer,
@@ -168,7 +178,7 @@ async def generate_document_summary(content: str) -> str:
     except Exception as e:
         return f"无法生成概述: {str(e)}"
 
-def create_conversation_markdown(session_id: str, sources: List[Source]) -> str:
+def create_conversation_markdown(session_id: str, sources: List[Source], messages: List[Message]) -> str:
     """
     创建对话历史的Markdown文件
     """
@@ -179,11 +189,23 @@ def create_conversation_markdown(session_id: str, sources: List[Source]) -> str:
     for i, source in enumerate(sources, 1):
         markdown_content += f"{i}. [{source.title}]({source.url})\n"
     
-    # 注意：由于系统中没有专门的对话历史存储，这里返回一个占位符
+    # 添加对话历史
     markdown_content += "\n## 对话历史\n\n"
-    markdown_content += "（当前系统没有专门存储对话历史，此部分为空）\n\n"
+    
+    if not messages:
+        markdown_content += "（当前会话中没有对话记录）\n\n"
+    else:
+        for message in messages:
+            # 根据消息类型添加不同的格式
+            if message.type == 'user':
+                markdown_content += f"**用户**: {message.content}\n\n"
+            elif message.type == 'assistant':
+                markdown_content += f"**助手**: {message.content}\n\n"
+            # 添加时间戳（如果需要的话）
+            # markdown_content += f"时间: {message.timestamp}\n\n"
+    
     markdown_content += "## 关联说明\n\n"
-    markdown_content += "此导出包含会话相关的文档内容和其概述。\n\n"
+    markdown_content += "此导出包含会话相关的文档内容和对话历史。\n\n"
     
     return markdown_content
 

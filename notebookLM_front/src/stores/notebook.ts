@@ -332,11 +332,16 @@ export const useNotebookStore = defineStore('notebook', () => {
     
     loading.exporting = true
     try {
+      // 将当前对话历史发送到后端
       const response = await fetch(`${notebookApi.getBaseUrl()}/export/conversation/${sessionId}`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-Session-ID': sessionId,
         },
+        body: JSON.stringify({
+          messages: messages.value
+        }),
       })
       
       if (!response.ok) {
