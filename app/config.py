@@ -12,7 +12,6 @@ def get_config_value(key: str, default: str = None) -> str:
 DATABASE_URL = get_config_value("DATABASE_URL")
 EMBEDDING_SERVICE_URL = get_config_value("EMBEDDING_SERVICE_URL")
 LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")
-LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")
 RERANKER_SERVICE_URL = get_config_value("RERANKER_SERVICE_URL")
 SEARXNG_QUERY_URL = get_config_value("SEARXNG_QUERY_URL", "http://localhost:8080/search")
 
@@ -21,6 +20,11 @@ QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
 QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
 QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
+RERANKER_MAX_TOKENS = get_config_value("RERANKER_MAX_TOKENS", 3072)
+RERANK_CLIENT_MAX_CONCURRENCY = get_config_value("RERANK_CLIENT_MAX_CONCURRENCY", 4)
+
+EMBEDDING_MAX_CONCURRENCY = get_config_value("EMBEDDING_MAX_CONCURRENCY", 4)
+EMBEDDING_BATCH_SIZE = get_config_value("EMBEDDING_BATCH_SIZE", 2)
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
@@ -31,8 +35,13 @@ print("--- Application Configuration ---")
 print(f"DATABASE_URL: {DATABASE_URL}")
 print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
 print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
-print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
 print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
+print(f"RERANKER_MAX_TOKENS: {RERANKER_MAX_TOKENS}")
+print(f"RERANK_CLIENT_MAX_CONCURRENCY: {RERANK_CLIENT_MAX_CONCURRENCY}")
+
+print(f"EMBEDDING_MAX_CONCURRENCY: {RERANKER_MAX_TOKENS}")
+print(f"EMBEDDING_BATCH_SIZE: {RERANK_CLIENT_MAX_CONCURRENCY}")
+
 print(f"QDRANT_URL: {QDRANT_URL}")
 print(f"PROXY_URL: {PROXY_URL}")
 print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
