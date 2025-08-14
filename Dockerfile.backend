@@ -1,33 +1,39 @@
-# backend/Dockerfile（建议版）
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# 换 Debian 源为清华镜像，加速国内 apt
-RUN sed -i -E 's@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g; s@security.debian.org@mirrors.tuna.tsinghua.edu.cn/debian-security@g' /etc/apt/sources.list
-
-# Playwright/Chromium 运行依赖 + 字体（bookworm 包名）
-RUN --mount=type=cache,target=/var/cache/apt \
+# Playwright/Chromium 运行依赖 + 字体（bookworm 包名），兼容 deb822 源文件
+RUN --network=host \
+    --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
-    apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl wget gnupg xdg-utils \
-    libasound2 libatk1.0-0 libcairo2 libcups2 libdrm2 libgbm1 \
-    libglib2.0-0 libgtk-3-0 libnspr4 libnss3 \
-    libx11-6 libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
-    libxrandr2 libxshmfence1 libxss1 libxtst6 \
-    libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-0 \
-    fonts-unifont fonts-noto-cjk fonts-noto-color-emoji fonts-liberation \
-    && rm -rf /var/lib/apt/lists/*
+    bash -euxo pipefail -c '\
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i -E "s@deb.debian.org@mirrors.tuna.tsinghua.edu.cn@g; s@security.debian.org@mirrors.tuna.tsinghua.edu.cn/debian-security@g" /etc/apt/sources.list.d/debian.sources; \
+      else \
+        printf "%s\n" \
+          "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main" \
+          "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main" \
+          "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main" \
+          > /etc/apt/sources.list; \
+      fi; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends \
+        ca-certificates curl wget gnupg xdg-utils \
+        libasound2 libatk1.0-0 libcairo2 libcups2 libdrm2 libgbm1 \
+        libglib2.0-0 libgtk-3-0 libnspr4 libnss3 \
+        libx11-6 libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+        libxrandr2 libxshmfence1 libxss1 libxtst6 \
+        libpango-1.0-0 libpangocairo-1.0-0 libxcb-dri3-0 \
+        fonts-unifont fonts-noto-cjk fonts-noto-color-emoji fonts-liberation; \
+      rm -rf /var/lib/apt/lists/* \
+    '
 
 COPY requirements.txt ./
-
-# 用清华 PyPI 源加速
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 只装浏览器本体（不要 --with-deps，以免再次触发包名错配）
+RUN --network=host pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 RUN python -m playwright install chromium
 
 COPY app ./app
