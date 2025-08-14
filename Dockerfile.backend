@@ -7,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Playwright/Chromium 运行依赖 + 字体（bookworm 包名），兼容 deb822 源文件
-RUN --network=host \
-    --mount=type=cache,target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
     bash -euxo pipefail -c '\
       if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
@@ -33,7 +32,7 @@ RUN --network=host \
     '
 
 COPY requirements.txt ./
-RUN --network=host pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 RUN python -m playwright install chromium
 
 COPY app ./app
