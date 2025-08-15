@@ -5,7 +5,7 @@ from .config import RERANKER_SERVICE_URL
 from .models import Chunk
 
 RERANK_MODEL = "Qwen/Qwen3-Reranker-0.6B"
-DEFAULT_RERANKER_TOP_K = 20
+DEFAULT_RERANKER_TOP_K = 15
 
 async def rerank(query: str, hits_batch: List[Tuple[Chunk, float]], model: str = RERANK_MODEL) -> List[Tuple[Chunk, float]]:
     """
