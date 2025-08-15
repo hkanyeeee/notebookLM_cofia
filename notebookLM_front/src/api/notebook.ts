@@ -92,7 +92,7 @@ export const notebookApi = {
   async ingestDocument(
     url: string,
     embedding_model: string = 'Qwen/Qwen3-Embedding-0.6B',
-    embedding_dimensions: number = 1024
+    embedding_dimensions: number = 2560
   ): Promise<IngestResponse> {
     try {
       const response = await api.post<IngestResponse>('/ingest', {

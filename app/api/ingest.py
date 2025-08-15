@@ -32,7 +32,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", 2560)
 
     try:
         # 1. Check if source already exists
