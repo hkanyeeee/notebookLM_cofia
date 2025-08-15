@@ -4,7 +4,7 @@ from app.config import LLM_SERVICE_URL
 
 
 # DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
-DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
 # DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:

@@ -28,7 +28,7 @@ async def generate_search_queries(
     user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
     payload = {
-        "model": "openai/gpt-oss-20b",
+        "model": "qwen3-30b-a3b-thinking-2507-mlx",
         "messages": [
             {"role": "system", "content": prompt_system},
             {"role": "user", "content": user_prompt},
