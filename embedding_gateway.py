@@ -6,6 +6,7 @@ from typing import List
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, JSONResponse
+from contextlib import asynccontextmanager
 
 
 # 后端实例列表（逗号分隔）
@@ -22,7 +23,12 @@ TIMEOUT_S = float(os.getenv("EMBEDDING_TIMEOUT", "300"))
 HOST = os.getenv("EMBEDDING_GATEWAY_HOST", "0.0.0.0")
 PORT = int(os.getenv("EMBEDDING_GATEWAY_PORT", "7998"))
 
-app = FastAPI(title="Embedding Gateway")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await client.aclose()
+
+app = FastAPI(title="Embedding Gateway", lifespan=lifespan)
 
 # 轮询游标（并发安全：用 asyncio.Lock 保护）
 _backend_cycle = cycle(EMBEDDING_BACKENDS)
@@ -88,14 +94,7 @@ async def health():
     return {"ok": True, "backends": EMBEDDING_BACKENDS}
 
 
-@app.on_event("shutdown")
-async def _shutdown():
-    await client.aclose()
-
-
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("embedding_gateway:app", host=HOST, port=PORT, reload=False)
-
-
