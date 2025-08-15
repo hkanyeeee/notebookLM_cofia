@@ -41,7 +41,7 @@ async def stream_answer(
     question: str,
     contexts: List[str],
     model: str = DEFAULT_CHAT_MODEL,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[dict, None]:
     """以 OpenAI 流式接口风格，逐块产出内容增量。
 
     约定：后端 LLM 服务兼容 /v1/chat/completions，开启 payload["stream"] = True 后返回如下格式的 SSE：
@@ -86,9 +86,13 @@ async def stream_answer(
                         if not choices:
                             continue
                         delta = choices[0].get("delta") or {}
-                        content = delta.get("reasoning_content") or delta.get("content")
+                        reasoning_content = delta.get("reasoning_content")
+                        content = delta.get("content")
+                        
+                        if reasoning_content:
+                            yield {"type": "reasoning", "content": reasoning_content}
                         if content:
-                            yield content
+                            yield {"type": "content", "content": content}
                     except Exception:
                         # 忽略无法解析的行
                         continue

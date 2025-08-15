@@ -191,7 +191,10 @@ async def query(
                 try:
                     # 逐块输出模型增量
                     async for delta in stream_answer(q, contexts):
-                        yield f"data: {{\"type\": \"delta\", \"content\": {json.dumps(delta, ensure_ascii=False)} }}\n\n"
+                        if delta["type"] == "reasoning":
+                            yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
+                        elif delta["type"] == "content":
+                            yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
                     # 输出 sources
                     sources = [
                         {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}

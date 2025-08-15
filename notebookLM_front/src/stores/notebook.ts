@@ -25,6 +25,7 @@ export interface Message {
   content: string
   timestamp: Date
   sources?: Source[] // Optional sources for assistant messages
+  reasoning?: string // Optional reasoning chain for assistant messages
 }
 
 // Ingestion status interface for a single URL
@@ -300,9 +301,10 @@ export const useNotebookStore = defineStore('notebook', () => {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: '分块信息加载中...',
+        content: '',
         timestamp: new Date(),
         sources: [],
+        reasoning: '',
       };
       const messageIndex = messages.value.length;
       messages.value.push(assistantMessage);
@@ -315,6 +317,7 @@ export const useNotebookStore = defineStore('notebook', () => {
       const decoder = new TextDecoder();
       let buffer = '';
       let accumulatedContent = '';
+      let accumulatedReasoning = '';
       
       while (true) {
         const { done, value } = await reader.read();
@@ -328,9 +331,14 @@ export const useNotebookStore = defineStore('notebook', () => {
           if (!jsonStr) continue;
           try {
             const evt = JSON.parse(jsonStr);
-            if (evt.type === 'delta' && typeof evt.content === 'string') {
+            if (evt.type === 'reasoning' && typeof evt.content === 'string') {
+              accumulatedReasoning += evt.content;
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                reasoning: accumulatedReasoning,
+              };
+            } else if (evt.type === 'content' && typeof evt.content === 'string') {
               accumulatedContent += evt.content;
-              // 更新整个消息对象来确保Vue响应式更新
               messages.value[messageIndex] = {
                 ...messages.value[messageIndex],
                 content: accumulatedContent,

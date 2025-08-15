@@ -32,9 +32,13 @@ watch(() => store.loading.querying, async (newVal, oldVal) => {
   }
 }, { flush: 'post' })
 
-// 流式过程中，监听最后一条消息内容变化，持续滚动
+// 流式过程中，监听最后一条消息内容和思维链变化，持续滚动
 watch(
-  () => store.messages.length > 0 ? store.messages[store.messages.length - 1].content : '',
+  () => {
+    if (store.messages.length === 0) return ''
+    const lastMsg = store.messages[store.messages.length - 1]
+    return lastMsg.content + (lastMsg.reasoning || '')
+  },
   async () => {
     await nextTick()
     scrollToBottom()
@@ -179,7 +183,16 @@ function formatTime(date: Date) {
         :class="message.type"
       >
         <div class="message-content">
-          <div class="message-text" v-html="marked(message.content)"></div>
+          <!-- Reasoning Chain (for assistant messages) -->
+          <div v-if="message.type === 'assistant' && message.reasoning" class="reasoning-section">
+            <ElCollapse>
+              <ElCollapseItem :title="`思维链（${message.reasoning.length} 字）`" name="reasoning">
+                <div class="reasoning-content" v-html="marked(message.reasoning)"></div>
+              </ElCollapseItem>
+            </ElCollapse>
+          </div>
+          <div class="message-text" v-if="message.content" v-html="marked(message.content)"></div>
+          <div class="message-text" v-else>{{"信息加载中..."}}</div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
 
           <!-- Sources (for assistant messages) -->
@@ -419,6 +432,23 @@ function formatTime(date: Date) {
 
 .message.assistant .message-time {
   text-align: left;
+}
+
+.reasoning-section {
+  margin-bottom: 16px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.reasoning-content {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+  background-color: #f9fafb;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .sources-section {
