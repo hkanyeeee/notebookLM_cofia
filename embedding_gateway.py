@@ -43,18 +43,25 @@ async def pick_backend() -> str:
         return next(_backend_cycle)
 
 
+def _forward_headers(src: dict) -> dict:
+    # 过滤掉不该手动传的 hop-by-hop 头
+    drop = {"host", "content-length", "connection"}
+    out = {k: v for k, v in src.items() if k.lower() not in drop}
+    # 确保 content-type 在
+    out.setdefault("content-type", "application/json")
+    return out
+
 async def try_forward(body: bytes, headers: dict, base_url: str) -> Response:
-    # 仅透传 JSON；必要时可以附加鉴权等头
     resp = await client.post(
         base_url.rstrip("/") + FORWARD_ENDPOINT,
         content=body,
-        headers={"content-type": headers.get("content-type", "application/json")},
+        headers=_forward_headers(headers),
     )
-    # 原样返回后端响应
     return Response(
         content=resp.content,
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
+        headers={k: v for k, v in resp.headers.items() if k.lower() == "x-request-id"},  # 需要时透传少量响应头
     )
 
 
