@@ -203,7 +203,7 @@ function formatTime(date: Date) {
 
     <!-- 输入区域：当无文档时禁用提问 -->
     <div class="input-area">
-      <div class="input-container">
+      <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."

@@ -20,7 +20,7 @@ QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
 QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
 QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
-RERANKER_MAX_TOKENS = get_config_value("RERANKER_MAX_TOKENS", 3072)
+RERANKER_MAX_TOKENS = int(get_config_value("RERANKER_MAX_TOKENS", "3072"))
 RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRENCY", 4))
 
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
