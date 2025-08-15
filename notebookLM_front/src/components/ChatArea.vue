@@ -32,6 +32,16 @@ watch(() => store.loading.querying, async (newVal, oldVal) => {
   }
 }, { flush: 'post' })
 
+// 流式过程中，监听最后一条消息内容变化，持续滚动
+watch(
+  () => store.messages.length > 0 ? store.messages[store.messages.length - 1].content : '',
+  async () => {
+    await nextTick()
+    scrollToBottom()
+  },
+  { flush: 'post' }
+)
+
 // 发送查询
 async function handleSendQuery() {
   const query = queryInput.value.trim()
@@ -189,16 +199,7 @@ function formatTime(date: Date) {
         </div>
       </div>
 
-      <!-- 加载状态 -->
-      <div v-if="store.loading.querying" class="message assistant loading">
-        <div class="message-content">
-          <div class="typing-indicator">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        </div>
-      </div>
+      
     </div>
 
     <!-- 输入区域：当无文档时禁用提问 -->

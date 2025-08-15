@@ -286,7 +286,8 @@ export const useNotebookStore = defineStore('notebook', () => {
         body: JSON.stringify({
           query,
           top_k: 60,
-          document_ids: documents.value.map(doc => doc.id)
+          document_ids: documents.value.map(doc => doc.id),
+          stream: true,
         }),
         signal: controller.signal,
       });
@@ -295,16 +296,58 @@ export const useNotebookStore = defineStore('notebook', () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-
+      // 先插入一个空的 assistant 消息，后续增量填充
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: data.answer || 'No content received.',
+        content: '分块信息加载中...',
         timestamp: new Date(),
-        sources: data.sources ? data.sources.sort((a: Source, b: Source) => b.score - a.score) : [],
+        sources: [],
       };
+      const messageIndex = messages.value.length;
       messages.value.push(assistantMessage);
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedContent = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr) continue;
+          try {
+            const evt = JSON.parse(jsonStr);
+            if (evt.type === 'delta' && typeof evt.content === 'string') {
+              accumulatedContent += evt.content;
+              // 更新整个消息对象来确保Vue响应式更新
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                content: accumulatedContent,
+              };
+            } else if (evt.type === 'sources' && Array.isArray(evt.sources)) {
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                sources: (evt.sources as Source[]).sort((a: Source, b: Source) => b.score - a.score),
+              };
+            } else if (evt.type === 'error') {
+              throw new Error(evt.message || 'stream error');
+            }
+          } catch (e) {
+            console.warn('Failed to parse stream line:', line, e);
+          }
+        }
+      }
 
     } catch (error) {
       console.error('查询失败:', error);

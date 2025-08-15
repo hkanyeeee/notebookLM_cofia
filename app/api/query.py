@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import json
 from typing import List, Tuple
 
 import tiktoken
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from ..config import (
     RERANKER_SERVICE_URL,
@@ -11,7 +13,7 @@ from ..config import (
     RERANK_CLIENT_MAX_CONCURRENCY,
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..llm_client import generate_answer
+from ..llm_client import generate_answer, stream_answer
 from ..models import Chunk
 from ..vector_db_client import query_embeddings, query_hybrid, qdrant_client, COLLECTION_NAME
 from ..rerank_client import DEFAULT_RERANKER_TOP_K
@@ -34,6 +36,7 @@ async def query(
     embedding_dimensions = data.get("embedding_dimensions", 1024)
     document_ids = data.get("document_ids", [])  # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
+    stream = bool(data.get("stream", False))
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
     if not q:
@@ -174,13 +177,39 @@ async def query(
             final_hits = hits[:DEFAULT_RERANKER_TOP_K]
 
         contexts = [chunk.content for chunk, _ in final_hits]
-        answer = await generate_answer(q, contexts)
 
-        sources = [
-            {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-            for chunk, score in final_hits
-        ]
-        return {"answer": answer, "sources": sources, "success": True}
+        if not stream:
+            answer = await generate_answer(q, contexts)
+            sources = [
+                {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
+                for chunk, score in final_hits
+            ]
+            return {"answer": answer, "sources": sources, "success": True}
+        else:
+            # 以 SSE 流式返回
+            async def event_generator():
+                try:
+                    # 逐块输出模型增量
+                    async for delta in stream_answer(q, contexts):
+                        yield f"data: {{\"type\": \"delta\", \"content\": {json.dumps(delta, ensure_ascii=False)} }}\n\n"
+                    # 输出 sources
+                    sources = [
+                        {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
+                        for chunk, score in final_hits
+                    ]
+                    yield "data: " + json.dumps({
+                        "type": "sources",
+                        "sources": sources,
+                    }, ensure_ascii=False) + "\n\n"
+                    # 完成
+                    yield "data: {\"type\": \"complete\"}\n\n"
+                except Exception as e:
+                    yield "data: " + json.dumps({
+                        "type": "error",
+                        "message": f"{e.__class__.__name__}: {str(e)}",
+                    }, ensure_ascii=False) + "\n\n"
+
+            return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{e.__class__.__name__}: {str(e)}")
