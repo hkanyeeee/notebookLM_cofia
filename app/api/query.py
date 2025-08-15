@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import List, Tuple
 
 import tiktoken
@@ -13,8 +14,8 @@ from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import generate_answer
 from ..models import Chunk
 from ..vector_db_client import query_embeddings, query_hybrid, qdrant_client, COLLECTION_NAME
+from ..rerank_client import DEFAULT_RERANKER_TOP_K
 from . import get_session_id
-from ..rerank_client import rerank, DEFAULT_RERANKER_TOP_K
 
 
 router = APIRouter()
@@ -53,7 +54,7 @@ async def query(
                     session_id=session_id,
                     source_ids=source_ids_int,
                     hnsw_ef=256,
-                    k_dense=min(50, top_k),
+                    k_dense=min(150, top_k),
                     k_sparse=min(50, top_k),
                     db=db,
                 )
@@ -96,14 +97,50 @@ async def query(
                 # Rerank batches with限流的并发控制，避免压满后端
                 async def rerank_with_limit(batch):
                     async with _rerank_client_semaphore:
-                        return await rerank(q, batch)
+                        # Use gateway to handle reranking requests
+                        from ..config import RERANKER_SERVICE_URL
+                        import httpx
+                        
+                        documents = [hit[0].content for hit in batch]
+                        payload = {
+                            "query": q,
+                            "documents": documents,
+                        }
+                        
+                        async with httpx.AsyncClient() as client:
+                            api_url = f"{RERANKER_SERVICE_URL.rstrip('/')}/rerank"
+                            response = await client.post(api_url, json=payload, timeout=300)
+                            response.raise_for_status()
+                            
+                            data = response.json()
+                            scores = data.get('scores')
+                            
+                            if scores is None or len(scores) != len(batch):
+                                raise ValueError(f"Reranker returned an invalid response. Number of scores does not match number of documents. Scores: {scores}")
+                            
+                            original_chunks = [hit[0] for hit in batch]
+                            scored_chunks = list(zip(original_chunks, scores))
+                            
+                            return scored_chunks
 
                 rerank_tasks = [asyncio.create_task(rerank_with_limit(batch)) for batch in batches]
                 reranked_results_with_scores = await asyncio.gather(*rerank_tasks)
 
                 # Flatten the list of lists and sort by the new score
                 all_reranked_hits = [item for sublist in reranked_results_with_scores for item in sublist]
-                all_reranked_hits.sort(key=lambda x: x[1], reverse=True)  # Sort by score, descending
+                
+                # Ensure scores are numeric for sorting
+                def safe_sort_key(item):
+                    score = item[1]
+                    try:
+                        # Try to convert to float for comparison
+                        return float(score)
+                    except (ValueError, TypeError):
+                        # If conversion fails, return a large number to push it to the end
+                        logger.warning(f"Invalid score type {type(score)}: {score}, treating as 0")
+                        return 0.0
+                
+                all_reranked_hits.sort(key=safe_sort_key, reverse=True)  # Sort by score, descending
 
                 # Log rerank ranking changes
                 print("=== Rerank Ranking Changes ===")

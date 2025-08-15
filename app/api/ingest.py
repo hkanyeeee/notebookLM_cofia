@@ -1,5 +1,6 @@
 import asyncio
 import json
+import hashlib
 from typing import List
 
 from fastapi import APIRouter, Body, Depends
@@ -64,11 +65,14 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
 
         chunk_objects = []
         for index, text in enumerate(chunks):
+            # 由 session_id|url|index 生成稳定且全局唯一的 chunk_id，避免因 source.id 复用造成冲突
+            raw = f"{session_id}|{url}|{index}".encode("utf-8", errors="ignore")
+            generated_chunk_id = hashlib.md5(raw).hexdigest()
             chunk_obj = Chunk(
-                chunk_id=str(index),
-                content=text, 
-                source_id=source.id, 
-                session_id=session_id
+                chunk_id=generated_chunk_id,
+                content=text,
+                source_id=source.id,
+                session_id=session_id,
             )
             chunk_objects.append(chunk_obj)
         

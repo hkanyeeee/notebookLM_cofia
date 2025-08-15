@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from ..database import get_db
-from ..models import Source
+from ..models import Source, Chunk
 from ..vector_db_client import delete_vector_db_data
 from . import get_session_id
 
@@ -32,7 +32,9 @@ async def delete_document(
         # 2. Delete from vector DB using the source_id
         await delete_vector_db_data([document_id])
 
-        # 3. Delete from SQL database (cascading delete will handle chunks)
+        # 3. Delete from SQL database
+        # 若未触发 ORM 级联，显式删除 chunks 以防遗留
+        await db.execute(Chunk.__table__.delete().where(Chunk.source_id == document_id))
         await db.delete(source_to_delete)
         await db.commit()
 
@@ -63,9 +65,9 @@ async def cleanup_session(
         # 2. Delete from vector DB
         await delete_vector_db_data(source_ids)
 
-        # 3. Delete from SQL database (cascading delete will handle chunks)
-        delete_stmt = Source.__table__.delete().where(Source.session_id == session_id)
-        await db.execute(delete_stmt)
+        # 3. Delete from SQL database，先删 chunks 再删 sources，避免孤儿数据
+        await db.execute(Chunk.__table__.delete().where(Chunk.session_id == session_id))
+        await db.execute(Source.__table__.delete().where(Source.session_id == session_id))
         await db.commit()
 
         return {"success": True, "message": f"Successfully cleaned up data for session {session_id}"}
