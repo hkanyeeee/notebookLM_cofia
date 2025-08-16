@@ -42,6 +42,21 @@ services:
     depends_on:
       - backend
 
+  embedding-gateway:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: embedding-gateway
+    ports:
+      - "7998:7998"
+    command: ["python", "embedding_gateway.py"]
+    # 定义可被 Gateway 轮询的后端 Embedding 服务
+    # 如需负载均衡本机多个 GPU，可参照 http://127.0.0.1:7997/v1,http://127.0.0.1:7996/v1 写法
+    # 注意：如果后端服务也在 Docker 内，请用 host.docker.internal 访问宿主机端口
+    environment:
+      - EMBEDDING_BACKENDS=${EMBEDDING_BACKENDS:-http://host.docker.internal:1234/v1}
+
 volumes: {}
 
 
