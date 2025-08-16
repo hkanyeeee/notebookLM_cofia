@@ -23,7 +23,6 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.1,
     }
 
     print(len(contexts), "contexts")
@@ -63,7 +62,6 @@ async def stream_answer(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.1,
         "stream": True,
     }
 
