@@ -135,7 +135,6 @@ async def send_webhook(webhook_url: str, data: dict):
 @router.post("/agenttic-ingest", summary="智能文档摄取接口")
 async def agenttic_ingest(
     data: dict = Body(...),
-    session_id: str = Depends(get_session_id),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -164,7 +163,9 @@ async def agenttic_ingest(
         print(f"Collection名称: {collection_name}")
 
         # 2. 检查数据库中是否已存在该URL
-        stmt = select(Source).where(Source.url == url, Source.session_id == session_id)
+        # 使用固定session_id值，因为我们不需要会话上下文
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        stmt = select(Source).where(Source.url == url, Source.session_id == FIXED_SESSION_ID)
         result = await db.execute(stmt)
         existing_source = result.scalars().first()
         if existing_source:
@@ -190,20 +191,22 @@ async def agenttic_ingest(
         print(f"总共生成了 {total_chunks} 个文本块")
 
         # 5. 创建Source和Chunk对象并存储到数据库
-        source = Source(url=url, title=document_name, session_id=session_id)
+        # 使用固定session_id值，因为我们不需要会话上下文
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
         db.add(source)
         await db.flush()
 
         chunk_objects = []
         for index, chunkT in enumerate(chunks):
             # 生成唯一的chunk_id
-            raw = f"{session_id}|{url}|{index}".encode("utf-8", errors="ignore")
+            raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
             generated_chunk_id = hashlib.md5(raw).hexdigest()
             chunk_obj = Chunk(
                 chunk_id=generated_chunk_id,
                 content=chunkT,
                 source_id=source.id,
-                session_id=session_id,
+                session_id=FIXED_SESSION_ID,
             )
             chunk_objects.append(chunk_obj)
         
@@ -261,6 +264,8 @@ async def agenttic_ingest(
         await db.commit()
 
         # 7. 准备webhook数据
+        # 使用固定session_id值，因为我们不需要会话上下文
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         webhook_data = {
             "document_name": document_name,
             "collection_name": collection_name,
@@ -275,7 +280,7 @@ async def agenttic_ingest(
                 for idx, chunk in enumerate(chunk_objects)
             ],
             "source_id": str(source.id),
-            "session_id": session_id
+            "session_id": FIXED_SESSION_ID
         }
 
         # 8. 发送webhook
