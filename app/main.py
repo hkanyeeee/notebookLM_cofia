@@ -33,12 +33,14 @@ app.add_middleware(
 
 # Routers
 from .api.ingest import router as ingest_router
+from .api.agenttic_ingest import router as agenttic_ingest_router
 from .api.search import router as search_router
 from .api.documents import router as documents_router
 from .api.query import router as query_router
 from .api.export import router as export_router
 
 app.include_router(ingest_router)
+app.include_router(agenttic_ingest_router)
 app.include_router(search_router)
 app.include_router(documents_router)
 app.include_router(query_router)
