@@ -10,7 +10,7 @@ from sqlalchemy.future import select
 
 from ..models import Source, Chunk
 from ..database import get_db
-from ..fetch_parse import fetch_then_extract
+from ..fetch_parse import fetch_then_extract, fetch_html
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import generate_answer
@@ -25,6 +25,11 @@ async def generate_document_names(url: str) -> dict:
     """
     使用大模型为文档和collection生成名称
     """
+    # 创建一个专门用于文档名称生成的提示模板，避免使用query接口中的generate_answer函数
+    # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
+    import httpx
+    from ..config import LLM_SERVICE_URL
+    
     prompt = f"""
 请为以下URL的文档生成合适的中文名称和英文collection名称：
 
@@ -39,19 +44,37 @@ URL: {url}
 """
     
     try:
-        response = await generate_answer(prompt, [], "qwen3-30b-a3b-thinking-2507-mlx")
-        # 尝试解析JSON
-        import re
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
-            result = json.loads(json_match.group())
-            return result
-        else:
-            # 如果无法解析，使用默认名称
-            return {
-                "document_name": url.split('/')[-1] or "未命名文档",
-                "collection_name": f"doc_{hashlib.md5(url.encode()).hexdigest()[:8]}"
-            }
+        # 使用LLM服务的底层API直接调用，绕过generate_answer函数
+        url = f"{LLM_SERVICE_URL}/chat/completions"
+        
+        payload = {
+            "model": "qwen3-30b-a3b-thinking-2507-mlx",
+            "messages": [
+                {"role": "system", "content": "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。"},
+                {"role": "user", "content": prompt},
+            ],
+        }
+
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            # 获取模型返回的内容
+            message = (data.get("choices") or [{}])[0].get("message", {})
+            response_content = message.get("content") or ""
+            
+            # 尝试解析JSON
+            import re
+            json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return result
+            else:
+                # 如果无法解析，使用默认名称
+                return {
+                    "document_name": url.split('/')[-1] or "未命名文档",
+                    "collection_name": f"doc_{hashlib.md5(url.encode()).hexdigest()[:8]}"
+                }
     except Exception as e:
         print(f"生成文档名称失败: {e}")
         return {
@@ -150,7 +173,7 @@ async def agenttic_ingest(
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 1024)
-    webhook_url = "http://192.168.31.125:5678/webhook-test/2d06e4c8-d45b-4ea1-b81b-bdf460c28f48"
+    webhook_url = "http://192.168.31.125:5678/webhook-test/194ccbac-faa0-4087-a3af-378195c0d915"
 
     try:
         # 1. 使用大模型生成文档名称和collection名称
@@ -180,14 +203,17 @@ async def agenttic_ingest(
         # 3. 拉取并解析内容
         print("正在拉取网页内容...")
         text = await fetch_then_extract(url)
+        raw_html = await fetch_html(url)
 
         # 4. 分块处理文本
         print("正在分块处理文本...")
         chunks = chunk_text(text)
+        raw_html_chunks = chunk_text(raw_html)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
         total_chunks = len(chunks)
+        total_raw_html_chunks = len(raw_html_chunks)
         print(f"总共生成了 {total_chunks} 个文本块")
 
         # 5. 创建Source和Chunk对象并存储到数据库
@@ -264,6 +290,18 @@ async def agenttic_ingest(
         await db.commit()
 
         # 7. 准备webhook数据
+        total_raw_html_chunks_objects = []
+        for index, chunkH in enumerate(raw_html_chunks):
+            # 生成唯一的chunk_id
+            raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
+            generated_chunk_id = hashlib.md5(raw).hexdigest()
+            chunk_html_obj = Chunk(
+                chunk_id=generated_chunk_id,
+                content=chunkH,
+                source_id=source.id,
+                session_id=FIXED_SESSION_ID,
+            )
+            total_raw_html_chunks_objects.append(chunk_html_obj)
         # 使用固定session_id值，因为我们不需要会话上下文
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         webhook_data = {
@@ -277,7 +315,7 @@ async def agenttic_ingest(
                     "content": chunk.content,
                     "index": idx
                 }
-                for idx, chunk in enumerate(chunk_objects)
+                for idx, chunk in enumerate(total_raw_html_chunks_objects)
             ],
             "source_id": str(source.id),
             "session_id": FIXED_SESSION_ID
