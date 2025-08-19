@@ -13,7 +13,7 @@ DATABASE_URL = get_config_value("DATABASE_URL")
 EMBEDDING_SERVICE_URL = get_config_value("EMBEDDING_SERVICE_URL")
 LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")
 RERANKER_SERVICE_URL = get_config_value("RERANKER_SERVICE_URL")
-SEARXNG_QUERY_URL = get_config_value("SEARXNG_QUERY_URL", "http://localhost:8080/search")
+SEARXNG_QUERY_URL = get_config_value("SEARXNG_QUERY_URL", "http://192.168.31.125:8080/search")
 
 # Qdrant Configuration
 QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
@@ -26,6 +26,7 @@ RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRE
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
 EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 2))
 WEBHOOK_TIMEOUT = int(get_config_value("WEBHOOK_TIMEOUT", 30))
+WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/webhook")
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
@@ -46,4 +47,5 @@ print(f"EMBEDDING_BATCH_SIZE: {EMBEDDING_BATCH_SIZE}")
 print(f"QDRANT_URL: {QDRANT_URL}")
 print(f"PROXY_URL: {PROXY_URL}")
 print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
+print(f"WEBHOOK_PREFIX: {WEBHOOK_PREFIX}")
 print("-------------------------------")

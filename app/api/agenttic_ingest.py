@@ -1,8 +1,8 @@
-import asyncio
 import json
 import hashlib
-from typing import List
+from typing import List, Optional
 import httpx
+import asyncio
 
 from fastapi import APIRouter, Body, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,9 +13,8 @@ from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..llm_client import generate_answer
-from ..config import EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE
-from . import get_session_id
+from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE
+from ..vector_db_client import add_embeddings
 
 
 router = APIRouter()
@@ -83,82 +82,10 @@ URL: {url}
         }
 
 
-async def add_embeddings_to_collection(
-    collection_name: str, 
-    source_id: int, 
-    chunks: List[Chunk], 
-    embeddings: List[List[float]]
-):
-    """
-    将embeddings添加到指定collection
-    """
-    from ..vector_db_client import qdrant_client, models
-    
-    if not qdrant_client:
-        raise ConnectionError("Qdrant客户端不可用")
-    if not chunks:
-        return
-
-    vector_size = len(embeddings[0])
-    
-    # 确保collection存在，如果不存在则创建
-    try:
-        qdrant_client.get_collection(collection_name=collection_name)
-        qdrant_client.update_collection(
-            collection_name=collection_name,
-            hnsw_config=models.HnswConfigDiff(m=64, ef_construct=512),
-        )
-    except Exception:
-        print(f"Collection '{collection_name}' 不存在，正在创建。")
-        qdrant_client.create_collection(
-            collection_name=collection_name,
-            vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
-            hnsw_config=models.HnswConfigDiff(m=64, ef_construct=512),
-        )
-        print(f"Collection '{collection_name}' 创建成功。")
-    
-    points = [
-        models.PointStruct(
-            id=chunk.id, 
-            vector=embedding,
-            payload={
-                "session_id": chunk.session_id,
-                "source_id": chunk.source_id,
-                "content": chunk.content,
-                "chunk_id": chunk.chunk_id
-            }
-        )
-        for chunk, embedding in zip(chunks, embeddings) if chunk.id is not None
-    ]
-
-    if not points:
-        print("没有要添加的点。")
-        return
-
-    qdrant_client.upsert(
-        collection_name=collection_name,
-        points=points,
-        wait=True 
-    )
-
-
-async def send_webhook(webhook_url: str, data: dict):
-    """
-    发送webhook到指定URL
-    """
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(webhook_url, json=data)
-            response.raise_for_status()
-            print(f"Webhook发送成功: {response.status_code}")
-    except Exception as e:
-        print(f"Webhook发送失败: {e}")
-
-
 @router.post("/agenttic-ingest", summary="智能文档摄取接口")
 async def agenttic_ingest(
     data: dict = Body(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     智能文档摄取接口：
@@ -173,7 +100,7 @@ async def agenttic_ingest(
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 1024)
-    webhook_url = "http://192.168.31.125:5678/webhook-test/194ccbac-faa0-4087-a3af-378195c0d915"
+    webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
 
     try:
         # 1. 使用大模型生成文档名称和collection名称
@@ -185,66 +112,76 @@ async def agenttic_ingest(
         print(f"文档名称: {document_name}")
         print(f"Collection名称: {collection_name}")
 
-        # 2. 检查数据库中是否已存在该URL
-        # 使用固定session_id值，因为我们不需要会话上下文
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-        stmt = select(Source).where(Source.url == url, Source.session_id == FIXED_SESSION_ID)
-        result = await db.execute(stmt)
-        existing_source = result.scalars().first()
-        if existing_source:
-            return {
-                "success": True,
-                "message": "文档已存在",
-                "document_id": str(existing_source.id),
-                "document_name": existing_source.title,
-                "collection_name": collection_name
-            }
-
-        # 3. 拉取并解析内容
+        # 2. 拉取并解析内容
         print("正在拉取网页内容...")
         text = await fetch_then_extract(url)
         raw_html = await fetch_html(url)
 
-        # 4. 分块处理文本
+        # 3. 分块处理文本
         print("正在分块处理文本...")
         chunks = chunk_text(text)
-        raw_html_chunks = chunk_text(raw_html, 4000, 200)
+        raw_html_chunks = chunk_text(raw_html)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
         total_chunks = len(chunks)
-        total_raw_html_chunks = len(raw_html_chunks)
         print(f"总共生成了 {total_chunks} 个文本块")
 
-        # 5. 创建Source和Chunk对象并存储到数据库
-        # 使用固定session_id值，因为我们不需要会话上下文
+        # 4. 创建Source和Chunk对象
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
+        # 创建Source对象
         source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
-        db.add(source)
-        await db.flush()
-
+        
+        # 创建Chunk对象列表
         chunk_objects = []
-        for index, chunkT in enumerate(chunks):
+        for index, text in enumerate(chunks):
             # 生成唯一的chunk_id
             raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
             generated_chunk_id = hashlib.md5(raw).hexdigest()
             chunk_obj = Chunk(
                 chunk_id=generated_chunk_id,
-                content=chunkT,
-                source_id=source.id,
+                content=text,
+                source_id=None,  # 在数据库中暂时不设置source_id
                 session_id=FIXED_SESSION_ID,
             )
             chunk_objects.append(chunk_obj)
         
+        # 创建raw_html_chunk对象列表
+        raw_html_chunk_objects = []
+        for index, html in enumerate(raw_html_chunks):
+            # 生成唯一的chunk_id
+            raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
+            generated_chunk_id = hashlib.md5(raw).hexdigest()
+            raw_html_chunk_obj = Chunk(
+                chunk_id=generated_chunk_id,
+                content=html,
+                source_id=None,  # 在数据库中暂时不设置source_id
+                session_id=FIXED_SESSION_ID,
+            )
+            raw_html_chunk_objects.append(raw_html_chunk_obj)
+        
+        
+        # 5. 将chunk对象保存到数据库
+        print("正在保存chunk到数据库...")
+        db.add(source)
+        await db.flush()
+        
+        # 为每个chunk设置source_id
+        for chunk in chunk_objects:
+            chunk.source_id = source.id
+        
         db.add_all(chunk_objects)
         await db.flush()
+        # 提前提交，缩短事务占用时间，避免长时间写锁
         await db.commit()
-
-        # 6. 生成embeddings并存储到新的collection
-        print("正在生成embeddings...")
+        
+        # 6. 为所有chunk生成嵌入向量并存储到Qdrant
+        print("正在生成嵌入...")
         MAX_PARALLEL = int(EMBEDDING_MAX_CONCURRENCY)
         BATCH_SIZE = int(EMBEDDING_BATCH_SIZE)
 
+        # 分批构造任务：每个任务只发起一次 /embeddings 请求（将 batch_size 传为该批大小）
         chunk_batches = [
             chunk_objects[i: i + BATCH_SIZE]
             for i in range(0, len(chunk_objects), BATCH_SIZE)
@@ -255,6 +192,7 @@ async def agenttic_ingest(
         async def embed_batch_worker(batch_index: int, batch_chunks: List[Chunk]):
             async with sem:
                 texts = [c.content for c in batch_chunks]
+                # 让每个任务只发一次请求
                 embeddings = await embed_texts(
                     texts,
                     model=embedding_model,
@@ -268,74 +206,72 @@ async def agenttic_ingest(
             for idx, batch in enumerate(chunk_batches)
         ]
 
-        completed = 0
+        # 等待所有嵌入任务完成
         for coro in asyncio.as_completed(tasks):
             try:
                 batch_index, embeddings = await coro
                 batch_chunks = chunk_batches[batch_index]
                 if not embeddings or len(embeddings) != len(batch_chunks):
-                    print(f"Embedding批次 {batch_index} 失败或数量不匹配")
+                    # 本批失败或数量不一致：跳过并记录
+                    print(
+                        f"Embedding batch {batch_index} failed or size mismatch: got {len(embeddings) if embeddings else 0}, expected {len(batch_chunks)}"
+                    )
                     continue
 
-                # 将该批结果写入指定的collection
-                await add_embeddings_to_collection(collection_name, source.id, batch_chunks, embeddings)
-
-                completed += len(batch_chunks)
-                print(f"已完成 {completed}/{total_chunks} 个chunks")
-                
+                # 将该批结果写入向量库
+                await add_embeddings(source.id, batch_chunks, embeddings)
             except Exception as e:
-                print(f"Embedding任务失败: {e}")
-                continue
-
-        await db.commit()
+                print(f"Embedding task failed: {e}")
+                # 不中断整体流程，继续其他批次
 
         # 7. 准备webhook数据
-        total_raw_html_chunks_objects = []
-        for index, chunkH in enumerate(raw_html_chunks):
-            # 生成唯一的chunk_id
-            raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
-            generated_chunk_id = hashlib.md5(raw).hexdigest()
-            chunk_html_obj = Chunk(
-                chunk_id=generated_chunk_id,
-                content=chunkH,
-                source_id=source.id,
-                session_id=FIXED_SESSION_ID,
-            )
-            total_raw_html_chunks_objects.append(chunk_html_obj)
-        # 使用固定session_id值，因为我们不需要会话上下文
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        import uuid
+        from datetime import datetime
+        
+        # 生成request_id: url + 当前日期 + uuid
+        # 对URL进行编码以处理特殊字符
+        import urllib.parse
+        encoded_url = urllib.parse.quote(url, safe=':/')
+        request_id = f"{encoded_url}_{datetime.now().strftime('%Y%m%d')}_{str(uuid.uuid4())}"
+        
         webhook_data = {
             "document_name": document_name,
             "collection_name": collection_name,
             "url": url,
             "total_chunks": total_chunks,
-            "chunks": [
+            "task_name": "agenttic_ingest",
+            "prompt": "",
+            "data_list": [
                 {
                     "chunk_id": chunk.chunk_id,
                     "content": chunk.content,
                     "index": idx
                 }
-                for idx, chunk in enumerate(total_raw_html_chunks_objects)
+                for idx, chunk in enumerate(raw_html_chunk_objects)
             ],
-            "source_id": str(source.id),
-            "session_id": FIXED_SESSION_ID,
+            "request_id": request_id,
         }
 
         # 8. 发送webhook
         print("正在发送webhook...")
-        await send_webhook(webhook_url, webhook_data)
+        # 直接向指定的webhook URL发送POST请求
+        try:
+            async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
+                response = await client.post(webhook_url, json=webhook_data)
+                response.raise_for_status()
+                print("Webhook发送成功")
+        except Exception as e:
+            print(f"Webhook发送失败: {e}")
 
         return {
             "success": True,
             "message": f"成功摄取文档，共处理了 {total_chunks} 个文本块",
-            "document_id": str(source.id),
             "document_name": document_name,
             "collection_name": collection_name,
             "total_chunks": total_chunks
         }
 
     except Exception as e:
-        await db.rollback()
         error_message = f"摄取失败: {e.__class__.__name__}: {str(e)}"
         print(error_message)
         raise HTTPException(status_code=500, detail=error_message)
