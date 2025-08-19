@@ -31,6 +31,8 @@ class WebhookResponseData(BaseModel):
     source_id: str
     session_id: str
     task_name: str
+    response: Optional[List[dict]] = None  # 添加response字段以包含sub_docs
+    recursive_depth: Optional[int] = 1  # 添加递归深度字段，默认为1
 
 
 class UnifiedIngestRequest(BaseModel):
@@ -54,6 +56,66 @@ class UnifiedIngestRequest(BaseModel):
     task_name: Optional[str] = None
 
 
+async def process_sub_docs(
+    sub_docs_urls: List[str], 
+    recursive_depth: int,
+    db: AsyncSession
+) -> List[dict]:
+    """
+    处理子文档的递归摄取函数
+    
+    Args:
+        sub_docs_urls: 子文档URL列表
+        recursive_depth: 递归深度限制
+        db: 数据库会话
+    
+    Returns:
+        List[dict]: 每个子文档的处理结果
+    """
+    results = []
+    
+    # 检查递归深度限制
+    if recursive_depth <= 0:
+        print(f"达到递归深度限制，跳过 {len(sub_docs_urls)} 个子文档的处理")
+        return results
+    
+    # 逐个处理子文档URL
+    for sub_url in sub_docs_urls:
+        try:
+            print(f"开始递归摄取子文档: {sub_url}")
+            
+            # 构造递归调用的请求数据
+            sub_request_data = {
+                "url": sub_url,
+                "recursive_depth": recursive_depth - 1,  # 减少递归深度
+                "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                "embedding_dimensions": 1024,
+                "webhook_url": WEBHOOK_PREFIX + "/array2array"
+            }
+            
+            # 调用本模块的agenttic_ingest函数进行递归处理
+            result = await agenttic_ingest(sub_request_data, db)
+            
+            results.append({
+                "url": sub_url,
+                "success": True,
+                "result": result
+            })
+            
+            print(f"子文档摄取成功: {sub_url}")
+            
+        except Exception as e:
+            error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
+            print(error_msg)
+            results.append({
+                "url": sub_url,
+                "success": False,
+                "error": error_msg
+            })
+    
+    return results
+
+
 async def process_webhook_response(
     data: WebhookResponseData,
     db: AsyncSession
@@ -75,13 +137,54 @@ async def process_webhook_response(
             "success": False
         }
     
-    # TODO: 在这里实现递归摄取逻辑
-    # 根据webhook响应中的子文档URL进行递归处理
+    # 实现递归摄取逻辑：处理webhook响应中的子文档URL
+    sub_docs_results = []
+    total_sub_docs = 0
+    
+    if data.response and isinstance(data.response, list):
+        print(f"检测到响应数据，共 {len(data.response)} 个响应项")
+        
+        # 收集所有子文档URL
+        all_sub_docs = []
+        
+        for i, response_item in enumerate(data.response):
+            if isinstance(response_item, dict) and "sub_docs" in response_item:
+                sub_docs = response_item.get("sub_docs", [])
+                if isinstance(sub_docs, list):
+                    print(f"响应项 {i} 包含 {len(sub_docs)} 个子文档")
+                    total_sub_docs += len(sub_docs)
+                    all_sub_docs.extend(sub_docs)
+                else:
+                    print(f"响应项 {i} 的 sub_docs 不是列表格式: {type(sub_docs)}")
+            else:
+                print(f"响应项 {i} 不包含 sub_docs 字段或格式不正确")
+        
+        if all_sub_docs:
+            print(f"总共发现 {len(all_sub_docs)} 个子文档URL，开始递归处理...")
+            
+            # 从原始数据中获取递归深度参数，默认为1
+            recursive_depth = 1
+            if hasattr(data, 'recursive_depth') and isinstance(data.recursive_depth, int):
+                recursive_depth = data.recursive_depth
+            
+            # 处理所有子文档
+            try:
+                sub_docs_results = await process_sub_docs(all_sub_docs, recursive_depth, db)
+                print(f"子文档递归处理完成，成功处理 {len([r for r in sub_docs_results if r.get('success')])} 个")
+            except Exception as e:
+                print(f"子文档处理出现异常: {str(e)}")
+                sub_docs_results = [{"error": f"子文档处理异常: {str(e)}"}]
+        else:
+            print("未发现任何子文档URL")
+    else:
+        print("响应数据中未包含有效的response字段")
     
     return {
         "message": "Webhook响应处理成功",
         "task_name": data.task_name,
         "document_name": data.document_name,
+        "total_sub_docs": total_sub_docs,
+        "sub_docs_results": sub_docs_results,
         "success": True
     }
 
