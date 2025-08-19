@@ -101,6 +101,7 @@ async def agenttic_ingest(
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 1024)
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
+    recursive_depth = data.get("recursive_depth", 1)  # 默认递归深度为1
 
     try:
         # 1. 使用大模型生成文档名称和collection名称
@@ -240,16 +241,19 @@ async def agenttic_ingest(
             "url": url,
             "total_chunks": total_chunks,
             "task_name": "agenttic_ingest",
-            "prompt": "",
+            "prompt": 
+            f"你正在阅读一个网页的部分html，这个网页的url是{url}，内容是某个开源框架文档。现在我需要你识别这个文档下面的的子文档。比如：https://lmstudio.ai/docs/python/getting-started/project-setup是https://lmstudio.ai/docs/python的子文档。子文档的URL有可能在HTML中以a标签的href，button的跳转link等等形式存在，你需要调用你的编程知识进行识别，使用{url}进行拼接。最终将识别出来的子文档URL以数组的形式放在sub_docs属性联合chunk_id、index返回，注意：如果没有发现任何子文档，那么返回空数组",
             "data_list": [
                 {
                     "chunk_id": chunk.chunk_id,
                     "content": chunk.content,
                     "index": idx
                 }
-                for idx, chunk in enumerate(raw_html_chunk_objects)
+                for idx, chunk in enumerate([raw_html_chunk_objects[0]])
+                # for idx, chunk in enumerate(raw_html_chunk_objects)
             ],
             "request_id": request_id,
+            "recursive_depth": recursive_depth,  # 添加递归深度参数
         }
 
         # 8. 发送webhook
