@@ -208,7 +208,7 @@ async def agenttic_ingest(
         # 4. 分块处理文本
         print("正在分块处理文本...")
         chunks = chunk_text(text)
-        raw_html_chunks = chunk_text(raw_html)
+        raw_html_chunks = chunk_text(raw_html, 4000, 200)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
@@ -318,7 +318,7 @@ async def agenttic_ingest(
                 for idx, chunk in enumerate(total_raw_html_chunks_objects)
             ],
             "source_id": str(source.id),
-            "session_id": FIXED_SESSION_ID
+            "session_id": FIXED_SESSION_ID,
         }
 
         # 8. 发送webhook
