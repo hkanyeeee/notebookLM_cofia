@@ -25,6 +25,9 @@ The system is composed of:
   - `/search`: Search for documents by title
   - `/documents`: List documents and delete by ID
   - `/query`: Query ingested documents with hybrid search and optional reranking
+  - `/webhook/send`: Send webhook notifications
+  - `/workflow_response`: Demo endpoint to print incoming workflow response data
+  - `/agenttic-ingest`: Smart document ingestion with webhook notifications
 - `vector_db_client.py`: Qdrant client for vector storage operations
 - `embedding_client.py`: Client for embedding generation
 - `rerank_client.py`: Client for reranking with optional gateway support
@@ -86,6 +89,7 @@ The project uses Python 3.11 with the following key dependencies:
 
 ### Ingestion
 - `POST /ingest`: Ingest a document from a URL and stream progress
+- `POST /agenttic-ingest`: Smart document ingestion with webhook notifications
 
 ### Search
 - `GET /search`: Search for documents by title
@@ -94,6 +98,10 @@ The project uses Python 3.11 with the following key dependencies:
 ### Documents
 - `GET /documents`: List all documents
 - `DELETE /documents/{document_id}`: Delete a document by ID
+
+### Webhook
+- `POST /webhook/send`: Send webhook notifications to external services
+- `POST /workflow_response`: Demo endpoint to print incoming workflow response data
 
 ## Data Flow
 

@@ -39,6 +39,7 @@ from .api.documents import router as documents_router
 from .api.query import router as query_router
 from .api.export import router as export_router
 from .api.workflow_response import router as workflow_response_router
+from .api.webhook import router as webhook_router
 
 app.include_router(ingest_router)
 app.include_router(agenttic_ingest_router)
@@ -47,3 +48,4 @@ app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(export_router)
 app.include_router(workflow_response_router)
+app.include_router(webhook_router)

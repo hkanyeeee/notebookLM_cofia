@@ -25,6 +25,7 @@ RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRE
 
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
 EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 2))
+WEBHOOK_TIMEOUT = int(get_config_value("WEBHOOK_TIMEOUT", 30))
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
