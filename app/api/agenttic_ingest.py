@@ -5,6 +5,7 @@ import httpx
 import asyncio
 
 from fastapi import APIRouter, Body, HTTPException, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -18,6 +19,71 @@ from ..vector_db_client import add_embeddings
 
 
 router = APIRouter()
+
+
+class WebhookResponseData(BaseModel):
+    """用于验证webhook返回数据结构的模型"""
+    document_name: str
+    collection_name: str
+    url: str
+    total_chunks: int
+    chunks: List[dict]
+    source_id: str
+    session_id: str
+    task_name: str
+
+
+class UnifiedIngestRequest(BaseModel):
+    """统一的摄取请求模型，支持客户端请求和webhook回调"""
+    # 客户端请求必需字段
+    url: str
+    
+    # 客户端请求可选字段
+    embedding_model: Optional[str] = None
+    embedding_dimensions: Optional[int] = None
+    webhook_url: Optional[str] = None
+    recursive_depth: Optional[int] = None
+    
+    # webhook回调专有字段
+    document_name: Optional[str] = None
+    collection_name: Optional[str] = None
+    total_chunks: Optional[int] = None
+    chunks: Optional[List[dict]] = None
+    source_id: Optional[str] = None
+    session_id: Optional[str] = None
+    task_name: Optional[str] = None
+
+
+async def process_webhook_response(
+    data: WebhookResponseData,
+    db: AsyncSession
+):
+    """
+    处理webhook回调数据的专用函数
+    """
+    print("处理webhook响应数据...")
+    print(f"任务名称: {data.task_name}")
+    print(f"文档名称: {data.document_name}")
+    print(f"Collection名称: {data.collection_name}")
+    print(f"总块数: {data.total_chunks}")
+    
+    # 检查任务名称
+    if data.task_name != "agenttic_ingest":
+        return {
+            "message": f"不支持的任务类型: {data.task_name}",
+            "task_name": data.task_name,
+            "success": False
+        }
+    
+    # TODO: 在这里实现递归摄取逻辑
+    # 根据webhook响应中的子文档URL进行递归处理
+    
+    return {
+        "message": "Webhook响应处理成功",
+        "task_name": data.task_name,
+        "document_name": data.document_name,
+        "success": True
+    }
 
 
 async def generate_document_names(url: str) -> dict:
@@ -82,18 +148,35 @@ URL: {url}
         }
 
 
-@router.post("/agenttic-ingest", summary="智能文档摄取接口")
+@router.post("/agenttic-ingest", summary="智能文档摄取接口（统一处理客户端请求和webhook回调）")
 async def agenttic_ingest(
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    智能文档摄取接口：
-    1. 获取URL并使用大模型生成文档名称和collection名称
-    2. 拉取并处理内容
-    3. 创建新的向量库collection存储
-    4. 发送webhook通知
+    统一的智能文档摄取接口：
+    - 客户端请求：获取URL并使用大模型生成文档名称和collection名称，拉取并处理内容，创建新的向量库collection存储，发送webhook通知
+    - webhook回调：处理工作流响应数据并执行递归摄取逻辑
+    
+    通过检测数据中是否包含 'chunks' 字段来判断请求类型
     """
+    
+    # 检测请求类型：如果包含 chunks 字段，说明是 webhook 回调
+    is_webhook_callback = 'chunks' in data and 'task_name' in data
+    
+    if is_webhook_callback:
+        # 处理 webhook 回调
+        print("检测到webhook回调请求")
+        try:
+            webhook_data = WebhookResponseData(**data)
+            return await process_webhook_response(webhook_data, db)
+        except Exception as e:
+            error_message = f"Webhook回调处理失败: {e.__class__.__name__}: {str(e)}"
+            print(error_message)
+            raise HTTPException(status_code=500, detail=error_message)
+    
+    # 处理客户端请求
+    print("检测到客户端摄取请求")
     url = data.get("url")
     if not url:
         raise HTTPException(status_code=400, detail="URL必须提供")
@@ -279,3 +362,16 @@ async def agenttic_ingest(
         error_message = f"摄取失败: {e.__class__.__name__}: {str(e)}"
         print(error_message)
         raise HTTPException(status_code=500, detail=error_message)
+
+
+@router.post("/workflow_response", summary="工作流响应处理接口（兼容性端点）")
+async def workflow_response(
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    工作流响应处理接口 - 兼容性端点
+    此端点将请求重定向到统一的 agenttic_ingest 接口进行处理
+    """
+    print("收到workflow_response请求，重定向到统一处理接口")
+    return await agenttic_ingest(data, db)

@@ -2,134 +2,148 @@
 
 ## Project Overview
 
-NotebookLM-Py is a document ingestion and querying system that allows users to ingest documents from URLs, store them in a database and vector store, and then query them using semantic search. It features both dense and sparse retrieval methods with hybrid search capabilities, and optional reranking.
+NotebookLM-Py is a comprehensive document processing and retrieval system that allows users to ingest, process, and search through documents from URLs. It's built with a modern architecture that includes:
+
+- A FastAPI backend for handling API requests
+- A Vue.js frontend for user interaction
+- Integration with embedding and reranking services
+- Support for vector databases (Qdrant)
+- Docker-based deployment
+
+The system enables users to:
+1. Ingest documents from URLs
+2. Process and chunk content for embedding
+3. Generate embeddings using external services
+4. Store and search through documents using vector similarity
 
 ## Architecture
 
-The system is composed of:
-- **Backend API**: FastAPI application with routers for ingest, search, documents and query operations
-- **Frontend**: Vue.js application for user interface
-- **Database**: Uses SQLAlchemy with async support and SQLite as default
-- **Vector Storage**: Qdrant vector database for semantic search
-- **Supporting services**: Embedding and reranking gateways
+The system consists of several components:
 
-## Code Structure
+1. **Backend API Server** (`app/main.py`): Built with FastAPI, handles all API endpoints for ingestion, search, document management, and query processing.
 
-### Backend API (`app/`)
-- `main.py`: FastAPI application with CORS middleware and router inclusion
-- `config.py`: Configuration loading from environment variables and .env file
-- `database.py`: Database initialization with SQLite and FTS5 support for BM25 search
-- `models.py`: SQLAlchemy ORM models for Source and Chunk entities
-- `api/` directory: API routers for:
-  - `/ingest`: Document ingestion from URLs with streaming progress
-  - `/search`: Search for documents by title
-  - `/documents`: List documents and delete by ID
-  - `/query`: Query ingested documents with hybrid search and optional reranking
-  - `/webhook/send`: Send webhook notifications
-  - `/workflow_response`: Demo endpoint to print incoming workflow response data
-  - `/agenttic-ingest`: Smart document ingestion with webhook notifications
-- `vector_db_client.py`: Qdrant client for vector storage operations
-- `embedding_client.py`: Client for embedding generation
-- `rerank_client.py`: Client for reranking with optional gateway support
-- `llm_client.py`: Client for LLM-based answer generation
+2. **Frontend Application** (`notebookLM_front/`): A Vue.js application providing the user interface for interacting with the system.
 
-### Frontend (`notebookLM_front/`)
-- Vue 3 + Vite application for user interface
-- Components for chat and sidebar functionality
+3. **Gateway Services**:
+   - `embedding_gateway.py`: Routes embedding requests to multiple backend services
+   - `rerank_gateway.py`: Routes reranking requests with load balancing and concurrency control
 
-### Supporting Files
-- `docker-compose.yml`: Docker orchestration for backend and frontend
-- `Dockerfile.backend`: Backend service Dockerfile with Playwright dependencies
-- `rerank_gateway.py`: Gateway for load-balancing reranking requests across multiple backends
-- `embedding_gateway.py`: Gateway for load-balancing embedding requests across multiple backends
+4. **Database**: Uses SQLite for local development, with support for other databases through SQLAlchemy.
 
-## Key Technical Details
+5. **Vector Database**: Integrates with Qdrant for vector storage and similarity search.
 
-1. The system uses a hybrid search approach combining dense vector search (Qdrant) and sparse BM25 search (SQLite FTS5)
-2. Concurrent processing for embedding generation with semaphore-based limits
-3. Support for optional reranking with a gateway that can load-balance across multiple reranker instances
-4. Session-based data isolation to support multiple users/contexts
-5. Streaming progress updates during document ingestion
-6. Integration with Playwright for web content extraction
+## Key Features
 
-## Environment Configuration
+- **Document Ingestion**: Streamed ingestion of documents from URLs with progress tracking
+- **Text Chunking**: Automatic splitting of text into manageable chunks for embedding
+- **Embedding Generation**: Integration with external embedding services via gateway
+- **Search Functionality**: Vector-based similarity search through ingested documents
+- **Document Management**: CRUD operations for managing ingested documents
+- **Query Processing**: Natural language query processing with search results
 
-The system uses environment variables from `.env` file with fallback to OS environment variables. Key configuration includes:
-- `DATABASE_URL`: Database connection string (SQLite by default)
-- `EMBEDDING_SERVICE_URL`: URL for embedding service
-- `LLM_SERVICE_URL`: URL for LLM service
-- `RERANKER_SERVICE_URL`: URL for reranker service
-- `QDRANT_HOST/PORT`: Qdrant vector database connection
-- `PROXY_URL`: Optional proxy for web requests
-
-## Development Commands
+## Technology Stack
 
 ### Backend
-- `conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` - Run backend locally
-- `pip install -r requirements.txt` - Install Python dependencies
+- Python 3.11
+- FastAPI for API framework
+- SQLAlchemy for database operations
+- Uvicorn for ASGI server
+- Qdrant client for vector storage
+- Playwright for web scraping
 
 ### Frontend
-- `cd notebookLM_front && pnpm install` - Install frontend dependencies
-- `cd notebookLM_front && pnpm dev` - Run frontend development server
+- Vue 3 with TypeScript
+- Element Plus UI components
+- Pinia for state management
+- Vite for build tooling
 
-### Docker
-- `docker-compose up --build` - Build and run the full application in containers
+### Infrastructure
+- Docker and Docker Compose for containerization
+- Nginx for reverse proxy (in frontend)
+- Qdrant for vector database
 
-## Project Dependencies
+## Running the Application
 
-The project uses Python 3.11 with the following key dependencies:
-- FastAPI and Uvicorn for the backend API
-- SQLAlchemy with async support for database operations
-- Qdrant-client for vector storage
-- Playwright for web content extraction
-- BeautifulSoup4 and readability-lxml for content parsing
-- Various other libraries for HTTP requests, embeddings, etc.
+### Development Environment Setup
+
+1. **Prerequisites**:
+   - Python 3.11
+   - Node.js 20+
+   - Docker and Docker Compose
+
+2. **Backend Setup**:
+   ```bash
+   # Install Python dependencies
+   pip install -r requirements.txt
+   
+   # Install Playwright Chromium
+   python -m playwright install chromium
+   ```
+
+3. **Frontend Setup**:
+   ```bash
+   # Navigate to frontend directory
+   cd notebookLM_front
+   
+   # Install Node.js dependencies
+   pnpm install
+   
+   # Build the frontend
+   pnpm build
+   ```
+
+4. **Running Services**:
+   ```bash
+   # Start all services with Docker Compose
+   docker-compose up -d
+   
+   # Or start backend only (for development)
+   conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+### Docker Deployment
+
+The project uses a multi-container setup with:
+- `backend`: The main FastAPI application
+- `frontend`: Vue.js frontend application
+- `embedding-gateway`: Routes embedding requests to backend services
+- `n8n`: Workflow automation tool (optional)
+
+To run with Docker Compose:
+```bash
+docker-compose up -d
+```
+
+The frontend will be available at `http://localhost:9001` and the backend API at `http://localhost:8000`.
 
 ## API Endpoints
 
-### Ingestion
-- `POST /ingest`: Ingest a document from a URL and stream progress
-- `POST /agenttic-ingest`: Smart document ingestion with webhook notifications
+The backend exposes several API endpoints:
 
-### Search
-- `GET /search`: Search for documents by title
-- `POST /query`: Query ingested documents with hybrid search and optional reranking
+- `/ingest`: Ingest documents from URLs with progress streaming
+- `/search`: Search through ingested documents using vector similarity
+- `/documents`: Manage documents (list, get, delete)
+- `/query`: Process natural language queries
+- `/export`: Export documents or search results
 
-### Documents
-- `GET /documents`: List all documents
-- `DELETE /documents/{document_id}`: Delete a document by ID
+## Development Conventions
 
-### Webhook
-- `POST /webhook/send`: Send webhook notifications to external services
-- `POST /workflow_response`: Demo endpoint to print incoming workflow response data
+1. **Code Style**: Python code follows PEP8 conventions with type hints
+2. **Database Migrations**: SQLAlchemy is used for database operations
+3. **Error Handling**: Comprehensive error handling with proper HTTP status codes
+4. **Testing**: Unit tests are included in the test directory
+5. **Documentation**: API endpoints are documented with FastAPI's automatic documentation
 
-## Data Flow
+## Key Files and Directories
 
-1. User submits a URL for ingestion
-2. System fetches and parses the content using Playwright and readability-lxml
-3. Content is chunked into smaller pieces
-4. Each chunk is embedded using the embedding service
-5. Embeddings are stored in Qdrant vector database
-6. Document metadata is stored in SQLite database
-7. When querying, system performs hybrid search combining vector and BM25 search
-8. Optional reranking can be applied to improve results
-9. Results are returned to the user through the frontend interface
-
-## Docker Setup
-
-The project uses Docker Compose for orchestration:
-- Backend service with FastAPI
-- Frontend service with Vue.js
-- Embedding gateway for load balancing embedding requests
-- Optional Qdrant vector database (can be external)
-- n8n workflow automation tool
-
-## Testing
-
-The project includes test files:
-- `test_agenttic_ingest.py`: Tests for agenttic ingestion
-- Various cleanup scripts for database management
-
-## Deployment
-
-The application can be deployed using Docker Compose with the provided configuration. The backend is configured to run on port 8000, and the frontend on port 9001.
+- `app/`: Main backend application code
+  - `api/`: API route handlers
+  - `models.py`: Database models
+  - `database.py`: Database connection and initialization
+  - `embedding_client.py`: Integration with embedding services
+  - `vector_db_client.py`: Integration with vector database (Qdrant)
+- `notebookLM_front/`: Frontend application
+- `gateway_script/`: Gateway services for embedding and reranking
+- `docker-compose.yml`: Docker orchestration configuration
+- `Dockerfile.backend`: Backend Docker image definition
+- `requirements.txt`: Python dependencies
