@@ -306,7 +306,9 @@ async def agenttic_ingest(
         print("正在生成文档名称...")
         names = await generate_document_names(url)
         document_name = names["document_name"]
-        collection_name = names["collection_name"]
+        # 使用URL的hash生成稳定的collection名称，确保同一URL总是得到相同的collection_name
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        collection_name = f"collection_{url_hash}"
         
         print(f"文档名称: {document_name}")
         print(f"Collection名称: {collection_name}")
@@ -477,6 +479,43 @@ async def agenttic_ingest(
 
     except Exception as e:
         error_message = f"摄取失败: {e.__class__.__name__}: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+@router.get("/documents", summary="获取通过agentic ingest处理的文档列表")
+async def get_agentic_ingest_documents(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取通过agentic ingest处理的文档列表
+    返回所有使用固定session_id存储的文档
+    """
+    try:
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
+        # 查询数据库中的source记录
+        stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+        result = await db.execute(stmt)
+        sources = result.scalars().all()
+        
+        documents = []
+        for source in sources:
+            documents.append({
+                "id": source.id,
+                "title": source.title,
+                "url": source.url,
+                "created_at": source.created_at.isoformat() if source.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "documents": documents,
+            "total": len(documents)
+        }
+    
+    except Exception as e:
+        error_message = f"获取文档列表失败: {e.__class__.__name__}: {str(e)}"
         print(error_message)
         raise HTTPException(status_code=500, detail=error_message)
 

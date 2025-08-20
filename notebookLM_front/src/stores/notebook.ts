@@ -1,6 +1,6 @@
 import { ref, reactive } from 'vue'
 import { defineStore } from 'pinia'
-import { notebookApi } from '../api/notebook'
+import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
 import { useSessionStore } from './session'
 
 // Document interface
@@ -47,10 +47,22 @@ export const useNotebookStore = defineStore('notebook', () => {
   const candidateUrls = ref<{ title: string; url: string }[]>([])
   const generating = ref<boolean>(false)
   
+  // Agentic Ingest相关状态
+  const agenticIngestUrl = ref<string>('')
+  
+  // Collection相关状态
+  const collections = ref<AgenticCollection[]>([])
+  const selectedCollection = ref<string>('')
+  const collectionQueryResults = ref<CollectionResult[]>([])
+  const collectionQueryInput = ref<string>('')
+  
   const loading = reactive({
     querying: false,
     addingDocument: false,
-    exporting: false
+    exporting: false,
+    triggeringAgenticIngest: false,
+    loadingCollections: false,
+    queryingCollection: false
   })
 
   const ingestionStatus = reactive<Map<string, IngestionProgress>>(new Map())
@@ -418,6 +430,111 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
+
+
+  // 触发agentic ingest
+  async function triggerAgenticIngest() {
+    const url = agenticIngestUrl.value.trim()
+    if (!url) {
+      throw new Error('请输入要处理的URL')
+    }
+
+    loading.triggeringAgenticIngest = true
+    try {
+      const request: AgenticIngestRequest = {
+        url,
+        embedding_model: 'Qwen/Qwen3-Embedding-0.6B',
+        embedding_dimensions: 1024,
+        recursive_depth: 1
+      }
+
+      const response = await notebookApi.triggerAgenticIngest(request)
+      if (response.success) {
+        // 处理成功，清空输入框并刷新collection列表
+        agenticIngestUrl.value = ''
+        await loadCollections()
+        return {
+          success: true,
+          message: response.message,
+          document_name: response.document_name
+        }
+      } else {
+        throw new Error(response.message || 'Agentic ingest失败')
+      }
+    } catch (error: any) {
+      console.error('触发agentic ingest失败:', error)
+      throw error
+    } finally {
+      loading.triggeringAgenticIngest = false
+    }
+  }
+
+  // 获取collection列表
+  async function loadCollections() {
+    loading.loadingCollections = true
+    try {
+      const response = await notebookApi.getCollections()
+      if (response.success) {
+        collections.value = response.collections
+      } else {
+        console.error('获取collection列表失败')
+        collections.value = []
+      }
+    } catch (error) {
+      console.error('获取collection列表出错:', error)
+      collections.value = []
+    } finally {
+      loading.loadingCollections = false
+    }
+  }
+
+  // 基于指定collection进行查询
+  async function queryCollection() {
+    const query = collectionQueryInput.value.trim()
+    const collectionId = selectedCollection.value
+    
+    if (!query) {
+      throw new Error('请输入查询内容')
+    }
+    if (!collectionId) {
+      throw new Error('请选择一个Collection')
+    }
+
+    loading.queryingCollection = true
+    try {
+      const request: CollectionQueryRequest = {
+        collection_id: collectionId,
+        query,
+        top_k: 20
+      }
+
+      const response = await notebookApi.queryCollection(request)
+      if (response.success) {
+        collectionQueryResults.value = response.results
+        return {
+          success: true,
+          message: response.message,
+          total_found: response.total_found,
+          results: response.results
+        }
+      } else {
+        throw new Error(response.message || 'Collection查询失败')
+      }
+    } catch (error: any) {
+      console.error('Collection查询失败:', error)
+      collectionQueryResults.value = []
+      throw error
+    } finally {
+      loading.queryingCollection = false
+    }
+  }
+
+  // 清空collection查询结果
+  function clearCollectionResults() {
+    collectionQueryResults.value = []
+    collectionQueryInput.value = ''
+  }
+
   return {
     documents,
     messages,
@@ -426,6 +543,14 @@ export const useNotebookStore = defineStore('notebook', () => {
     topicInput,
     candidateUrls,
     generating,
+    // Agentic Ingest相关
+    agenticIngestUrl,
+    // Collection相关
+    collections,
+    selectedCollection,
+    collectionQueryResults,
+    collectionQueryInput,
+    // 方法
     addDocument,
     cancelIngestion,
     removeDocument,
@@ -434,5 +559,9 @@ export const useNotebookStore = defineStore('notebook', () => {
     generateCandidatesFromTopic,
     addCandidate,
     exportConversation,
+    triggerAgenticIngest,
+    loadCollections,
+    queryCollection,
+    clearCollectionResults,
   }
 })

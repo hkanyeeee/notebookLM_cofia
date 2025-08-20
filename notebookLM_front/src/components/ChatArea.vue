@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, nextTick, computed, watch } from 'vue'
+import { ref, nextTick, computed, watch, onMounted } from 'vue'
 import { useNotebookStore } from '../stores/notebook'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip } from 'element-plus'
-import { Refresh, Promotion } from '@element-plus/icons-vue'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip, ElSelect, ElOption } from 'element-plus'
+import { Refresh, Promotion, Plus } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
@@ -92,13 +92,128 @@ function formatTime(date: Date) {
     minute: '2-digit',
   }).format(date)
 }
+
+// 组件挂载时加载collection列表
+onMounted(async () => {
+  try {
+    await store.loadCollections()
+  } catch (error) {
+    console.warn('初始加载数据失败:', error)
+  }
+})
+
+// 触发agentic ingest
+async function handleTriggerAgenticIngest() {
+  const url = store.agenticIngestUrl.trim()
+  if (!url) {
+    ElMessage.warning('请输入要处理的URL')
+    return
+  }
+
+  try {
+    const result = await store.triggerAgenticIngest()
+    if (result.success) {
+      ElMessage.success(`成功触发Agentic Ingest：${result.document_name}`)
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || 'Agentic Ingest失败')
+  }
+}
+
+// Collection查询
+async function handleCollectionQuery() {
+  const query = store.collectionQueryInput.trim()
+  const collectionId = store.selectedCollection
+  
+  if (!query) {
+    ElMessage.warning('请输入查询内容')
+    return
+  }
+  if (!collectionId) {
+    ElMessage.warning('请选择一个Collection')
+    return
+  }
+
+  try {
+    const result = await store.queryCollection()
+    if (result.success) {
+      ElMessage.success(`找到 ${result.total_found} 个相关结果`)
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || 'Collection查询失败')
+  }
+}
 </script>
 
 <template>
   <div class="chat-area">
     <!-- 头部 -->
     <header class="chat-header">
-      <h1>对话</h1>
+      <div class="header-left">
+        <h1>对话</h1>
+        
+        <!-- Collection与Agentic Ingest 控制区 -->
+        <div class="agentic-controls">
+          <!-- Collection选择下拉框 -->
+          <ElSelect
+            v-model="store.selectedCollection"
+            placeholder="选择Collection"
+            class="collection-selector"
+            :loading="store.loading.loadingCollections"
+            clearable
+          >
+            <ElOption
+              v-for="collection in store.collections"
+              :key="collection.collection_id"
+              :label="collection.document_title"
+              :value="collection.collection_id"
+            />
+          </ElSelect>
+          
+          <!-- Collection查询输入框 -->
+          <ElInput
+            v-model="store.collectionQueryInput"
+            placeholder="在选定Collection中查询..."
+            class="collection-query-input"
+            clearable
+            @keydown.enter="handleCollectionQuery"
+          />
+          
+          <!-- Collection查询按钮 -->
+          <ElButton
+            type="success"
+            @click="handleCollectionQuery"
+            :loading="store.loading.queryingCollection"
+            :disabled="!store.collectionQueryInput.trim() || !store.selectedCollection || store.loading.queryingCollection"
+            class="query-btn"
+          >
+            查询
+          </ElButton>
+          
+          <!-- URL输入框 -->
+          <ElInput
+            v-model="store.agenticIngestUrl"
+            placeholder="输入URL进行Agentic Ingest"
+            class="url-input"
+            clearable
+          />
+          
+          <!-- 提交按钮 -->
+          <ElButton
+            type="primary"
+            @click="handleTriggerAgenticIngest"
+            :loading="store.loading.triggeringAgenticIngest"
+            :disabled="!store.agenticIngestUrl.trim() || store.loading.triggeringAgenticIngest"
+            class="trigger-btn"
+          >
+            <ElIcon>
+              <Plus />
+            </ElIcon>
+            处理
+          </ElButton>
+        </div>
+      </div>
+      
       <div class="header-actions">
         <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0">
           <ElIcon>
@@ -111,6 +226,31 @@ function formatTime(date: Date) {
 
     <!-- 消息列表 / 欢迎与课题输入 -->
     <div ref="messageContainer" class="messages-container">
+      <!-- Collection查询结果区域 -->
+      <div v-if="store.collectionQueryResults.length > 0" class="collection-results">
+        <div class="collection-results-header">
+          <h3>Collection查询结果 ({{ store.collectionQueryResults.length }} 个结果)</h3>
+          <ElButton text @click="store.clearCollectionResults()" class="clear-results-btn">
+            清空结果
+          </ElButton>
+        </div>
+        <div class="collection-results-list">
+          <div 
+            v-for="(result, index) in store.collectionQueryResults" 
+            :key="index" 
+            class="collection-result-item"
+          >
+            <div class="result-header">
+              <div class="result-score">分数: {{ result.score.toFixed(4) }}</div>
+              <a :href="result.source_url" target="_blank" class="result-url">
+                {{ result.source_title }}
+              </a>
+            </div>
+            <div class="result-content">{{ result.content }}</div>
+          </div>
+        </div>
+      </div>
+      
       <div v-if="store.messages.length === 0" class="welcome-message">
         <h2>欢迎</h2>
         <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
@@ -262,11 +402,49 @@ function formatTime(date: Date) {
   z-index: 10;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+
 .chat-header h1 {
   margin: 0;
   color: #111827;
   font-size: 20px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.agentic-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  max-width: 800px;
+}
+
+.collection-selector {
+  width: 200px;
+}
+
+.collection-query-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.query-btn {
+  white-space: nowrap;
+}
+
+.url-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.trigger-btn {
+  white-space: nowrap;
 }
 
 .header-actions {
@@ -573,10 +751,131 @@ function formatTime(date: Date) {
   font-size: 12px;
 }
 
+/* Collection查询结果样式 */
+.collection-results {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.collection-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.collection-results-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.clear-results-btn {
+  font-size: 12px;
+}
+
+.collection-results-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.collection-result-item {
+  margin-bottom: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.collection-result-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.collection-result-item:last-child {
+  margin-bottom: 0;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.result-score {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.result-url {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4f46e5;
+  text-decoration: none;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-url:hover {
+  text-decoration: underline;
+}
+
+.result-content {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .chat-header {
     padding: 16px;
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .header-left {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .agentic-controls {
+    flex-direction: column;
+    gap: 12px;
+    max-width: none;
+  }
+
+  .collection-selector {
+    width: 100%;
+  }
+
+  .collection-query-input {
+    min-width: auto;
+  }
+
+  .url-input {
+    min-width: auto;
+  }
+
+  .header-actions {
+    align-self: center;
   }
 
   .messages-container {

@@ -1,5 +1,6 @@
-from sqlalchemy import String, Integer, Text, ForeignKey
+from sqlalchemy import String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from datetime import datetime
 from typing import List
 
 class Base(DeclarativeBase):
@@ -12,6 +13,7 @@ class Source(Base):
     url: Mapped[str] = mapped_column(String(500), unique=True, index=True)
     title: Mapped[str] = mapped_column(String(200))
     session_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     chunks: Mapped[List["Chunk"]] = relationship("Chunk", back_populates="source", cascade="all, delete-orphan")
 
