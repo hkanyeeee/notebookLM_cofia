@@ -27,12 +27,13 @@ class WebhookResponseData(BaseModel):
     collection_name: str
     url: str
     total_chunks: int
-    chunks: List[dict]
-    source_id: str
-    session_id: str
+    source_id: Optional[str] = None
+    session_id: Optional[str] = None
     task_name: str
-    response: Optional[List[dict]] = None  # 添加response字段以包含sub_docs
+    output: Optional[List[dict]] = None  # 添加output字段以包含sub_docs
     recursive_depth: Optional[int] = 1  # 添加递归深度字段，默认为1
+    request_id: Optional[str] = None  # 请求ID
+    webhookUrl: Optional[str] = None  # webhook URL
 
 
 class UnifiedIngestRequest(BaseModel):
@@ -141,23 +142,27 @@ async def process_webhook_response(
     sub_docs_results = []
     total_sub_docs = 0
     
-    if data.response and isinstance(data.response, list):
-        print(f"检测到响应数据，共 {len(data.response)} 个响应项")
+    if data.output and isinstance(data.output, list):
+        print(f"检测到响应数据，共 {len(data.output)} 个响应项")
         
         # 收集所有子文档URL
         all_sub_docs = []
         
-        for i, response_item in enumerate(data.response):
-            if isinstance(response_item, dict) and "sub_docs" in response_item:
-                sub_docs = response_item.get("sub_docs", [])
-                if isinstance(sub_docs, list):
-                    print(f"响应项 {i} 包含 {len(sub_docs)} 个子文档")
-                    total_sub_docs += len(sub_docs)
-                    all_sub_docs.extend(sub_docs)
+        for i, output_item in enumerate(data.output):
+            if isinstance(output_item, dict) and "response" in output_item:
+                response_data = output_item.get("response", {})
+                if isinstance(response_data, dict) and "sub_docs" in response_data:
+                    sub_docs = response_data.get("sub_docs", [])
+                    if isinstance(sub_docs, list):
+                        print(f"响应项 {i} 包含 {len(sub_docs)} 个子文档")
+                        total_sub_docs += len(sub_docs)
+                        all_sub_docs.extend(sub_docs)
+                    else:
+                        print(f"响应项 {i} 的 sub_docs 不是列表格式: {type(sub_docs)}")
                 else:
-                    print(f"响应项 {i} 的 sub_docs 不是列表格式: {type(sub_docs)}")
+                    print(f"响应项 {i} 的 response 不包含 sub_docs 字段或格式不正确")
             else:
-                print(f"响应项 {i} 不包含 sub_docs 字段或格式不正确")
+                print(f"响应项 {i} 不包含 response 字段或格式不正确")
         
         if all_sub_docs:
             print(f"总共发现 {len(all_sub_docs)} 个子文档URL，开始递归处理...")
@@ -261,17 +266,24 @@ async def agenttic_ingest(
     - 客户端请求：获取URL并使用大模型生成文档名称和collection名称，拉取并处理内容，创建新的向量库collection存储，发送webhook通知
     - webhook回调：处理工作流响应数据并执行递归摄取逻辑
     
-    通过检测数据中是否包含 'chunks' 字段来判断请求类型
+    通过检测数据中是否包含 'task_name' 字段来判断请求类型
     """
     
-    # 检测请求类型：如果包含 chunks 字段，说明是 webhook 回调
-    is_webhook_callback = 'chunks' in data and 'task_name' in data
+    # 检测请求类型：如果包含 task_name 字段，说明是 webhook 回调
+    # 需要考虑数据可能嵌套在 body 字段中的情况
+    is_webhook_callback = 'task_name' in data or ('body' in data and isinstance(data.get('body'), dict) and 'task_name' in data['body'])
     
     if is_webhook_callback:
         # 处理 webhook 回调
         print("检测到webhook回调请求")
         try:
-            webhook_data = WebhookResponseData(**data)
+            # 如果数据嵌套在body中，提取body内容
+            webhook_request_data = data
+            if 'body' in data and isinstance(data.get('body'), dict) and 'task_name' in data['body']:
+                print("检测到嵌套在body中的webhook数据，正在提取...")
+                webhook_request_data = data['body']
+            
+            webhook_data = WebhookResponseData(**webhook_request_data)
             return await process_webhook_response(webhook_data, db)
         except Exception as e:
             error_message = f"Webhook回调处理失败: {e.__class__.__name__}: {str(e)}"
