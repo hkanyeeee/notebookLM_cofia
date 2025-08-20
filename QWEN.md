@@ -1,149 +1,163 @@
-# NotebookLM-Py Project Documentation
+# NotebookLM-Py Project Overview
 
-## Project Overview
+## Project Description
 
-NotebookLM-Py is a comprehensive document processing and retrieval system that allows users to ingest, process, and search through documents from URLs. It's built with a modern architecture that includes:
-
-- A FastAPI backend for handling API requests
-- A Vue.js frontend for user interaction
-- Integration with embedding and reranking services
-- Support for vector databases (Qdrant)
-- Docker-based deployment
-
-The system enables users to:
-1. Ingest documents from URLs
-2. Process and chunk content for embedding
-3. Generate embeddings using external services
-4. Store and search through documents using vector similarity
+NotebookLM-Py is a full-stack application that provides an interface for managing and querying documents, with features for ingestion, search, and document management. It's built using Python (FastAPI) for the backend and Vue.js with TypeScript for the frontend. The application integrates with external services like embedding models, LLMs, and Qdrant vector database for semantic search capabilities.
 
 ## Architecture
 
-The system consists of several components:
+The application follows a microservices architecture with the following components:
 
-1. **Backend API Server** (`app/main.py`): Built with FastAPI, handles all API endpoints for ingestion, search, document management, and query processing.
+1. **Backend Service** (Python/FastAPI):
+   - Main API server built with FastAPI
+   - Handles document ingestion, search, and management
+   - Integrates with Qdrant vector database for semantic search
+   - Uses SQLAlchemy for database operations
 
-2. **Frontend Application** (`notebookLM_front/`): A Vue.js application providing the user interface for interacting with the system.
+2. **Frontend Service** (Vue.js/TypeScript):
+   - Web-based user interface for interacting with the backend
+   - Built with Vite and Element Plus UI components
 
-3. **Gateway Services**:
-   - `embedding_gateway.py`: Routes embedding requests to multiple backend services
-   - `rerank_gateway.py`: Routes reranking requests with load balancing and concurrency control
+3. **Embedding Gateway**:
+   - Acts as a proxy for embedding model services
+   - Supports load balancing across multiple embedding backends
 
-4. **Database**: Uses SQLite for local development, with support for other databases through SQLAlchemy.
+4. **n8n Integration**:
+   - Workflow automation tool integrated into the system
+   - Allows for creating complex document processing workflows
 
-5. **Vector Database**: Integrates with Qdrant for vector storage and similarity search.
+5. **Dockerized Deployment**:
+   - Full Docker support with docker-compose for easy deployment
+   - Multi-container setup including backend, frontend, embedding gateway, and n8n
 
 ## Key Features
 
-- **Document Ingestion**: Streamed ingestion of documents from URLs with progress tracking
-- **Text Chunking**: Automatic splitting of text into manageable chunks for embedding
-- **Embedding Generation**: Integration with external embedding services via gateway
-- **Search Functionality**: Vector-based similarity search through ingested documents
-- **Document Management**: CRUD operations for managing ingested documents
-- **Query Processing**: Natural language query processing with search results
+- Document ingestion from various sources
+- Semantic search using vector databases (Qdrant)
+- Collection management
+- Document querying and retrieval
+- Export functionality
+- Webhook integration
+- Workflow automation with n8n
 
 ## Technology Stack
 
-### Backend
+### Backend:
 - Python 3.11
-- FastAPI for API framework
-- SQLAlchemy for database operations
-- Uvicorn for ASGI server
-- Qdrant client for vector storage
+- FastAPI
+- uvicorn
+- SQLAlchemy with SQLite
+- Qdrant Client
 - Playwright for web scraping
+- BeautifulSoup for HTML parsing
 
-### Frontend
-- Vue 3 with TypeScript
+### Frontend:
+- Vue.js 3
+- TypeScript
 - Element Plus UI components
-- Pinia for state management
-- Vite for build tooling
+- Vite build tool
 
-### Infrastructure
-- Docker and Docker Compose for containerization
-- Nginx for reverse proxy (in frontend)
-- Qdrant for vector database
+### Infrastructure:
+- Docker (with docker-compose)
+- Nginx
+- n8n workflow automation
+
+## Project Structure
+
+```
+notebookLM_cofia/
+├── app/                    # Backend application code
+│   ├── api/                # API routes and controllers
+│   ├── chunking.py         # Text chunking utilities
+│   ├── config.py           # Configuration settings
+│   ├── database.py         # Database initialization and operations
+│   ├── embedding_client.py # Embedding model client
+│   ├── fetch_parse.py      # Web scraping and parsing utilities
+│   ├── llm_client.py       # LLM client
+│   ├── main.py             # Main FastAPI application entry point
+│   ├── models.py           # Data models
+│   ├── rerank_client.py    # Reranking client
+│   └── vector_db_client.py # Vector database client
+├── gateway_script/         # Gateway services for embedding and reranking
+│   ├── embedding_gateway.py
+│   ├── rerank_gateway.py
+│   └── serve_reranker.py
+├── notebookLM_front/       # Frontend application
+│   ├── src/                # Source code
+│   ├── public/             # Static assets
+│   └── package.json        # Frontend dependencies
+├── docker-compose.yml      # Docker orchestration
+├── Dockerfile.backend      # Backend Dockerfile
+├── requirements.txt        # Python dependencies
+└── readme                  # Quick start instructions
+```
 
 ## Running the Application
 
-### Development Environment Setup
+### Prerequisites:
+- Docker and docker-compose installed
+- Python 3.11 (for development)
 
-1. **Prerequisites**:
-   - Python 3.11
-   - Node.js 20+
-   - Docker and Docker Compose
-
-2. **Backend Setup**:
+### Quick Start:
+1. Build and start the containers:
    ```bash
-   # Install Python dependencies
-   pip install -r requirements.txt
-   
-   # Install Playwright Chromium
-   python -m playwright install chromium
+   docker-compose up --build
    ```
 
-3. **Frontend Setup**:
-   ```bash
-   # Navigate to frontend directory
-   cd notebookLM_front
-   
-   # Install Node.js dependencies
-   pnpm install
-   
-   # Build the frontend
-   pnpm build
-   ```
+2. Access the frontend at `http://localhost:9001`
+3. The backend API will be available at `http://localhost:8000`
 
-4. **Running Services**:
+### Development:
+1. For backend development:
    ```bash
-   # Start all services with Docker Compose
-   docker-compose up -d
-   
-   # Or start backend only (for development)
    conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-### Docker Deployment
-
-The project uses a multi-container setup with:
-- `backend`: The main FastAPI application
-- `frontend`: Vue.js frontend application
-- `embedding-gateway`: Routes embedding requests to backend services
-- `n8n`: Workflow automation tool (optional)
-
-To run with Docker Compose:
-```bash
-docker-compose up -d
-```
-
-The frontend will be available at `http://localhost:9001` and the backend API at `http://localhost:8000`.
+2. For frontend development:
+   ```bash
+   cd notebookLM_front
+   pnpm install
+   pnpm dev
+   ```
 
 ## API Endpoints
 
-The backend exposes several API endpoints:
+The backend exposes the following main API endpoints:
+- `/ingest` - Document ingestion
+- `/collections` - Collection management
+- `/search` - Semantic search
+- `/documents` - Document operations
+- `/query` - Query processing
+- `/export` - Export functionality
+- `/webhook` - Webhook integration
 
-- `/ingest`: Ingest documents from URLs with progress streaming
-- `/search`: Search through ingested documents using vector similarity
-- `/documents`: Manage documents (list, get, delete)
-- `/query`: Process natural language queries
-- `/export`: Export documents or search results
+## Configuration
 
-## Development Conventions
+Environment variables are used for configuration:
+- `DATABASE_URL` - Database connection string
+- `QDRANT_HOST` - Qdrant vector database host
+- `EMBEDDING_SERVICE_URL` - Embedding service URL
+- `LLM_SERVICE_URL` - LLM service URL
+- `SEARXNG_QUERY_URL` - SearxNG search URL
 
-1. **Code Style**: Python code follows PEP8 conventions with type hints
-2. **Database Migrations**: SQLAlchemy is used for database operations
-3. **Error Handling**: Comprehensive error handling with proper HTTP status codes
-4. **Testing**: Unit tests are included in the test directory
-5. **Documentation**: API endpoints are documented with FastAPI's automatic documentation
+## Contributing
 
-## Key Files and Directories
+This project uses standard Python and JavaScript development practices. For backend, follow FastAPI conventions. For frontend, use Vue.js best practices with TypeScript.
 
-- `app/`: Main backend application code
-  - `api/`: API route handlers
-  - `models.py`: Database models
-  - `database.py`: Database connection and initialization
-  - `embedding_client.py`: Integration with embedding services
-  - `vector_db_client.py`: Integration with vector database (Qdrant)
-- `notebookLM_front/`: Frontend application
-- `gateway_script/`: Gateway services for embedding and reranking
-- `docker-compose.yml`: Docker orchestration configuration
-- `Dockerfile.backend`: Backend Docker image definition
-- `requirements.txt`: Python dependencies
+## Testing
+
+The project includes test files for various components:
+- `test_agenttic_ingest.py` - Tests for agenttic ingestion
+- `batch_delete_collections.py` - Utility for batch collection deletion
+- `clear_db.py` - Database clearing utility
+- `list_collections.py` - Collection listing utility
+- `webhook_test.py` - Webhook testing utilities
+
+## Deployment
+
+The application is designed for containerized deployment using Docker and docker-compose. The setup includes:
+- Backend service with FastAPI
+- Frontend service with Vue.js
+- Embedding gateway for handling embedding model requests
+- n8n workflow automation tool
+- Qdrant vector database (optional)
