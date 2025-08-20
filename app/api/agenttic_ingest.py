@@ -447,23 +447,25 @@ async def agenttic_ingest(
                     "content": chunk.content,
                     "index": idx
                 }
-                for idx, chunk in enumerate([raw_html_chunk_objects[0]])
-                # for idx, chunk in enumerate(raw_html_chunk_objects)
+                for idx, chunk in enumerate(raw_html_chunk_objects)
             ],
             "request_id": request_id,
             "recursive_depth": recursive_depth,  # 添加递归深度参数
         }
 
-        # 8. 发送webhook
-        print("正在发送webhook...")
-        # 直接向指定的webhook URL发送POST请求
-        try:
-            async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
-                response = await client.post(webhook_url, json=webhook_data)
-                response.raise_for_status()
-                print("Webhook发送成功")
-        except Exception as e:
-            print(f"Webhook发送失败: {e}")
+        # 8. 发送webhook（仅在递归深度大于0时）
+        if recursive_depth > 0:
+            print("正在发送webhook进行子文档识别...")
+            # 直接向指定的webhook URL发送POST请求
+            try:
+                async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
+                    response = await client.post(webhook_url, json=webhook_data)
+                    response.raise_for_status()
+                    print("Webhook发送成功")
+            except Exception as e:
+                print(f"Webhook发送失败: {e}")
+        else:
+            print(f"递归深度为0，跳过子文档识别webhook")
 
         return {
             "success": True,
