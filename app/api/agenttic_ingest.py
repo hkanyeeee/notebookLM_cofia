@@ -33,7 +33,7 @@ class WebhookResponseData(BaseModel):
     output: Optional[List[dict]] = None  # 添加output字段以包含sub_docs
     recursive_depth: Optional[int] = 1  # 添加递归深度字段，默认为1
     request_id: Optional[str] = None  # 请求ID
-    webhookUrl: Optional[str] = None  # webhook URL
+    webhook_url: Optional[str] = None  # webhook URL
 
 
 class UnifiedIngestRequest(BaseModel):
