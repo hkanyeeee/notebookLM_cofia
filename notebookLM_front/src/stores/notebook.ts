@@ -1,7 +1,14 @@
 import { ref, reactive, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult, type ModelInfo } from '../api/notebook'
+import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult, type ModelInfo, DEFAULT_TOOLS } from '../api/notebook'
 import { useSessionStore } from './session'
+
+// 问答类型枚举
+export enum QueryType {
+  NORMAL = 'normal',      // 普通问答（启用web search）
+  DOCUMENT = 'document',  // 文档问答（不启用web search）
+  COLLECTION = 'collection' // collection问答（启用web search）
+}
 
 // Document interface
 export interface Document {
@@ -60,8 +67,16 @@ export const useNotebookStore = defineStore('notebook', () => {
   const models = ref<ModelInfo[]>([])
   const selectedModel = ref<string>('')  // 当前选中的模型ID
   
-  // 计算属性：是否处于Collection查询模式（当选择了collection时）
-  const isCollectionQueryMode = computed(() => !!selectedCollection.value)
+  // 问答类型状态
+  const queryType = ref<QueryType>(QueryType.DOCUMENT) // 默认为文档问答
+  
+  // 计算属性：是否处于Collection查询模式（当问答类型为COLLECTION或选择了collection时）
+  const isCollectionQueryMode = computed(() => queryType.value === QueryType.COLLECTION || !!selectedCollection.value)
+  
+  // 计算属性：当前模式是否应该启用web search工具
+  const shouldUseWebSearch = computed(() => 
+    queryType.value === QueryType.NORMAL || queryType.value === QueryType.COLLECTION
+  )
   
   const loading = reactive({
     querying: false,
@@ -152,6 +167,10 @@ export const useNotebookStore = defineStore('notebook', () => {
                     };
                     if (!documents.value.some(doc => doc.id === newDoc.id)) {
                       documents.value.push(newDoc);
+                      // 成功添加文档后自动切换到文档问答模式
+                      if (queryType.value === QueryType.NORMAL) {
+                        queryType.value = QueryType.DOCUMENT;
+                      }
                     }
                     status.message = data.message || '处理完成!';
                     status.inProgress = false;
@@ -283,12 +302,12 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   async function sendQuery(query: string) {
-    // 如果处于Collection查询模式，执行Collection查询
-    if (isCollectionQueryMode.value) {
+    // 如果问答类型为COLLECTION，执行Collection查询
+    if (queryType.value === QueryType.COLLECTION) {
       return await performCollectionQuery(query)
     }
     
-    // 否则执行普通查询
+    // 否则执行普通/文档查询
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -304,19 +323,34 @@ export const useNotebookStore = defineStore('notebook', () => {
     try {
       controller = new AbortController();
       timeoutId = window.setTimeout(() => controller?.abort(), 300000);
+      
+      // 构建查询参数
+      const queryParams: any = {
+        query,
+        top_k: 60,
+        stream: true,
+        model: selectedModel.value,  // 添加选中的模型
+        query_type: queryType.value, // 添加问答类型参数
+      }
+      
+      // 根据问答类型决定文档范围和工具配置
+      if (queryType.value === QueryType.DOCUMENT) {
+        // 文档问答模式：使用已添加的文档，不启用工具
+        queryParams.document_ids = documents.value.map(doc => doc.id)
+        queryParams.tool_mode = 'off'
+      } else if (queryType.value === QueryType.NORMAL) {
+        // 普通问答模式：不限制文档范围，启用web search工具
+        queryParams.tool_mode = 'auto'
+        queryParams.tools = DEFAULT_TOOLS
+      }
+      
       const response = await fetch(`${notebookApi.getBaseUrl()}/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Session-ID': sessionStore.getSessionId() || '',
         },
-        body: JSON.stringify({
-          query,
-          top_k: 60,
-          document_ids: documents.value.map(doc => doc.id),
-          stream: true,
-          model: selectedModel.value,  // 添加选中的模型
-        }),
+        body: JSON.stringify(queryParams),
         signal: controller.signal,
       });
 
@@ -345,6 +379,7 @@ export const useNotebookStore = defineStore('notebook', () => {
       let buffer = '';
       let accumulatedContent = '';
       let accumulatedReasoning = '';
+      let isToolRunning = false;
       
       while (true) {
         const { done, value } = await reader.read();
@@ -365,10 +400,52 @@ export const useNotebookStore = defineStore('notebook', () => {
                 reasoning: accumulatedReasoning,
               };
             } else if (evt.type === 'content' && typeof evt.content === 'string') {
-              accumulatedContent += evt.content;
+              // 如果正在运行工具且内容为空，则先显示等待状态
+              if (!accumulatedContent && isToolRunning) {
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: '🔍 正在处理工具结果，请稍候...',
+                };
+              } else {
+                accumulatedContent += evt.content;
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: accumulatedContent,
+                };
+              }
+            } else if (evt.type === 'tool_call') {
+              // 工具调用开始
+              isToolRunning = true;
+              const toolName = evt.tool_name || evt.name || 'unknown';
+              let statusMessage = '';
+              if (toolName === 'web_search') {
+                statusMessage = '🔍 正在搜索网络信息...';
+              } else {
+                statusMessage = `🔧 正在调用工具: ${toolName}...`;
+              }
               messages.value[messageIndex] = {
                 ...messages.value[messageIndex],
-                content: accumulatedContent,
+                content: statusMessage,
+              };
+            } else if (evt.type === 'tool_result') {
+              // 工具调用完成
+              isToolRunning = false;
+              const toolName = evt.tool_name || evt.name || 'unknown';
+              let statusMessage = '';
+              if (toolName === 'web_search') {
+                statusMessage = '✅ 网络搜索完成，正在生成回答...';
+              } else {
+                statusMessage = `✅ 工具 ${toolName} 执行完成，正在处理结果...`;
+              }
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                content: statusMessage,
+              };
+            } else if (evt.type === 'status' && typeof evt.message === 'string') {
+              // 状态更新
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                content: evt.message,
               };
             } else if (evt.type === 'sources' && Array.isArray(evt.sources)) {
               messages.value[messageIndex] = {
@@ -400,8 +477,10 @@ export const useNotebookStore = defineStore('notebook', () => {
 
   // 执行Collection查询的独立方法
   async function performCollectionQuery(query: string) {
-    const collectionId = selectedCollection.value
-    if (!collectionId) {
+    const collectionId = selectedCollection.value || ''
+    
+    // 如果问答类型是COLLECTION但没有选择collection，抛出错误
+    if (queryType.value === QueryType.COLLECTION && !collectionId) {
       throw new Error('请选择一个Collection')
     }
 
@@ -430,10 +509,21 @@ export const useNotebookStore = defineStore('notebook', () => {
     loading.querying = true // 使用通用的查询状态
 
     try {
-      const request: CollectionQueryRequest = {
+      const request: CollectionQueryRequest & { 
+        use_web_search?: boolean, 
+        tools?: any[], 
+        tool_mode?: string 
+      } = {
         collection_id: collectionId,
         query,
         top_k: 20
+      }
+      
+      // 如果应该启用web search，添加工具配置
+      if (shouldUseWebSearch.value) {
+        request.use_web_search = true
+        request.tools = DEFAULT_TOOLS
+        request.tool_mode = 'auto'
       }
 
       // 使用流式查询
@@ -607,6 +697,10 @@ export const useNotebookStore = defineStore('notebook', () => {
         // 处理成功，清空输入框并刷新collection列表
         agenticIngestUrl.value = ''
         await loadCollections()
+        // 成功添加collection后自动切换到文档问答模式
+        if (queryType.value === QueryType.NORMAL) {
+          queryType.value = QueryType.DOCUMENT
+        }
         return {
           success: true,
           message: response.message,
@@ -731,6 +825,9 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 模型相关
     models,
     selectedModel,
+    // 问答类型相关
+    queryType,
+    shouldUseWebSearch,
     // 方法
     addDocument,
     cancelIngestion,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted } from 'vue'
-import { useNotebookStore } from '../stores/notebook'
+import { useNotebookStore, QueryType } from '../stores/notebook'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip, ElSelect, ElOption } from 'element-plus'
 import { Refresh, Promotion, Plus } from '@element-plus/icons-vue'
 import { marked } from 'marked'
@@ -57,32 +57,50 @@ async function handleSendQuery() {
     return
   }
 
-  // Collection查询模式验证
-  if (store.isCollectionQueryMode) {
-    if (!store.selectedCollection) {
-      ElMessage.warning('请先选择一个Collection')
-      return
-    }
-  } else {
-    // 普通查询模式验证
-    if (store.documents.length === 0) {
-      ElMessage.warning('请先添加一些文档再开始对话')
-      return
-    }
-
-    if (store.ingestionStatus.size > 0) {
-      ElMessage.warning('正在处理文档，请稍后再试')
-      return
-    }
+  // 根据问答类型进行不同的验证
+  switch (store.queryType) {
+    case QueryType.NORMAL:
+      // 普通问答：无需额外验证，可以直接问答
+      break
+      
+    case QueryType.DOCUMENT:
+      // 文档问答：需要先添加文档
+      if (store.documents.length === 0) {
+        ElMessage.warning('请先添加一些文档再开始对话')
+        return
+      }
+      if (store.ingestionStatus.size > 0) {
+        ElMessage.warning('正在处理文档，请稍后再试')
+        return
+      }
+      break
+      
+    case QueryType.COLLECTION:
+      // Collection问答：需要选择collection
+      if (!store.selectedCollection) {
+        ElMessage.warning('请先选择一个Collection')
+        return
+      }
+      break
   }
 
   try {
     queryInput.value = ''
     const result = await store.sendQuery(query)
     
-    // 如果是Collection查询模式，显示查询结果提示
-    if (store.isCollectionQueryMode && result && result.success) {
-      ElMessage.success(`找到 ${result.total_found} 个相关结果`)
+    // 根据问答类型显示不同的提示信息
+    if (result && result.success) {
+      switch (store.queryType) {
+        case QueryType.NORMAL:
+          ElMessage.success('正在为您生成回答...')
+          break
+        case QueryType.DOCUMENT:
+          ElMessage.success('正在基于文档生成回答...')
+          break
+        case QueryType.COLLECTION:
+          ElMessage.success(`找到 ${result.total_found || 0} 个相关结果`)
+          break
+      }
     }
   } catch (error: any) {
     ElMessage.error(error.message || '查询失败，请重试')
@@ -140,6 +158,41 @@ async function handleTriggerAgenticIngest() {
   }
 }
 
+// 获取输入框placeholder
+function getInputPlaceholder() {
+  switch (store.queryType) {
+    case QueryType.NORMAL:
+      return '请输入您的问题（将使用网络搜索）...'
+    case QueryType.DOCUMENT:
+      return '请输入关于文档的问题...'
+    case QueryType.COLLECTION:
+      return store.selectedCollection 
+        ? `在 '${store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title}' 中查询...`
+        : '请先选择Collection，然后输入问题...'
+  }
+}
+
+// 判断查询按钮是否禁用
+function isQueryDisabled() {
+  if (!queryInput.value.trim()) return true
+  if (store.loading.querying || store.loading.queryingCollection) return true
+  
+  switch (store.queryType) {
+    case QueryType.NORMAL:
+      return false // 普通问答无需额外条件
+    case QueryType.DOCUMENT:
+      return store.documents.length === 0 || store.ingestionStatus.size > 0
+    case QueryType.COLLECTION:
+      return !store.selectedCollection
+  }
+}
+
+// 判断查询按钮是否显示loading状态
+function isQueryLoading() {
+  return store.loading.querying || store.loading.queryingCollection || 
+         (store.queryType === QueryType.DOCUMENT && store.ingestionStatus.size > 0)
+}
+
 // Collection查询已整合到sendQuery方法中，此方法保留用于向后兼容
 async function handleCollectionQuery() {
   const query = store.collectionQueryInput.trim()
@@ -157,6 +210,18 @@ async function handleCollectionQuery() {
   } catch (error: any) {
     ElMessage.error(error.message || 'Collection查询失败')
   }
+}
+
+// 判断消息是否为状态消息
+function isStatusMessage(content: string) {
+  const statusPatterns = [
+    /🔍.*搜索/,
+    /✅.*完成/,
+    /🔧.*工具/,
+    /正在处理.*请稍候/,
+    /正在生成.*回答/,
+  ]
+  return statusPatterns.some(pattern => pattern.test(content))
 }
 </script>
 
@@ -236,64 +301,109 @@ async function handleCollectionQuery() {
       </div>
       
       <div v-if="store.messages.length === 0" class="welcome-message">
-        <h2>欢迎</h2>
-        <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
-        <div class="topic-input">
-          <ElInput
-            v-model="store.topicInput"
-            placeholder="请输入课题，例如：Sora 2025 能力与限制"
-            :disabled="store.generating"
-          />
-          <ElButton
-            type="primary"
-            @click="store.generateCandidatesFromTopic()"
-            :loading="store.generating"
-            :disabled="!store.topicInput.trim() || store.generating"
-            class="topic-send-btn"
-          >生成搜索</ElButton>
-        </div>
+        <!-- 文档问答模式的欢迎消息 -->
+        <div v-if="store.queryType === QueryType.DOCUMENT">
+          <h2>文档问答</h2>
+          <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
+          <div class="topic-input">
+            <ElInput
+              v-model="store.topicInput"
+              placeholder="请输入课题，例如：Sora 2025 能力与限制"
+              :disabled="store.generating"
+            />
+            <ElButton
+              type="primary"
+              @click="store.generateCandidatesFromTopic()"
+              :loading="store.generating"
+              :disabled="!store.topicInput.trim() || store.generating"
+              class="topic-send-btn"
+            >生成搜索</ElButton>
+          </div>
 
-        <!-- 候选URL按钮区 -->
-        <div v-if="store.candidateUrls.length > 0" class="candidates">
-          <h3>候选网址</h3>
-          <div class="candidate-grid">
-            <ElTooltip
-              v-for="item in store.candidateUrls"
-              :key="item.url"
-              placement="top"
-              effect="dark"
-            >
-              <template #content>
-                <div>
-                  <div>{{ item.title }}</div>
-                  <div>{{ item.url }}</div>
-                </div>
-              </template>
-              <ElButton
-                class="candidate-item"
-                @click="store.addCandidate(item.url)"
+          <!-- 候选URL按钮区 -->
+          <div v-if="store.candidateUrls.length > 0" class="candidates">
+            <h3>候选网址</h3>
+            <div class="candidate-grid">
+              <ElTooltip
+                v-for="item in store.candidateUrls"
+                :key="item.url"
+                placement="top"
+                effect="dark"
               >
-                <div class="candidate-item-content">
-                  <div class="candidate-title">{{ item.title }}</div>
-                  <div class="candidate-url">{{ item.url }}</div>
-                </div>
-              </ElButton>
-            </ElTooltip>
+                <template #content>
+                  <div>
+                    <div>{{ item.title }}</div>
+                    <div>{{ item.url }}</div>
+                  </div>
+                </template>
+                <ElButton
+                  class="candidate-item"
+                  @click="store.addCandidate(item.url)"
+                >
+                  <div class="candidate-item-content">
+                    <div class="candidate-title">{{ item.title }}</div>
+                    <div class="candidate-url">{{ item.url }}</div>
+                  </div>
+                </ElButton>
+              </ElTooltip>
+            </div>
+          </div>
+
+          <div class="welcome-features">
+            <div class="feature-item">
+              <strong>💡 智能问答</strong>
+              <p>基于您添加的文档内容回答问题</p>
+            </div>
+            <div class="feature-item">
+              <strong>📚 文档总结</strong>
+              <p>快速获取文档的核心要点</p>
+            </div>
+            <div class="feature-item">
+              <strong>🔍 深度分析</strong>
+              <p>深入分析文档中的关键信息</p>
+            </div>
           </div>
         </div>
 
-        <div class="welcome-features">
-          <div class="feature-item">
-            <strong>💡 智能问答</strong>
-            <p>基于您添加的文档内容回答问题</p>
+        <!-- 普通问答模式的欢迎消息 -->
+        <div v-else-if="store.queryType === QueryType.NORMAL">
+          <h2>普通问答</h2>
+          <p>我会使用网络搜索为您提供最新的信息和答案，直接在下方输入您的问题即可开始对话。</p>
+          
+          <div class="welcome-features">
+            <div class="feature-item">
+              <strong>🌐 网络搜索</strong>
+              <p>实时搜索最新信息</p>
+            </div>
+            <div class="feature-item">
+              <strong>💬 智能对话</strong>
+              <p>自然语言交互体验</p>
+            </div>
+            <div class="feature-item">
+              <strong>🎯 精准回答</strong>
+              <p>基于搜索结果生成准确答案</p>
+            </div>
           </div>
-          <div class="feature-item">
-            <strong>📚 文档总结</strong>
-            <p>快速获取文档的核心要点</p>
-          </div>
-          <div class="feature-item">
-            <strong>🔍 深度分析</strong>
-            <p>深入分析文档中的关键信息</p>
+        </div>
+
+        <!-- Collection问答模式的欢迎消息 -->
+        <div v-else-if="store.queryType === QueryType.COLLECTION">
+          <h2>Collection问答</h2>
+          <p>选择一个Collection进行基于知识库的问答，同时可以结合网络搜索获取最新信息。</p>
+          
+          <div class="welcome-features">
+            <div class="feature-item">
+              <strong>📚 知识库问答</strong>
+              <p>基于Collection中的文档回答</p>
+            </div>
+            <div class="feature-item">
+              <strong>🔍 混合搜索</strong>
+              <p>结合知识库和网络搜索</p>
+            </div>
+            <div class="feature-item">
+              <strong>📊 精准匹配</strong>
+              <p>智能检索相关文档片段</p>
+            </div>
           </div>
         </div>
       </div>
@@ -315,7 +425,7 @@ async function handleCollectionQuery() {
               </ElCollapseItem>
             </ElCollapse>
           </div>
-          <div class="message-text" v-if="message.content" v-html="marked(message.content)"></div>
+          <div class="message-text" v-if="message.content" v-html="marked(message.content)" :class="{ 'status-message': isStatusMessage(message.content) }"></div>
           <div class="message-text" v-else>{{"信息加载中..."}}</div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
 
@@ -342,8 +452,8 @@ async function handleCollectionQuery() {
     <!-- 输入区域：当无文档时禁用提问 -->
     <div class="input-area">
         
-      <!-- Collection与Agentic Ingest 控制区 -->
-      <div class="agentic-controls">
+      <!-- Collection与Agentic Ingest 控制区 - 普通问答模式下隐藏 -->
+      <div v-if="store.queryType !== QueryType.NORMAL" class="agentic-controls">
         <!-- Collection选择下拉框 -->
         <ElSelect
           v-model="store.selectedCollection"
@@ -383,9 +493,30 @@ async function handleCollectionQuery() {
         </ElButton>
       </div>
       <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">
+        <!-- 问答类型选择器 -->
+        <ElSelect
+          v-model="store.queryType"
+          placeholder="选择问答类型"
+          class="query-type-selector"
+          style="width: 120px"
+        >
+          <ElOption
+            :label="'普通问答'"
+            :value="QueryType.NORMAL"
+          />
+          <ElOption
+            :label="'文档问答'"
+            :value="QueryType.DOCUMENT"
+          />
+          <ElOption
+            :label="'Collection问答'"
+            :value="QueryType.COLLECTION"
+          />
+        </ElSelect>
+        
         <ElInput
           v-model="queryInput"
-          :placeholder="store.isCollectionQueryMode ? `在 '${store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title}' 中查询...` : '请输入您的问题...'"
+          :placeholder="getInputPlaceholder()"
           class="query-input"
           type="textarea"
           :rows="2"
@@ -393,8 +524,8 @@ async function handleCollectionQuery() {
         <ElButton
           type="primary"
           @click="handleSendQuery"
-          :disabled="store.loading.querying || store.loading.queryingCollection || !queryInput.trim() || (!store.isCollectionQueryMode && (store.documents.length === 0 || store.ingestionStatus.size > 0))"
-          :loading="store.loading.querying || store.loading.queryingCollection || (!store.isCollectionQueryMode && store.ingestionStatus.size > 0)"
+          :disabled="isQueryDisabled()"
+          :loading="isQueryLoading()"
           class="send-btn"
         >
           <ElIcon>
@@ -403,11 +534,17 @@ async function handleCollectionQuery() {
         </ElButton>
       </div>
       <div class="input-hint">
-        <span v-if="store.isCollectionQueryMode">
-          Collection查询模式：{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}
+        <span v-if="store.queryType === QueryType.NORMAL">
+          普通问答模式{{ store.shouldUseWebSearch ? '（已启用网络搜索）' : '' }}
         </span>
-        <span v-else>
-          {{ store.documents.length }} 个文档已添加
+        <span v-else-if="store.queryType === QueryType.DOCUMENT">
+          文档问答模式：{{ store.documents.length }} 个文档已添加
+        </span>
+        <span v-else-if="store.queryType === QueryType.COLLECTION">
+          Collection问答模式{{ store.shouldUseWebSearch ? '（已启用网络搜索）' : '' }}：
+          {{ store.selectedCollection 
+            ? store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' 
+            : '请选择Collection' }}
         </span>
       </div>
     </div>
@@ -718,6 +855,42 @@ async function handleCollectionQuery() {
 }
 
 
+/* 状态消息样式 */
+.status-message {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%) !important;
+  border: 1px solid #b3e5fc !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  margin: 8px 0 !important;
+  color: #0277bd !important;
+  font-weight: 500 !important;
+  animation: statusPulse 1.5s ease-in-out infinite !important;
+  box-shadow: 0 2px 8px rgba(2, 119, 189, 0.1) !important;
+  position: relative !important;
+}
+
+.status-message::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(to bottom, #29b6f6, #0288d1);
+  border-radius: 8px 0 0 8px;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.01);
+  }
+}
+
 /* 打字指示器 */
 .typing-indicator {
   display: flex;
@@ -764,6 +937,10 @@ async function handleCollectionQuery() {
   align-items: center;
   max-width: 800px;
   margin: 0 auto;
+}
+
+.query-type-selector {
+  flex-shrink: 0;
 }
 
 .query-input {
