@@ -13,7 +13,7 @@ from ..config import (
     RERANK_CLIENT_MAX_CONCURRENCY,
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..llm_client import generate_answer, stream_answer
+from ..llm_client import generate_answer, stream_answer, DEFAULT_CHAT_MODEL
 from ..models import Chunk
 from ..vector_db_client import query_embeddings, query_hybrid, qdrant_client, COLLECTION_NAME
 from ..rerank_client import DEFAULT_RERANKER_TOP_K
@@ -37,6 +37,7 @@ async def query(
     document_ids = data.get("document_ids", [])  # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
     stream = bool(data.get("stream", False))
+    llm_model = data.get("model", DEFAULT_CHAT_MODEL)  # 添加模型参数支持
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
     if not q:
@@ -179,7 +180,7 @@ async def query(
         contexts = [chunk.content for chunk, _ in final_hits]
 
         if not stream:
-            answer = await generate_answer(q, contexts)
+            answer = await generate_answer(q, contexts, model=llm_model)
             sources = [
                 {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
                 for chunk, score in final_hits
@@ -190,7 +191,7 @@ async def query(
             async def event_generator():
                 try:
                     # 逐块输出模型增量
-                    async for delta in stream_answer(q, contexts):
+                    async for delta in stream_answer(q, contexts, model=llm_model):
                         if delta["type"] == "reasoning":
                             yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
                         elif delta["type"] == "content":

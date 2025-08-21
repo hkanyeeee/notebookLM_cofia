@@ -1,6 +1,6 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
+import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult, type ModelInfo } from '../api/notebook'
 import { useSessionStore } from './session'
 
 // Document interface
@@ -56,13 +56,21 @@ export const useNotebookStore = defineStore('notebook', () => {
   const collectionQueryResults = ref<CollectionResult[]>([])
   const collectionQueryInput = ref<string>('')
   
+  // 模型相关状态
+  const models = ref<ModelInfo[]>([])
+  const selectedModel = ref<string>('')  // 当前选中的模型ID
+  
+  // 计算属性：是否处于Collection查询模式（当选择了collection时）
+  const isCollectionQueryMode = computed(() => !!selectedCollection.value)
+  
   const loading = reactive({
     querying: false,
     addingDocument: false,
     exporting: false,
     triggeringAgenticIngest: false,
     loadingCollections: false,
-    queryingCollection: false
+    queryingCollection: false,
+    loadingModels: false
   })
 
   const ingestionStatus = reactive<Map<string, IngestionProgress>>(new Map())
@@ -275,6 +283,12 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   async function sendQuery(query: string) {
+    // 如果处于Collection查询模式，执行Collection查询
+    if (isCollectionQueryMode.value) {
+      return await performCollectionQuery(query)
+    }
+    
+    // 否则执行普通查询
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -301,6 +315,7 @@ export const useNotebookStore = defineStore('notebook', () => {
           top_k: 60,
           document_ids: documents.value.map(doc => doc.id),
           stream: true,
+          model: selectedModel.value,  // 添加选中的模型
         }),
         signal: controller.signal,
       });
@@ -380,6 +395,42 @@ export const useNotebookStore = defineStore('notebook', () => {
     } finally {
       loading.querying = false;
       try { if (timeoutId !== undefined) clearTimeout(timeoutId); } catch {}
+    }
+  }
+
+  // 执行Collection查询的独立方法
+  async function performCollectionQuery(query: string) {
+    const collectionId = selectedCollection.value
+    if (!collectionId) {
+      throw new Error('请选择一个Collection')
+    }
+
+    loading.queryingCollection = true
+    try {
+      const request: CollectionQueryRequest = {
+        collection_id: collectionId,
+        query,
+        top_k: 20
+      }
+
+      const response = await notebookApi.queryCollection(request)
+      if (response.success) {
+        collectionQueryResults.value = response.results
+        return {
+          success: true,
+          message: response.message,
+          total_found: response.total_found,
+          results: response.results
+        }
+      } else {
+        throw new Error(response.message || 'Collection查询失败')
+      }
+    } catch (error: any) {
+      console.error('Collection查询失败:', error)
+      collectionQueryResults.value = []
+      throw error
+    } finally {
+      loading.queryingCollection = false
     }
   }
 
@@ -488,6 +539,29 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
+  // 获取可用的LLM模型列表
+  async function loadModels() {
+    loading.loadingModels = true
+    try {
+      const response = await notebookApi.getModels()
+      if (response.success) {
+        models.value = response.models?.filter(model => model.name.indexOf('embedding') === -1)
+        // 如果还没有选择模型且有可用模型，选择第一个
+        if (!selectedModel.value && models.value.length > 0) {
+          selectedModel.value = models.value[0].id
+        }
+      } else {
+        console.error('获取模型列表失败')
+        models.value = []
+      }
+    } catch (error) {
+      console.error('获取模型列表出错:', error)
+      models.value = []
+    } finally {
+      loading.loadingModels = false
+    }
+  }
+
   // 基于指定collection进行查询
   async function queryCollection() {
     const query = collectionQueryInput.value.trim()
@@ -550,11 +624,16 @@ export const useNotebookStore = defineStore('notebook', () => {
     selectedCollection,
     collectionQueryResults,
     collectionQueryInput,
+    isCollectionQueryMode,
+    // 模型相关
+    models,
+    selectedModel,
     // 方法
     addDocument,
     cancelIngestion,
     removeDocument,
     sendQuery,
+    performCollectionQuery,
     clearMessages,
     generateCandidatesFromTopic,
     addCandidate,
@@ -563,5 +642,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     loadCollections,
     queryCollection,
     clearCollectionResults,
+    loadModels,
   }
 })

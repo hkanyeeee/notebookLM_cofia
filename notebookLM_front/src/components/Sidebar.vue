@@ -142,40 +142,51 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 文档列表 -->
-    <div class="documents-section" v-if="!collapsed">
-      <h3>文档列表</h3>
-      <div class="documents-list">
-        <ElTooltip
-          v-for="doc in store.documents"
-          :key="doc.id"
-          placement="right"
-          effect="dark"
-        >
-          <template #content>
-            <div>
-              <div>{{ doc.title }}</div>
-              <div>{{ doc.url }}</div>
-            </div>
-          </template>
-          <div class="document-item">
-            <ElIcon class="doc-icon">
-              <Document />
-            </ElIcon>
-            <div class="doc-info">
-              <div class="doc-title">{{ doc.title }}</div>
-              <div class="doc-url">{{ doc.url }}</div>
-            </div>
-            <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="delete-btn">
-              <ElIcon>
-                <Delete />
+    <div class="documents-section" v-if="!collapsed" :class="{ 'collection-mode': store.isCollectionQueryMode }">
+      <div class="documents-section-content">
+        <h3>文档列表</h3>
+        <div class="documents-list">
+          <ElTooltip
+            v-for="doc in store.documents"
+            :key="doc.id"
+            placement="right"
+            effect="dark"
+          >
+            <template #content>
+              <div>
+                <div>{{ doc.title }}</div>
+                <div>{{ doc.url }}</div>
+              </div>
+            </template>
+            <div class="document-item">
+              <ElIcon class="doc-icon">
+                <Document />
               </ElIcon>
-            </ElButton>
-          </div>
-        </ElTooltip>
+              <div class="doc-info">
+                <div class="doc-title">{{ doc.title }}</div>
+                <div class="doc-url">{{ doc.url }}</div>
+              </div>
+              <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="delete-btn">
+                <ElIcon>
+                  <Delete />
+                </ElIcon>
+              </ElButton>
+            </div>
+          </ElTooltip>
 
-        <div v-if="store.documents.length === 0" class="empty-state">
-          <p>还没有添加任何文档</p>
-          <p class="empty-hint">可在右侧输入课题，或点击上方按钮添加网址</p>
+          <div v-if="store.documents.length === 0" class="empty-state">
+            <p>还没有添加任何文档</p>
+            <p class="empty-hint">可在右侧输入课题，或点击上方按钮添加网址</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Collection查询模式蒙版 -->
+      <div v-if="store.isCollectionQueryMode" class="collection-overlay">
+        <div class="collection-overlay-content">
+          <h4>Collection查询模式</h4>
+          <p>当前正在使用Collection进行查询</p>
+          <p class="collection-name">{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
     </div>
@@ -324,6 +335,63 @@ function handleRemoveFailedUrl(url: string) {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  position: relative;
+}
+
+.documents-section-content {
+  transition: opacity 0.3s ease;
+}
+
+.documents-section.collection-mode .documents-section-content {
+  opacity: 0.3;
+}
+
+.collection-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(107, 114, 128, 0.1);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.collection-overlay-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  max-width: 280px;
+}
+
+.collection-overlay-content h4 {
+  margin: 0 0 12px 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.collection-overlay-content p {
+  margin: 8px 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.collection-overlay-content .collection-name {
+  color: #4f46e5;
+  font-weight: 500;
+  background: #f0f9ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 16px;
+  font-size: 13px;
 }
 
 .documents-section h3 {

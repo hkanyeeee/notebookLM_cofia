@@ -54,21 +54,35 @@ async function handleSendQuery() {
     return
   }
 
-  if (store.documents.length === 0) {
-    ElMessage.warning('请先添加一些文档再开始对话')
-    return
-  }
+  // Collection查询模式验证
+  if (store.isCollectionQueryMode) {
+    if (!store.selectedCollection) {
+      ElMessage.warning('请先选择一个Collection')
+      return
+    }
+  } else {
+    // 普通查询模式验证
+    if (store.documents.length === 0) {
+      ElMessage.warning('请先添加一些文档再开始对话')
+      return
+    }
 
-  if (store.ingestionStatus.size > 0) {
-    ElMessage.warning('正在处理文档，请稍后再试')
-    return
+    if (store.ingestionStatus.size > 0) {
+      ElMessage.warning('正在处理文档，请稍后再试')
+      return
+    }
   }
 
   try {
     queryInput.value = ''
-    await store.sendQuery(query)
-  } catch {
-    ElMessage.error('查询失败，请重试')
+    const result = await store.sendQuery(query)
+    
+    // 如果是Collection查询模式，显示查询结果提示
+    if (store.isCollectionQueryMode && result && result.success) {
+      ElMessage.success(`找到 ${result.total_found} 个相关结果`)
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '查询失败，请重试')
   }
 }
 
@@ -93,10 +107,13 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
-// 组件挂载时加载collection列表
+// 组件挂载时加载collection列表和模型列表
 onMounted(async () => {
   try {
-    await store.loadCollections()
+    await Promise.all([
+      store.loadCollections(),
+      store.loadModels()
+    ])
   } catch (error) {
     console.warn('初始加载数据失败:', error)
   }
@@ -120,22 +137,17 @@ async function handleTriggerAgenticIngest() {
   }
 }
 
-// Collection查询
+// Collection查询已整合到sendQuery方法中，此方法保留用于向后兼容
 async function handleCollectionQuery() {
   const query = store.collectionQueryInput.trim()
-  const collectionId = store.selectedCollection
   
   if (!query) {
     ElMessage.warning('请输入查询内容')
     return
   }
-  if (!collectionId) {
-    ElMessage.warning('请选择一个Collection')
-    return
-  }
 
   try {
-    const result = await store.queryCollection()
+    const result = await store.performCollectionQuery(query)
     if (result.success) {
       ElMessage.success(`找到 ${result.total_found} 个相关结果`)
     }
@@ -151,66 +163,22 @@ async function handleCollectionQuery() {
     <header class="chat-header">
       <div class="header-left">
         <h1>对话</h1>
-        
-        <!-- Collection与Agentic Ingest 控制区 -->
-        <div class="agentic-controls">
-          <!-- Collection选择下拉框 -->
+        <div class="model-selector">
           <ElSelect
-            v-model="store.selectedCollection"
-            placeholder="选择Collection"
-            class="collection-selector"
-            :loading="store.loading.loadingCollections"
+            v-model="store.selectedModel"
+            placeholder="选择模型"
+            class="model-select"
+            :loading="store.loading.loadingModels"
             clearable
+            filterable
           >
             <ElOption
-              v-for="collection in store.collections"
-              :key="collection.collection_id"
-              :label="collection.document_title"
-              :value="collection.collection_id"
+              v-for="model in store.models"
+              :key="model.id"
+              :label="model.name"
+              :value="model.id"
             />
           </ElSelect>
-          
-          <!-- Collection查询输入框 -->
-          <ElInput
-            v-model="store.collectionQueryInput"
-            placeholder="在选定Collection中查询..."
-            class="collection-query-input"
-            clearable
-            @keydown.enter="handleCollectionQuery"
-          />
-          
-          <!-- Collection查询按钮 -->
-          <ElButton
-            type="success"
-            @click="handleCollectionQuery"
-            :loading="store.loading.queryingCollection"
-            :disabled="!store.collectionQueryInput.trim() || !store.selectedCollection || store.loading.queryingCollection"
-            class="query-btn"
-          >
-            查询
-          </ElButton>
-          
-          <!-- URL输入框 -->
-          <ElInput
-            v-model="store.agenticIngestUrl"
-            placeholder="输入URL进行Agentic Ingest"
-            class="url-input"
-            clearable
-          />
-          
-          <!-- 提交按钮 -->
-          <ElButton
-            type="primary"
-            @click="handleTriggerAgenticIngest"
-            :loading="store.loading.triggeringAgenticIngest"
-            :disabled="!store.agenticIngestUrl.trim() || store.loading.triggeringAgenticIngest"
-            class="trigger-btn"
-          >
-            <ElIcon>
-              <Plus />
-            </ElIcon>
-            处理
-          </ElButton>
         </div>
       </div>
       
@@ -357,10 +325,51 @@ async function handleCollectionQuery() {
 
     <!-- 输入区域：当无文档时禁用提问 -->
     <div class="input-area">
+        
+      <!-- Collection与Agentic Ingest 控制区 -->
+      <div class="agentic-controls">
+        <!-- Collection选择下拉框 -->
+        <ElSelect
+          v-model="store.selectedCollection"
+          placeholder="选择Collection"
+          class="collection-selector"
+          :loading="store.loading.loadingCollections"
+          clearable
+        >
+          <ElOption
+            v-for="collection in store.collections"
+            :key="collection.collection_id"
+            :label="collection.document_title"
+            :value="collection.collection_id"
+          />
+        </ElSelect>
+        
+        <!-- URL输入框 -->
+        <ElInput
+          v-model="store.agenticIngestUrl"
+          placeholder="输入URL进行Agentic Ingest"
+          class="url-input"
+          clearable
+        />
+        
+        <!-- 提交按钮 -->
+        <ElButton
+          type="primary"
+          @click="handleTriggerAgenticIngest"
+          :loading="store.loading.triggeringAgenticIngest"
+          :disabled="!store.agenticIngestUrl.trim() || store.loading.triggeringAgenticIngest"
+          class="trigger-btn"
+        >
+          <ElIcon>
+            <Plus />
+          </ElIcon>
+          处理
+        </ElButton>
+      </div>
       <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">
         <ElInput
           v-model="queryInput"
-          placeholder="请输入您的问题..."
+          :placeholder="store.isCollectionQueryMode ? `在 '${store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title}' 中查询...` : '请输入您的问题...'"
           class="query-input"
           type="textarea"
           :rows="2"
@@ -368,8 +377,8 @@ async function handleCollectionQuery() {
         <ElButton
           type="primary"
           @click="handleSendQuery"
-          :disabled="store.loading.querying || !queryInput.trim() || store.documents.length === 0 || store.ingestionStatus.size > 0"
-          :loading="store.loading.querying || store.ingestionStatus.size > 0"
+          :disabled="store.loading.querying || store.loading.queryingCollection || !queryInput.trim() || (!store.isCollectionQueryMode && (store.documents.length === 0 || store.ingestionStatus.size > 0))"
+          :loading="store.loading.querying || store.loading.queryingCollection || (!store.isCollectionQueryMode && store.ingestionStatus.size > 0)"
           class="send-btn"
         >
           <ElIcon>
@@ -378,7 +387,12 @@ async function handleCollectionQuery() {
         </ElButton>
       </div>
       <div class="input-hint">
-        <span>{{ store.documents.length }} 个文档已添加</span>
+        <span v-if="store.isCollectionQueryMode">
+          Collection查询模式：{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}
+        </span>
+        <span v-else>
+          {{ store.documents.length }} 个文档已添加
+        </span>
       </div>
     </div>
   </div>
@@ -417,9 +431,19 @@ async function handleCollectionQuery() {
   white-space: nowrap;
 }
 
+.model-selector {
+  margin-left: 24px;
+}
+
+.model-select {
+  width: 200px;
+}
+
 .agentic-controls {
   display: flex;
   align-items: center;
+  margin: auto;
+  margin-bottom: 20px;
   gap: 12px;
   flex: 1;
   max-width: 800px;
@@ -429,14 +453,7 @@ async function handleCollectionQuery() {
   width: 200px;
 }
 
-.collection-query-input {
-  flex: 1;
-  min-width: 200px;
-}
 
-.query-btn {
-  white-space: nowrap;
-}
 
 .url-input {
   flex: 1;
@@ -866,9 +883,7 @@ async function handleCollectionQuery() {
     width: 100%;
   }
 
-  .collection-query-input {
-    min-width: auto;
-  }
+
 
   .url-input {
     min-width: auto;
