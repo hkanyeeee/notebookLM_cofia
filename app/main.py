@@ -3,13 +3,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import DATABASE_URL
+from .config import DATABASE_URL, LLM_SERVICE_URL
 from .database import init_db
+from .tools.orchestrator import initialize_orchestrator
 
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     print(f"Using DATABASE_URL: {DATABASE_URL}")
+    print(f"Using LLM_SERVICE_URL: {LLM_SERVICE_URL}")
+    
+    # 初始化数据库
     try:
         await init_db()
         print("Database initialized successfully")
@@ -17,6 +21,15 @@ async def app_lifespan(app: FastAPI):
         print(f"Database initialization failed: {e}")
         # 可选：重新抛出异常以阻止应用启动
         # raise e
+    
+    # 初始化工具编排器
+    try:
+        initialize_orchestrator(LLM_SERVICE_URL)
+        print("Tool orchestrator initialized successfully")
+    except Exception as e:
+        print(f"Tool orchestrator initialization failed: {e}")
+        # 继续运行，工具功能会自动退化为普通问答
+    
     yield
 
 

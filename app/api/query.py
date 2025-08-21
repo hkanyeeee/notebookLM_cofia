@@ -13,7 +13,12 @@ from ..config import (
     RERANK_CLIENT_MAX_CONCURRENCY,
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..llm_client import generate_answer, stream_answer, DEFAULT_CHAT_MODEL
+from ..llm_client import (
+    generate_answer, stream_answer, DEFAULT_CHAT_MODEL,
+    generate_answer_with_tools, stream_answer_with_tools
+)
+from ..tools.models import RunConfig, ToolMode, ToolSchema
+from ..tools.selector import StrategySelector
 from ..models import Chunk
 from ..vector_db_client import query_embeddings, query_hybrid, qdrant_client, COLLECTION_NAME
 from ..rerank_client import DEFAULT_RERANKER_TOP_K
@@ -38,6 +43,12 @@ async def query(
     use_hybrid = data.get("use_hybrid", True)
     stream = bool(data.get("stream", False))
     llm_model = data.get("model", DEFAULT_CHAT_MODEL)  # 添加模型参数支持
+    
+    # 新增工具相关参数
+    tool_mode = data.get("tool_mode", "auto")  # "off" | "auto" | "json" | "react" | "harmony"
+    tools_data = data.get("tools", [])  # 工具定义列表
+    max_steps = data.get("max_steps", 6)  # 最大执行步数
+    
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
     if not q:
@@ -178,24 +189,93 @@ async def query(
             final_hits = hits[:DEFAULT_RERANKER_TOP_K]
 
         contexts = [chunk.content for chunk, _ in final_hits]
-
+        
+        # 构建工具配置
+        try:
+            tool_mode_enum = ToolMode(tool_mode)
+        except ValueError:
+            # 无效的工具模式，使用默认值
+            tool_mode_enum = ToolMode.AUTO
+        
+        # 解析工具定义（当前为空列表，后续可扩展）
+        tools_schemas = []
+        if tools_data:
+            for tool_data in tools_data:
+                try:
+                    schema = ToolSchema(**tool_data)
+                    tools_schemas.append(schema)
+                except Exception as e:
+                    print(f"解析工具定义失败: {e}")
+        
+        run_config = RunConfig(
+            tool_mode=tool_mode_enum,
+            tools=tools_schemas,
+            max_steps=max_steps,
+            model=llm_model
+        )
+        
+        # 判断是否使用工具功能
+        use_tools = StrategySelector.should_use_tools(run_config, llm_model)
+        
         if not stream:
-            answer = await generate_answer(q, contexts, model=llm_model)
-            sources = [
-                {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-                for chunk, score in final_hits
-            ]
-            return {"answer": answer, "sources": sources, "success": True}
+            # 非流式响应
+            if use_tools:
+                result = await generate_answer_with_tools(q, contexts, run_config)
+                sources = [
+                    {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
+                    for chunk, score in final_hits
+                ]
+                return {
+                    "answer": result["answer"],
+                    "sources": sources,
+                    "success": result["success"],
+                    "tool_mode": result.get("tool_mode", tool_mode),
+                    "steps": result.get("steps", [])
+                }
+            else:
+                # 使用传统问答
+                answer = await generate_answer(q, contexts, model=llm_model)
+                sources = [
+                    {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
+                    for chunk, score in final_hits
+                ]
+                return {"answer": answer, "sources": sources, "success": True}
         else:
-            # 以 SSE 流式返回
+            # 流式响应
             async def event_generator():
                 try:
-                    # 逐块输出模型增量
-                    async for delta in stream_answer(q, contexts, model=llm_model):
-                        if delta["type"] == "reasoning":
-                            yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
-                        elif delta["type"] == "content":
-                            yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
+                    if use_tools:
+                        # 使用工具流式问答
+                        async for event in stream_answer_with_tools(q, contexts, run_config):
+                            if event.get("type") == "reasoning":
+                                yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(event['content'], ensure_ascii=False)} }}\n\n"
+                            elif event.get("type") == "content":
+                                yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(event['content'], ensure_ascii=False)} }}\n\n"
+                            elif event.get("type") == "action":
+                                yield "data: " + json.dumps({
+                                    "type": "action",
+                                    "name": event["name"],
+                                    "args": event["args"]
+                                }, ensure_ascii=False) + "\n\n"
+                            elif event.get("type") == "observation":
+                                yield "data: " + json.dumps({
+                                    "type": "observation",
+                                    "name": event["name"],
+                                    "result": event["result"]
+                                }, ensure_ascii=False) + "\n\n"
+                            elif event.get("type") == "error":
+                                yield "data: " + json.dumps({
+                                    "type": "error",
+                                    "message": event["message"]
+                                }, ensure_ascii=False) + "\n\n"
+                    else:
+                        # 使用传统流式问答
+                        async for delta in stream_answer(q, contexts, model=llm_model):
+                            if delta["type"] == "reasoning":
+                                yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
+                            elif delta["type"] == "content":
+                                yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
+                    
                     # 输出 sources
                     sources = [
                         {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}

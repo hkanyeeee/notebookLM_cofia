@@ -28,6 +28,10 @@ EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 2))
 WEBHOOK_TIMEOUT = int(get_config_value("WEBHOOK_TIMEOUT", 30))
 WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/webhook")
 
+# 工具相关配置
+DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
+MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "6"))
+
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
 HTTPS_PROXY = get_config_value("HTTPS_PROXY")
@@ -48,4 +52,8 @@ print(f"QDRANT_URL: {QDRANT_URL}")
 print(f"PROXY_URL: {PROXY_URL}")
 print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
 print(f"WEBHOOK_PREFIX: {WEBHOOK_PREFIX}")
+
+# 工具相关配置
+print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")
+print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
 print("-------------------------------")
