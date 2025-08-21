@@ -452,8 +452,8 @@ function isStatusMessage(content: string) {
     <!-- 输入区域：当无文档时禁用提问 -->
     <div class="input-area">
         
-      <!-- Collection与Agentic Ingest 控制区 - 普通问答模式下隐藏 -->
-      <div v-if="store.queryType !== QueryType.NORMAL" class="agentic-controls">
+      <!-- Collection与Agentic Ingest 控制区 - COLLECTION问答模式下显示 -->
+      <div v-if="store.queryType === QueryType.COLLECTION" class="agentic-controls">
         <!-- Collection选择下拉框 -->
         <ElSelect
           v-model="store.selectedCollection"
