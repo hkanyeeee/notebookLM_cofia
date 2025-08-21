@@ -4,7 +4,7 @@ from typing import List, Optional
 import httpx
 import asyncio
 
-from fastapi import APIRouter, Body, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -57,13 +57,13 @@ class UnifiedIngestRequest(BaseModel):
     task_name: Optional[str] = None
 
 
-async def process_sub_docs(
+async def process_sub_docs_concurrent(
     sub_docs_urls: List[str], 
     recursive_depth: int,
     db: AsyncSession
 ) -> List[dict]:
     """
-    处理子文档的递归摄取函数
+    并发处理子文档的递归摄取函数
     
     Args:
         sub_docs_urls: 子文档URL列表
@@ -80,8 +80,8 @@ async def process_sub_docs(
         print(f"达到递归深度限制，跳过 {len(sub_docs_urls)} 个子文档的处理")
         return results
     
-    # 逐个处理子文档URL
-    for sub_url in sub_docs_urls:
+    # 并发处理所有子文档URL
+    async def process_single_sub_doc(sub_url: str) -> dict:
         try:
             print(f"开始递归摄取子文档: {sub_url}")
             
@@ -97,32 +97,74 @@ async def process_sub_docs(
             # 调用本模块的agenttic_ingest函数进行递归处理
             result = await agenttic_ingest(sub_request_data, db)
             
-            results.append({
+            print(f"子文档摄取成功: {sub_url}")
+            return {
                 "url": sub_url,
                 "success": True,
                 "result": result
-            })
-            
-            print(f"子文档摄取成功: {sub_url}")
+            }
             
         except Exception as e:
             error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
             print(error_msg)
-            results.append({
+            return {
                 "url": sub_url,
                 "success": False,
                 "error": error_msg
-            })
+            }
+    
+    # 使用asyncio.gather进行并发处理
+    try:
+        results = await asyncio.gather(
+            *[process_single_sub_doc(url) for url in sub_docs_urls],
+            return_exceptions=False
+        )
+    except Exception as e:
+        print(f"并发处理子文档时出现异常: {str(e)}")
+        # 降级到串行处理
+        results = []
+        for sub_url in sub_docs_urls:
+            result = await process_single_sub_doc(sub_url)
+            results.append(result)
     
     return results
 
 
-async def process_webhook_response(
-    data: WebhookResponseData,
-    db: AsyncSession
+async def process_sub_docs_background(
+    sub_docs_urls: List[str], 
+    recursive_depth: int,
+    request_id: Optional[str] = None
 ):
     """
-    处理webhook回调数据的专用函数
+    后台异步处理子文档的函数 - 不阻塞主响应
+    
+    Args:
+        sub_docs_urls: 子文档URL列表
+        recursive_depth: 递归深度限制
+        request_id: 请求ID，用于日志追踪
+    """
+    try:
+        # 创建新的数据库会话
+        from ..database import async_session
+        async with async_session() as db:
+            print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，request_id: {request_id}")
+            
+            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db)
+            
+            success_count = len([r for r in results if r.get('success')])
+            print(f"[后台任务] 子文档处理完成，成功: {success_count}/{len(results)}, request_id: {request_id}")
+            
+    except Exception as e:
+        print(f"[后台任务] 子文档处理异常: {str(e)}, request_id: {request_id}")
+
+
+async def process_webhook_response(
+    data: WebhookResponseData,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    处理webhook回调数据的专用函数 - 优化版本，子文档处理改为后台任务
     """
     print("处理webhook响应数据...")
     print(f"任务名称: {data.task_name}")
@@ -138,8 +180,7 @@ async def process_webhook_response(
             "success": False
         }
     
-    # 实现递归摄取逻辑：处理webhook响应中的子文档URL
-    sub_docs_results = []
+    # 实现递归摄取逻辑：收集webhook响应中的子文档URL
     total_sub_docs = 0
     
     if data.output and isinstance(data.output, list):
@@ -165,31 +206,41 @@ async def process_webhook_response(
                 print(f"响应项 {i} 不包含 response 字段或格式不正确")
         
         if all_sub_docs:
-            print(f"总共发现 {len(all_sub_docs)} 个子文档URL，开始递归处理...")
+            print(f"总共发现 {len(all_sub_docs)} 个子文档URL")
             
             # 从原始数据中获取递归深度参数，默认为1
             recursive_depth = 1
             if hasattr(data, 'recursive_depth') and isinstance(data.recursive_depth, int):
                 recursive_depth = data.recursive_depth
             
-            # 处理所有子文档
-            try:
-                sub_docs_results = await process_sub_docs(all_sub_docs, recursive_depth, db)
-                print(f"子文档递归处理完成，成功处理 {len([r for r in sub_docs_results if r.get('success')])} 个")
-            except Exception as e:
-                print(f"子文档处理出现异常: {str(e)}")
-                sub_docs_results = [{"error": f"子文档处理异常: {str(e)}"}]
+            # 🚀 关键优化：将子文档处理作为后台任务异步执行，不阻塞响应
+            if background_tasks:
+                print("将子文档处理添加到后台任务队列...")
+                background_tasks.add_task(
+                    process_sub_docs_background, 
+                    all_sub_docs, 
+                    recursive_depth,
+                    data.request_id
+                )
+            else:
+                # 如果没有background_tasks，直接启动协程任务（不等待）
+                print("启动子文档后台处理协程...")
+                asyncio.create_task(
+                    process_sub_docs_background(all_sub_docs, recursive_depth, data.request_id)
+                )
+                
         else:
             print("未发现任何子文档URL")
     else:
         print("响应数据中未包含有效的response字段")
     
+    # 🚀 立即返回响应，不等待子文档处理完成
     return {
-        "message": "Webhook响应处理成功",
+        "message": "Webhook响应处理成功，子文档处理已启动后台任务",
         "task_name": data.task_name,
         "document_name": data.document_name,
         "total_sub_docs": total_sub_docs,
-        "sub_docs_results": sub_docs_results,
+        "sub_docs_processing": "后台处理中" if total_sub_docs > 0 else "无需处理",
         "success": True
     }
 
@@ -258,6 +309,7 @@ URL: {url}
 
 @router.post("/agenttic-ingest", summary="智能文档摄取接口（统一处理客户端请求和webhook回调）")
 async def agenttic_ingest(
+    background_tasks: BackgroundTasks,
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db)
 ):
@@ -284,7 +336,7 @@ async def agenttic_ingest(
                 webhook_request_data = data['body']
             
             webhook_data = WebhookResponseData(**webhook_request_data)
-            return await process_webhook_response(webhook_data, db)
+            return await process_webhook_response(webhook_data, db, background_tasks)
         except Exception as e:
             error_message = f"Webhook回调处理失败: {e.__class__.__name__}: {str(e)}"
             print(error_message)
@@ -522,6 +574,7 @@ async def get_agentic_ingest_documents(
 
 @router.post("/workflow_response", summary="工作流响应处理接口（兼容性端点）")
 async def workflow_response(
+    background_tasks: BackgroundTasks,
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db)
 ):
@@ -530,4 +583,4 @@ async def workflow_response(
     此端点将请求重定向到统一的 agenttic_ingest 接口进行处理
     """
     print("收到workflow_response请求，重定向到统一处理接口")
-    return await agenttic_ingest(data, db)
+    return await agenttic_ingest(background_tasks, data, db)
