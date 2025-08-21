@@ -21,7 +21,7 @@ from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..vector_db_client import add_embeddings, query_hybrid
 from ..rerank_client import rerank
 from ..models import Chunk, Source
-from ..database import get_db
+from ..database import AsyncSessionLocal
 
 
 class WebSearchTool:
@@ -171,10 +171,13 @@ class WebSearchTool:
             return []
         
         # 使用数据库会话
-        async with get_db() as db:
+        async with AsyncSessionLocal() as db:
             source_ids = []
             all_chunks = []
             all_embeddings_flat = []
+            
+            # 用于确保 chunk_id 在整个 session 中唯一的全局计数器
+            global_chunk_index = 0
             
             for doc in documents:
                 url = doc["url"]
@@ -188,8 +191,7 @@ class WebSearchTool:
                 source = Source(
                     session_id=session_id,
                     url=url,
-                    title=title,
-                    content=content
+                    title=title
                 )
                 db.add(source)
                 await db.commit()
@@ -198,21 +200,25 @@ class WebSearchTool:
                 
                 # 文档切分
                 chunks_text = chunk_text(
-                    content, 
-                    tokens_per_chunk=CHUNK_SIZE, 
+                    content,
+                    tokens_per_chunk=CHUNK_SIZE,
                     overlap_tokens=CHUNK_OVERLAP
                 )
                 
                 # 创建 Chunk 记录
                 chunks = []
-                for i, chunk_content in enumerate(chunks_text):
+                # 使用全局计数器确保chunk_id在整个session中唯一
+                for chunk_content in chunks_text:
+                    # 生成基于session_id和全局索引的唯一chunk_id
+                    chunk_id = f"{session_id}_{global_chunk_index}"
                     chunk = Chunk(
                         content=chunk_content,
                         source_id=source.id,
                         session_id=session_id,
-                        chunk_id=i
+                        chunk_id=chunk_id
                     )
                     chunks.append(chunk)
+                    global_chunk_index += 1
                 
                 db.add_all(chunks)
                 await db.commit()
@@ -226,7 +232,7 @@ class WebSearchTool:
                 # 计算 embeddings
                 chunk_texts = [chunk.content for chunk in chunks]
                 embeddings = await embed_texts(
-                    chunk_texts, 
+                    chunk_texts,
                     model=DEFAULT_EMBEDDING_MODEL,
                     batch_size=2
                 )
@@ -257,7 +263,7 @@ class WebSearchTool:
         query_embedding = query_embeddings[0]
         
         # 使用数据库会话进行混合检索
-        async with get_db() as db:
+        async with AsyncSessionLocal() as db:
             # 混合检索（向量 + BM25）
             hits = await query_hybrid(
                 query_text=query,
