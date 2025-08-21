@@ -145,8 +145,8 @@ async def process_sub_docs_background(
     """
     try:
         # 创建新的数据库会话
-        from ..database import async_session
-        async with async_session() as db:
+        from ..database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
             print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，request_id: {request_id}")
             
             results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db)
