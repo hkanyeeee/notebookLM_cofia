@@ -742,7 +742,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     try {
       const response = await notebookApi.getModels()
       if (response.success) {
-        models.value = response.models?.filter(model => model.name.indexOf('embedding') === -1)
+        models.value = response.models ? response.models.filter(model => model.name.indexOf('embedding') === -1) : []
         // 如果还没有选择模型且有可用模型，选择第一个
         if (!selectedModel.value && models.value.length > 0) {
           selectedModel.value = models.value[0].id
