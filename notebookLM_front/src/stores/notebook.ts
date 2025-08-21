@@ -405,7 +405,30 @@ export const useNotebookStore = defineStore('notebook', () => {
       throw new Error('请选择一个Collection')
     }
 
+    // 添加用户消息
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: query,
+      timestamp: new Date()
+    }
+    messages.value.push(userMessage)
+
+    // 创建助手回复消息
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      sources: [],
+      reasoning: ''
+    }
+    messages.value.push(assistantMessage)
+    const messageIndex = messages.value.length - 1
+
     loading.queryingCollection = true
+    loading.querying = true // 使用通用的查询状态
+
     try {
       const request: CollectionQueryRequest = {
         collection_id: collectionId,
@@ -413,6 +436,75 @@ export const useNotebookStore = defineStore('notebook', () => {
         top_k: 20
       }
 
+      // 使用流式查询
+      await notebookApi.queryCollectionStream(
+        request,
+        (data) => {
+          // 处理流式数据
+          if (data.type === 'status') {
+            // 更新消息内容显示状态信息
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: data.message
+            }
+          } else if (data.type === 'search_results') {
+            // 搜索结果摘要
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: data.message
+            }
+          } else if (data.type === 'llm_start') {
+            // 开始生成LLM回答
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: '正在生成智能回答...'
+            }
+          } else if (data.type === 'content') {
+            // LLM生成的内容
+            const currentMessage = messages.value[messageIndex]
+            const newContent = (currentMessage.content === '正在生成智能回答...' || 
+                              currentMessage.content.includes('正在生成智能回答') ||
+                              currentMessage.content.includes('找到') && currentMessage.content.includes('个相关结果')) 
+                              ? data.content 
+                              : currentMessage.content + data.content
+            
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: newContent
+            }
+          } else if (data.type === 'reasoning') {
+            // 思维链内容
+            const currentMessage = messages.value[messageIndex]
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              reasoning: (currentMessage.reasoning || '') + data.content
+            }
+          } else if (data.type === 'error') {
+            // 错误信息
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: `❌ ${data.message}`
+            }
+          } else if (data.type === 'complete') {
+            // 完成
+            console.log('流式查询完成')
+          }
+        },
+        () => {
+          // 查询完成
+          console.log('Collection流式查询完成')
+        },
+        (error) => {
+          // 查询出错
+          console.error('Collection流式查询出错:', error)
+          messages.value[messageIndex] = {
+            ...messages.value[messageIndex],
+            content: `❌ 查询失败: ${error.message}`
+          }
+        }
+      )
+
+      // 同时获取搜索结果用于显示
       const response = await notebookApi.queryCollection(request)
       if (response.success) {
         collectionQueryResults.value = response.results
@@ -425,12 +517,23 @@ export const useNotebookStore = defineStore('notebook', () => {
       } else {
         throw new Error(response.message || 'Collection查询失败')
       }
+
     } catch (error: any) {
       console.error('Collection查询失败:', error)
       collectionQueryResults.value = []
+      
+      // 更新消息显示错误
+      if (messages.value[messageIndex]) {
+        messages.value[messageIndex] = {
+          ...messages.value[messageIndex],
+          content: `❌ 查询失败: ${error.message}`
+        }
+      }
+      
       throw error
     } finally {
       loading.queryingCollection = false
+      loading.querying = false
     }
   }
 

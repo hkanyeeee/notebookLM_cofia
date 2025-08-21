@@ -17,6 +17,9 @@ const store = useNotebookStore()
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
 
+// 控制详细搜索结果的显示
+const showDetailedResults = ref(false)
+
 // 监听消息变化，自动滚动到底部
 watch(() => store.messages.length, async () => {
   await nextTick()
@@ -195,27 +198,40 @@ async function handleCollectionQuery() {
     <!-- 消息列表 / 欢迎与课题输入 -->
     <div ref="messageContainer" class="messages-container">
       <!-- Collection查询结果区域 -->
-      <div v-if="store.collectionQueryResults.length > 0" class="collection-results">
+      <div v-if="store.collectionQueryResults.length > 0 && store.messages.length === 0" class="collection-results">
         <div class="collection-results-header">
-          <h3>Collection查询结果 ({{ store.collectionQueryResults.length }} 个结果)</h3>
-          <ElButton text @click="store.clearCollectionResults()" class="clear-results-btn">
-            清空结果
-          </ElButton>
+          <h3>Collection搜索结果 ({{ store.collectionQueryResults.length }} 个相关文档片段)</h3>
+          <div class="collection-results-actions">
+            <ElButton text @click="showDetailedResults = !showDetailedResults" class="toggle-results-btn">
+              {{ showDetailedResults ? '隐藏详细结果' : '查看详细结果' }}
+            </ElButton>
+            <ElButton text @click="store.clearCollectionResults()" class="clear-results-btn">
+              清空结果
+            </ElButton>
+          </div>
         </div>
-        <div class="collection-results-list">
+        <div v-if="showDetailedResults" class="collection-results-list">
           <div 
             v-for="(result, index) in store.collectionQueryResults" 
             :key="index" 
             class="collection-result-item"
           >
             <div class="result-header">
-              <div class="result-score">分数: {{ result.score.toFixed(4) }}</div>
+              <div class="result-score">相关度: {{ result.score.toFixed(4) }}</div>
               <a :href="result.source_url" target="_blank" class="result-url">
                 {{ result.source_title }}
               </a>
             </div>
             <div class="result-content">{{ result.content }}</div>
           </div>
+        </div>
+        <div v-else class="collection-results-summary">
+          <p class="summary-text">
+            📄 找到 {{ store.collectionQueryResults.length }} 个相关文档片段，
+            <ElButton type="primary" size="small" @click="handleSendQuery()">
+              点击生成智能回答
+            </ElButton>
+          </p>
         </div>
       </div>
       
@@ -793,8 +809,33 @@ async function handleCollectionQuery() {
   font-weight: 600;
 }
 
-.clear-results-btn {
+.collection-results-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.clear-results-btn, .toggle-results-btn {
   font-size: 12px;
+}
+
+.collection-results-summary {
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.summary-text {
+  margin: 0;
+  color: #374151;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .collection-results-list {

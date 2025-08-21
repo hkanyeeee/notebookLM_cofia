@@ -56,9 +56,22 @@ export interface IngestResponse {
   message?: string
 }
 
+export interface ToolSchema {
+  name: string
+  description: string
+  parameters: {
+    type: string
+    properties: Record<string, any>
+    required?: string[]
+  }
+}
+
 export interface QueryRequest {
   query: string
   document_ids?: string[]
+  tool_mode?: 'off' | 'auto' | 'json' | 'react' | 'harmony'
+  tools?: ToolSchema[]
+  max_steps?: number
 }
 
 export interface QueryResponse {
@@ -66,6 +79,20 @@ export interface QueryResponse {
   answer: string
   sources?: string[]
   message?: string
+  tool_mode?: string
+  steps?: Array<{
+    type: string
+    content: string
+    tool_call?: {
+      name: string
+      arguments: Record<string, any>
+    }
+    tool_result?: {
+      name: string
+      result: string
+      success: boolean
+    }
+  }>
 }
 
 export interface GenerateQueriesResponse {
@@ -120,6 +147,7 @@ export interface CollectionQueryResponse {
   results: CollectionResult[]
   total_found: number
   message: string
+  llm_answer?: string  // LLM生成的智能回答
 }
 
 export interface CollectionResult {
@@ -129,6 +157,39 @@ export interface CollectionResult {
   source_url: string
   source_title: string
 }
+
+// ModelInfo接口定义
+export interface ModelInfo {
+  id: string;
+  name: string;
+}
+
+// 预定义工具配置
+export const DEFAULT_TOOLS: ToolSchema[] = [
+  {
+    name: "web_search",
+    description: "搜索网络信息并进行智能召回。能够生成搜索关键词，从网络搜索相关内容，爬取网页，进行文档切分、向量化索引，并基于用户查询召回最相关的内容片段。",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "搜索查询内容，可以是问题、关键词或主题"
+        },
+        session_id: {
+          type: "string",
+          description: "可选的会话ID，用于关联搜索结果。如果不提供会自动生成"
+        },
+        retrieve_only: {
+          type: "boolean",
+          description: "是否只从现有索引检索，不进行新的网络搜索。默认为 false",
+          default: false
+        }
+      },
+      required: ["query"]
+    }
+  }
+]
 
 // API方法
 export const notebookApi = {
@@ -161,11 +222,22 @@ export const notebookApi = {
   },
 
   // 查询文档内容
-  async queryDocuments(query: string, documentIds?: string[]): Promise<QueryResponse> {
+  async queryDocuments(
+    query: string,
+    documentIds?: string[],
+    options?: {
+      tool_mode?: 'off' | 'auto' | 'json' | 'react' | 'harmony'
+      tools?: ToolSchema[]
+      max_steps?: number
+    }
+  ): Promise<QueryResponse> {
     try {
       const response = await api.post<QueryResponse>('/query', {
         query,
-        document_ids: documentIds
+        document_ids: documentIds,
+        tool_mode: options?.tool_mode,
+        tools: options?.tools,
+        max_steps: options?.max_steps
       })
       return response.data
     } catch (error: any) {
@@ -176,6 +248,21 @@ export const notebookApi = {
         message: error.message
       }
     }
+  },
+
+  // 查询文档内容（启用工具功能）
+  async queryDocumentsWithTools(
+    query: string,
+    documentIds?: string[],
+    toolMode: 'auto' | 'json' | 'react' | 'harmony' = 'auto',
+    tools?: ToolSchema[],
+    maxSteps: number = 6
+  ): Promise<QueryResponse> {
+    return this.queryDocuments(query, documentIds, {
+      tool_mode: toolMode,
+      tools: tools,
+      max_steps: maxSteps
+    })
   },
 
   // 删除单个文档
@@ -251,6 +338,65 @@ export const notebookApi = {
     }
   },
 
+  // 基于指定collection进行流式查询
+  async queryCollectionStream(
+    request: CollectionQueryRequest,
+    onData: (data: any) => void,
+    onComplete?: () => void,
+    onError?: (error: any) => void
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/collections/query-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-ID': useSessionStore().getSessionId() || ''
+        },
+        body: JSON.stringify(request)
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法创建流读取器')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // 保留最后一个不完整的行
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim()
+            if (dataStr && dataStr !== '[DONE]') {
+              try {
+                const data = JSON.parse(dataStr)
+                onData(data)
+              } catch (e) {
+                console.warn('解析流式数据失败:', e, dataStr)
+              }
+            }
+          }
+        }
+      }
+
+      onComplete?.()
+    } catch (error: any) {
+      console.error('流式查询失败:', error)
+      onError?.(error)
+    }
+  },
+
   // 获取指定collection的详细信息
   async getCollectionDetail(collectionId: string): Promise<{ success: boolean; collection?: any }> {
     try {
@@ -260,6 +406,19 @@ export const notebookApi = {
       return {
         success: false,
         collection: null
+      }
+    }
+  },
+
+  // 获取可用的LLM模型列表
+  async getModels(): Promise<{ success: boolean; models?: ModelInfo[] }> {
+    try {
+      const response = await api.get('/models')
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        models: []
       }
     }
   }
@@ -274,4 +433,54 @@ export function cleanupSession(sessionId: string) {
   const data = new Blob([JSON.stringify({ session_id: sessionId })], { type: 'application/json' })
   navigator.sendBeacon(url, data)
   console.log(`Sent cleanup beacon for session: ${sessionId}`)
+}
+
+/**
+ * 工具功能使用示例
+ *
+ * 以下是如何使用工具功能的不同方式：
+ */
+
+// 示例 1: 使用默认工具进行查询
+export async function queryWithDefaultTools(query: string) {
+  return await notebookApi.queryDocumentsWithTools(
+    query,
+    undefined, // 不指定文档ID
+    'auto', // 自动选择工具策略
+    DEFAULT_TOOLS, // 使用预定义的工具
+    6 // 最大执行步数
+  )
+}
+
+// 示例 2: 只使用网络搜索工具
+export async function queryWithWebSearch(query: string) {
+  const webSearchOnly = DEFAULT_TOOLS.filter(tool => tool.name === 'web_search')
+
+  return await notebookApi.queryDocumentsWithTools(
+    query,
+    undefined,
+    'json', // 指定使用 JSON Function Calling 策略
+    webSearchOnly,
+    4
+  )
+}
+
+// 示例 3: 禁用工具功能
+export async function queryWithoutTools(query: string, documentIds?: string[]) {
+  return await notebookApi.queryDocuments(
+    query,
+    documentIds,
+    { tool_mode: 'off' }
+  )
+}
+
+// 示例 4: 自定义工具配置
+export async function queryWithCustomTools(query: string, customTools: ToolSchema[]) {
+  return await notebookApi.queryDocumentsWithTools(
+    query,
+    undefined,
+    'auto',
+    customTools,
+    8
+  )
 }
