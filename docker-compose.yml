@@ -45,14 +45,16 @@ services:
       - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://host.docker.internal:1234/v1}
       - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-}
       - SEARXNG_QUERY_URL=${SEARXNG_QUERY_URL:-http://host.docker.internal:8080/search}
+      # 后端给 n8n 回调时的地址，建议用容器名，避免写死宿主机 IP
+      - WEBHOOK_PREFIX=${WEBHOOK_PREFIX:-http://n8n:5678/webhook}
     volumes:
       - ./data:/app/data
     depends_on:
       - embedding-gateway
     networks:
       - localnet
-    expose:
-      - "8000"   # 供同网容器（n8n、frontend）访问
+    ports:
+      - "8000:8000"   # 供宿主机访问；容器间仍可用服务名 backend:8000
 
   frontend:
     restart: always
