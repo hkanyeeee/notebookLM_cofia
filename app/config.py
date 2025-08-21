@@ -32,6 +32,33 @@ WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/
 DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
 MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "6"))
 
+# Web 搜索相关配置
+WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "5"))
+WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "3"))
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "5"))
+WEB_SEARCH_MAX_CONTENT_LENGTH = int(get_config_value("WEB_SEARCH_MAX_CONTENT_LENGTH", "10000"))
+WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "3"))
+WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
+
+# Web 爬取相关配置  
+WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
+PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "30.0"))
+
+# 关键词生成配置
+ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
+QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
+    "QUERY_GENERATION_PROMPT_TEMPLATE", 
+    "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的英文查询。返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
+)
+
+# 文档处理配置
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "800"))
+CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "80"))
+
+# RAG 相关配置
+RAG_TOP_K = int(get_config_value("RAG_TOP_K", "15"))
+RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "5"))
+
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
 HTTPS_PROXY = get_config_value("HTTPS_PROXY")
@@ -56,4 +83,12 @@ print(f"WEBHOOK_PREFIX: {WEBHOOK_PREFIX}")
 # 工具相关配置
 print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")
 print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
+
+# Web 搜索相关配置
+print(f"WEB_SEARCH_RESULT_COUNT: {WEB_SEARCH_RESULT_COUNT}")
+print(f"WEB_SEARCH_MAX_QUERIES: {WEB_SEARCH_MAX_QUERIES}")
+print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
+print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
+print(f"CHUNK_SIZE: {CHUNK_SIZE}")
+print(f"RAG_TOP_K: {RAG_TOP_K}")
 print("-------------------------------")

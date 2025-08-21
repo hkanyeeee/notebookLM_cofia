@@ -90,11 +90,52 @@ class ToolRegistry:
 
 
 # 全局注册表实例
-# 当前为空，后续可以添加具体工具
 tool_registry = ToolRegistry()
 
 
-# 示例：注册一个简单的测试工具（当前注释掉，保持注册表为空）
+# 注册 Web 搜索工具
+def register_web_search_tool():
+    """注册 Web 搜索工具"""
+    from .web_search_tool import web_search
+    
+    web_search_schema = ToolSchema(
+        name="web_search",
+        description="搜索网络信息并进行智能召回。能够生成搜索关键词，从网络搜索相关内容，爬取网页，进行文档切分、向量化索引，并基于用户查询召回最相关的内容片段。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索查询内容，可以是问题、关键词或主题"
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "可选的会话ID，用于关联搜索结果。如果不提供会自动生成"
+                },
+                "retrieve_only": {
+                    "type": "boolean",
+                    "description": "是否只从现有索引检索，不进行新的网络搜索。默认为 false",
+                    "default": False
+                }
+            },
+            "required": ["query"]
+        }
+    )
+    
+    tool_registry.register_tool(web_search_schema, web_search)
+
+
+# 注册所有工具
+def register_all_tools():
+    """注册所有可用工具"""
+    register_web_search_tool()
+
+
+# 自动注册工具
+register_all_tools()
+
+
+# 示例：注册一个简单的测试工具（当前注释掉）
 """
 def echo_tool(message: str) -> str:
     '''简单的回显工具，用于测试'''
