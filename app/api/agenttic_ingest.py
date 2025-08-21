@@ -321,7 +321,7 @@ async def agenttic_ingest(
         # 3. 分块处理文本
         print("正在分块处理文本...")
         chunks = chunk_text(text)
-        raw_html_chunks = chunk_text(raw_html)
+        raw_html_chunks = chunk_text(raw_html, 4000, 200)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
