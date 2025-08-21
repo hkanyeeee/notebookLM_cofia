@@ -31,7 +31,7 @@ class WebhookResponseData(BaseModel):
     session_id: Optional[str] = None
     task_name: str
     output: Optional[List[dict]] = None  # 添加output字段以包含sub_docs
-    recursive_depth: Optional[int] = 1  # 添加递归深度字段，默认为1
+    recursive_depth: Optional[int] = 2  # 添加递归深度字段，默认为1
     request_id: Optional[str] = None  # 请求ID
     webhook_url: Optional[str] = None  # webhook URL
 
