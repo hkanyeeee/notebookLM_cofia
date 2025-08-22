@@ -35,8 +35,7 @@ MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "6"))
 # Web 搜索相关配置
 WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "5"))
 WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "3"))
-WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "5"))
-WEB_SEARCH_MAX_CONTENT_LENGTH = int(get_config_value("WEB_SEARCH_MAX_CONTENT_LENGTH", "10000"))
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "15"))
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "3"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
 
@@ -52,8 +51,8 @@ QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
 )
 
 # 文档处理配置
-CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "800"))
-CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "80"))
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "400"))
+CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "40"))
 
 # RAG 相关配置
 RAG_TOP_K = int(get_config_value("RAG_TOP_K", "15"))

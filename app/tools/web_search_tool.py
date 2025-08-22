@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import (
     LLM_SERVICE_URL, SEARXNG_QUERY_URL,
     WEB_SEARCH_RESULT_COUNT, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS,
-    WEB_SEARCH_MAX_CONTENT_LENGTH, WEB_SEARCH_CONCURRENT_REQUESTS, WEB_SEARCH_TIMEOUT,
+    WEB_SEARCH_CONCURRENT_REQUESTS, WEB_SEARCH_TIMEOUT,
     WEB_LOADER_ENGINE, PLAYWRIGHT_TIMEOUT,
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K
@@ -153,8 +153,8 @@ class WebSearchTool:
                 )
             
             # 限制内容长度
-            if content and len(content) > WEB_SEARCH_MAX_CONTENT_LENGTH:
-                content = content[:WEB_SEARCH_MAX_CONTENT_LENGTH] + "..."
+            # if content and len(content) > WEB_SEARCH_MAX_CONTENT_LENGTH:
+            #     content = content[:WEB_SEARCH_MAX_CONTENT_LENGTH] + "..."
             
             return content
         except Exception as e:
