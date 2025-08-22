@@ -65,10 +65,14 @@ async function handleTriggerAgenticIngest() {
 // 组件挂载时加载collection列表和模型列表
 onMounted(async () => {
   try {
-    await Promise.all([
-      store.loadCollections(),
-      store.loadModels()
-    ])
+    // 只有当模型列表为空时才加载模型，避免重复加载
+    const loadPromises = [store.loadCollections()]
+    
+    if (store.models.length === 0) {
+      loadPromises.push(store.loadModels())
+    }
+    
+    await Promise.all(loadPromises)
   } catch (error) {
     console.warn('初始加载数据失败:', error)
   }

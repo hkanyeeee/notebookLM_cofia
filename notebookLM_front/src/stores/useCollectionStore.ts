@@ -32,7 +32,7 @@ export function useCollectionStore() {
         url,
         embedding_model: 'Qwen/Qwen3-Embedding-0.6B',
         embedding_dimensions: 1024,
-        recursive_depth: 1
+        recursive_depth: 2
       }
 
       const response = await notebookApi.triggerAgenticIngest(request)

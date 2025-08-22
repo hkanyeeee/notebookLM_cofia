@@ -254,6 +254,14 @@ async def process_webhook_response(
                     print(f"响应项 {i} 的 response 不包含 sub_docs 字段或格式不正确")
             else:
                 print(f"响应项 {i} 不包含 response 字段或格式不正确")
+
+        # 记录去重统计信息
+        if all_sub_docs:
+            duplicates_count = total_sub_docs - len(all_sub_docs)
+            if duplicates_count > 0:
+                print(f"去重完成：从 {total_sub_docs} 个原始URL中移除了 {duplicates_count} 个重复项，最终得到 {len(all_sub_docs)} 个唯一URL")
+            else:
+                print(f"去重完成：所有 {total_sub_docs} 个URL都是唯一的")
         
         if all_sub_docs:
             print(f"总共发现 {len(all_sub_docs)} 个子文档URL")

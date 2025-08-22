@@ -124,9 +124,15 @@ class HarmonyStrategy:
             
             tool_calls, remaining_content = self.parse_response(content)
             
+            # 调试日志：解析结果
+            print(f"[Harmony Strategy] 解析结果: 发现 {len(tool_calls)} 个工具调用")
+            for i, tc in enumerate(tool_calls):
+                print(f"[Harmony Strategy] 工具调用 {i+1}: {tc.name}, 参数: {tc.arguments}")
+            
             # 如果有工具调用，先执行第一个工具
             if tool_calls:
                 tool_call = tool_calls[0]  # 一次处理一个工具调用
+                print(f"[Harmony Strategy] 准备执行工具: {tool_call.name}")
                 
                 # 验证工具调用
                 if not tool_registry.is_allowed(tool_call.name):
@@ -161,7 +167,11 @@ class HarmonyStrategy:
                         )
                 
                 # 执行工具
+                print(f"[Harmony Strategy] 开始执行工具: {tool_call.name}")
                 tool_result = await tool_registry.execute_tool(tool_call)
+                print(f"[Harmony Strategy] 工具执行完成: 成功={tool_result.success}")
+                if not tool_result.success:
+                    print(f"[Harmony Strategy] 工具执行错误: {tool_result.error}")
                 
                 return Step(
                     step_type=StepType.OBSERVATION,

@@ -15,6 +15,7 @@ from ..config import (
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K
 )
+from ..llm_client import DEFAULT_CHAT_MODEL
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
@@ -31,16 +32,20 @@ class WebSearchTool:
         self.name = "web_search"
         self.description = "搜索网络信息，爬取相关网页内容，并进行向量化索引和智能召回"
     
-    async def generate_search_queries(self, topic: str) -> List[str]:
+    async def generate_search_queries(self, topic: str, model: str = None) -> List[str]:
         """生成搜索关键词"""
         if not ENABLE_QUERY_GENERATION or not topic.strip():
             return [topic]
+        
+        # 使用传入的模型或默认模型
+        if model is None:
+            model = DEFAULT_CHAT_MODEL
         
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE
         user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
         
         payload = {
-            "model": "qwen3-30b-a3b-thinking-2507-mlx",
+            "model": model,
             "messages": [
                 {"role": "system", "content": prompt_system},
                 {"role": "user", "content": user_prompt},
@@ -87,16 +92,21 @@ class WebSearchTool:
             print(f"生成搜索关键词失败: {e}")
             return [topic]
     
-    async def search_searxng(self, query: str) -> List[Dict[str, str]]:
+    async def search_searxng(
+        self, 
+        query: str, 
+        language: str = "en-US",
+        categories: str = ""
+    ) -> List[Dict[str, str]]:
         """使用 SearxNG 搜索"""
         params = {
             "q": query,
             "format": "json",
             "pageno": 1,
             "safesearch": "1",
-            "language": "en-US",
+            "language": language,
             "time_range": "",
-            "categories": "",
+            "categories": categories,
             "theme": "simple",
             "image_proxy": 0,
         }
@@ -223,9 +233,12 @@ class WebSearchTool:
                 db.add_all(chunks)
                 await db.commit()
                 
-                # 刷新以获取 ID
+                # 刷新以获取 ID 并确保chunks在session中
                 for chunk in chunks:
                     await db.refresh(chunk)
+                    # 确保source关系正确加载
+                    if not chunk.source:
+                        chunk.source = source
                 
                 all_chunks.extend(chunks)
                 
@@ -288,22 +301,26 @@ class WebSearchTool:
     
     async def execute(
         self, 
-        query: str, 
-        session_id: Optional[str] = None,
-        retrieve_only: bool = False
+        query: str,
+        language: str = "en-US",
+        categories: str = "",
+        filter_list: Optional[List[str]] = None,
+        model: str = None
     ) -> Dict[str, Any]:
         """执行完整的 Web 搜索流程
         
         Args:
             query: 搜索查询
-            session_id: 会话ID，如果不提供则生成新的
-            retrieve_only: 如果为 True，只从现有索引中检索，不进行新的网络搜索
+            language: 语言过滤器，默认为 "en-US"
+            categories: 搜索类别列表，默认为 ""
+            filter_list: 域名过滤列表，用于过滤搜索结果
+            model: 用于关键词生成的LLM模型名称，默认使用系统配置
             
         Returns:
             包含搜索结果和召回内容的字典
         """
-        if not session_id:
-            session_id = str(uuid.uuid4())
+        # 内部自动生成会话ID
+        session_id = str(uuid.uuid4())
         
         result = {
             "session_id": session_id,
@@ -316,73 +333,79 @@ class WebSearchTool:
         }
         
         try:
-            if not retrieve_only:
-                # 1. 生成搜索关键词
-                queries = await self.generate_search_queries(query)
-                print(f"生成的搜索关键词: {queries}")
+            # 1. 生成搜索关键词
+            queries = await self.generate_search_queries(query, model)
+            print(f"生成的搜索关键词: {queries}")
+            
+            # 2. 并发搜索
+            search_tasks = [self.search_searxng(q, language, categories) for q in queries]
+            search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
+            
+            # 合并搜索结果并去重
+            all_results = []
+            seen_urls = set()
+            for results in search_results_list:
+                if isinstance(results, list):
+                    for item in results:
+                        url = item.get("url")
+                        if url and url not in seen_urls:
+                            # 应用域名过滤
+                            if filter_list:
+                                from urllib.parse import urlparse
+                                domain = urlparse(url).netloc
+                                # 如果域名在过滤列表中，则跳过
+                                if any(filter_domain in domain for filter_domain in filter_list):
+                                    continue
+                            seen_urls.add(url)
+                            all_results.append(item)
+            
+            # 限制结果数量
+            all_results = all_results[:WEB_SEARCH_MAX_RESULTS]
+            print(f"找到 {len(all_results)} 个搜索结果")
+            
+            if all_results:
+                # 3. 并发爬取网页内容
+                content_tasks = []
+                for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
+                    content_tasks.append(self.fetch_web_content(item["url"]))
                 
-                # 2. 并发搜索
-                search_tasks = [self.search_searxng(q) for q in queries]
-                search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
+                # 处理剩余的 URL（分批）
+                remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
+                contents = await asyncio.gather(*content_tasks, return_exceptions=True)
                 
-                # 合并搜索结果并去重
-                all_results = []
-                seen_urls = set()
-                for results in search_results_list:
-                    if isinstance(results, list):
-                        for item in results:
-                            url = item.get("url")
-                            if url and url not in seen_urls:
-                                seen_urls.add(url)
-                                all_results.append(item)
+                # 处理剩余的批次
+                for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
+                    batch = remaining_urls[i:i + WEB_SEARCH_CONCURRENT_REQUESTS]
+                    batch_tasks = [self.fetch_web_content(item["url"]) for item in batch]
+                    batch_contents = await asyncio.gather(*batch_tasks, return_exceptions=True)
+                    contents.extend(batch_contents)
                 
-                # 限制结果数量
-                all_results = all_results[:WEB_SEARCH_MAX_RESULTS]
-                print(f"找到 {len(all_results)} 个搜索结果")
+                # 组装文档
+                documents = []
+                for item, content in zip(all_results, contents):
+                    if isinstance(content, str) and content:
+                        documents.append({
+                            "url": item["url"],
+                            "title": item["title"],
+                            "content": content,
+                            "snippet": item.get("snippet", "")
+                        })
                 
-                if all_results:
-                    # 3. 并发爬取网页内容
-                    content_tasks = []
-                    for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
-                        content_tasks.append(self.fetch_web_content(item["url"]))
-                    
-                    # 处理剩余的 URL（分批）
-                    remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
-                    contents = await asyncio.gather(*content_tasks, return_exceptions=True)
-                    
-                    # 处理剩余的批次
-                    for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
-                        batch = remaining_urls[i:i + WEB_SEARCH_CONCURRENT_REQUESTS]
-                        batch_tasks = [self.fetch_web_content(item["url"]) for item in batch]
-                        batch_contents = await asyncio.gather(*batch_tasks, return_exceptions=True)
-                        contents.extend(batch_contents)
-                    
-                    # 组装文档
-                    documents = []
-                    for item, content in zip(all_results, contents):
-                        if isinstance(content, str) and content:
-                            documents.append({
-                                "url": item["url"],
-                                "title": item["title"],
-                                "content": content,
-                                "snippet": item.get("snippet", "")
-                            })
-                    
-                    print(f"成功爬取 {len(documents)} 个网页")
-                    result["search_results"] = documents
-                    
-                    if documents:
-                        # 4. 处理文档（切分、embedding、存储）
-                        source_ids = await self.process_documents(documents, session_id)
-                        result["source_ids"] = source_ids
-                        print(f"处理了 {len(source_ids)} 个文档源")
+                print(f"成功爬取 {len(documents)} 个网页")
+                result["search_results"] = documents
+                
+                if documents:
+                    # 4. 处理文档（切分、embedding、存储）
+                    source_ids = await self.process_documents(documents, session_id)
+                    result["source_ids"] = source_ids
+                    print(f"处理了 {len(source_ids)} 个文档源")
             
             # 5. 搜索和召回
-            if result["source_ids"] or retrieve_only:
+            if result["source_ids"]:
                 hits = await self.search_and_retrieve(
                     query, 
                     session_id, 
-                    source_ids=result["source_ids"] if result["source_ids"] else None
+                    source_ids=result["source_ids"]
                 )
                 
                 # 格式化召回内容
@@ -421,25 +444,41 @@ web_search_tool = WebSearchTool()
 # 工具函数（供注册表使用）
 async def web_search(
     query: str,
-    session_id: Optional[str] = None,
-    retrieve_only: bool = False
+    language: str = "en-US",
+    categories: str = "",
+    filter_list: Optional[List[str]] = None,
+    model: str = None,
+    **kwargs  # 接受额外的参数用于向后兼容
 ) -> str:
     """Web 搜索工具函数
     
     Args:
         query: 搜索查询内容
-        session_id: 可选的会话ID，用于关联搜索结果
-        retrieve_only: 是否只从现有索引检索，不进行新的网络搜索
+        language: 语言过滤器，默认为 "en-US"
+        categories: 搜索类别列表，默认为 ""
+        filter_list: 域名过滤列表，用于过滤搜索结果
+        model: 用于关键词生成的LLM模型名称，默认使用系统配置
+        **kwargs: 额外参数（用于向后兼容）
     
     Returns:
         搜索和召回结果的 JSON 字符串
     """
-    result = await web_search_tool.execute(query, session_id, retrieve_only)
+    print(f"[WebSearch] 工具函数被调用，参数: query={query}, language={language}, categories={categories}, filter_list={filter_list}, model={model}, kwargs={kwargs}")
+    
+    # 处理向后兼容的参数名映射
+    if "source" in kwargs and not categories:
+        categories = kwargs["source"]
+        print(f"[WebSearch] 映射source参数到categories: {categories}")
+    
+    if "topn" in kwargs:
+        # topn参数目前没有直接映射，可以记录日志或忽略
+        print(f"[WebSearch] 注意：topn参数 ({kwargs['topn']}) 当前未使用")
+    
+    result = await web_search_tool.execute(query, language, categories, filter_list, model)
     
     # 构建返回的摘要信息
     if result["success"]:
         summary = {
-            "session_id": result["session_id"],
             "message": result["message"],
             "search_count": len(result["search_results"]),
             "retrieved_count": len(result["retrieved_content"]),

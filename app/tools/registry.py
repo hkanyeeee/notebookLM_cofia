@@ -46,7 +46,10 @@ class ToolRegistry:
         Returns:
             工具执行结果
         """
+        print(f"[Registry] 收到工具调用请求: {tool_call.name}, 参数: {tool_call.arguments}")
+        
         if not self.is_allowed(tool_call.name):
+            print(f"[Registry] 工具未找到或不允许: {tool_call.name}")
             return ToolResult(
                 name=tool_call.name,
                 result=f"工具 '{tool_call.name}' 不在允许列表中",
@@ -57,6 +60,7 @@ class ToolRegistry:
         
         handler = self._handlers.get(tool_call.name)
         if not handler:
+            print(f"[Registry] 未找到工具处理函数: {tool_call.name}")
             return ToolResult(
                 name=tool_call.name,
                 result=f"工具 '{tool_call.name}' 没有对应的执行函数",
@@ -66,12 +70,14 @@ class ToolRegistry:
             )
         
         try:
+            print(f"[Registry] 开始执行工具处理函数: {tool_call.name}")
             # 执行工具函数
             if asyncio.iscoroutinefunction(handler):
                 result = await handler(**tool_call.arguments)
             else:
                 result = handler(**tool_call.arguments)
                 
+            print(f"[Registry] 工具执行成功: {tool_call.name}, 结果长度: {len(str(result)) if result else 0}")
             return ToolResult(
                 name=tool_call.name,
                 result=result,
@@ -80,6 +86,7 @@ class ToolRegistry:
             )
             
         except Exception as e:
+            print(f"[Registry] 工具执行异常: {tool_call.name}, 错误: {str(e)}")
             return ToolResult(
                 name=tool_call.name,
                 result=f"工具执行出错：{str(e)}",
@@ -108,14 +115,20 @@ def register_web_search_tool():
                     "type": "string",
                     "description": "搜索查询内容，可以是问题、关键词或主题"
                 },
-                "session_id": {
+                "language": {
                     "type": "string",
-                    "description": "可选的会话ID，用于关联搜索结果。如果不提供会自动生成"
+                    "description": "语言过滤器，用于指定搜索结果的语言。默认为 'en-US'",
+                    "default": "en-US"
                 },
-                "retrieve_only": {
-                    "type": "boolean",
-                    "description": "是否只从现有索引检索，不进行新的网络搜索。默认为 false",
-                    "default": False
+                "categories": {
+                    "type": "string",
+                    "description": "搜索类别列表，用于限制搜索范围到特定类别。默认为空字符串（所有类别）",
+                    "default": ""
+                },
+                "filter_list": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "域名过滤列表，包含需要从搜索结果中排除的域名。例如：['example.com', 'badsite.org']"
                 }
             },
             "required": ["query"]

@@ -90,6 +90,9 @@ class HarmonyParser:
     # Harmony 格式的正则表达式（作为 XML 解析的备选方案）
     TOOL_TAG_PATTERN = re.compile(r'<tool\s+name\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</tool>', re.DOTALL | re.IGNORECASE)
     
+    # Channel Commentary 格式（GPT OSS特有格式）
+    CHANNEL_PATTERN = re.compile(r'<\|channel\|>commentary\s+to\s*=\s*(\w+)\s*<\|constrain\|>json<\|message\|>(\{.*?\})', re.DOTALL | re.IGNORECASE)
+    
     @classmethod
     def parse_xml_tools(cls, text: str) -> List[ToolCall]:
         """使用 XML 解析器提取工具调用（优先方法）"""
@@ -157,10 +160,48 @@ class HarmonyParser:
         return tool_calls
     
     @classmethod
+    def parse_channel_commentary(cls, text: str) -> List[ToolCall]:
+        """解析 Channel Commentary 格式（GPT OSS特有）"""
+        tool_calls = []
+        
+        matches = cls.CHANNEL_PATTERN.findall(text)
+        
+        for tool_name, json_content in matches:
+            try:
+                arguments = json.loads(json_content)
+                
+                # 对web_search工具进行参数映射兼容
+                if tool_name == "web_search":
+                    # 映射旧参数名到新参数名
+                    if "topn" in arguments:
+                        # topn在web_search中没有直接对应，移除该参数
+                        topn_value = arguments.pop("topn")
+                        print(f"[HarmonyParser] 移除不支持的topn参数: {topn_value}")
+                    if "source" in arguments:
+                        # source映射到categories
+                        arguments["categories"] = arguments.pop("source", "")
+                        print(f"[HarmonyParser] 映射source到categories: {arguments['categories']}")
+                
+                tool_calls.append(ToolCall(
+                    name=tool_name,
+                    arguments=arguments
+                ))
+                
+            except json.JSONDecodeError:
+                # JSON解析失败，跳过
+                continue
+        
+        return tool_calls
+    
+    @classmethod
     def parse_tool_calls(cls, text: str) -> List[ToolCall]:
         """从文本中解析工具调用"""
-        # 优先使用 XML 解析
-        tool_calls = cls.parse_xml_tools(text)
+        # 先尝试 Channel Commentary 格式（GPT OSS）
+        tool_calls = cls.parse_channel_commentary(text)
+        
+        if not tool_calls:
+            # 优先使用 XML 解析
+            tool_calls = cls.parse_xml_tools(text)
         
         # 如果 XML 解析失败，使用正则表达式
         if not tool_calls:
@@ -171,7 +212,7 @@ class HarmonyParser:
     @classmethod
     def has_tool_calls(cls, text: str) -> bool:
         """检查文本中是否包含工具调用"""
-        return bool(cls.TOOL_TAG_PATTERN.search(text))
+        return bool(cls.TOOL_TAG_PATTERN.search(text) or cls.CHANNEL_PATTERN.search(text))
 
 
 class ToolCallValidator:

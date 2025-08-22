@@ -110,7 +110,6 @@ function isStatusMessage(content: string) {
     /✅.*完成/,
     /🔧.*工具/,
     /正在处理.*请稍候/,
-    /正在生成.*回答/,
   ]
   return statusPatterns.some(pattern => pattern.test(content))
 }

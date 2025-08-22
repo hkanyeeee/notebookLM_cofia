@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useNotebookStore } from '../stores/notebook'
+import { ref, computed } from 'vue'
+import { useNotebookStore, QueryType } from '../stores/notebook'
 import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip } from 'element-plus'
 import { Plus, Document, Delete, Fold, Expand } from '@element-plus/icons-vue'
 
@@ -16,6 +16,9 @@ defineProps<Props>()
 defineEmits<Emits>()
 
 const store = useNotebookStore()
+
+// 计算属性：是否处于普通问答模式
+const isNormalQueryMode = computed(() => store.queryType === QueryType.NORMAL)
 
 // 添加URL对话框
 const showAddDialog = ref(false)
@@ -142,7 +145,7 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 文档列表 -->
-    <div class="documents-section" v-if="!collapsed" :class="{ 'collection-mode': store.isCollectionQueryMode }">
+    <div class="documents-section" v-if="!collapsed" :class="{ 'collection-mode': store.isCollectionQueryMode, 'normal-mode': isNormalQueryMode }">
       <div class="documents-section-content">
         <h3>文档列表</h3>
         <div class="documents-list">
@@ -180,13 +183,22 @@ function handleRemoveFailedUrl(url: string) {
           </div>
         </div>
       </div>
-      
+
       <!-- Collection查询模式蒙版 -->
       <div v-if="store.isCollectionQueryMode" class="collection-overlay">
         <div class="collection-overlay-content">
           <h4>Collection查询模式</h4>
           <p>当前正在使用Collection进行查询</p>
           <p class="collection-name">{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
+        </div>
+      </div>
+
+      <!-- 普通问答模式蒙版 -->
+      <div v-if="isNormalQueryMode" class="normal-overlay">
+        <div class="normal-overlay-content">
+          <h4>普通问答模式</h4>
+          <p>当前正在使用网络搜索进行问答</p>
+          <p class="normal-description">该模式将使用网络搜索为您提供最新的信息和答案</p>
         </div>
       </div>
     </div>
@@ -342,7 +354,8 @@ function handleRemoveFailedUrl(url: string) {
   transition: opacity 0.3s ease;
 }
 
-.documents-section.collection-mode .documents-section-content {
+.documents-section.collection-mode .documents-section-content,
+.documents-section.normal-mode .documents-section-content {
   opacity: 0.3;
 }
 
@@ -385,6 +398,54 @@ function handleRemoveFailedUrl(url: string) {
 }
 
 .collection-overlay-content .collection-name {
+  color: #4f46e5;
+  font-weight: 500;
+  background: #f0f9ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.normal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(107, 114, 128, 0.1);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.normal-overlay-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  max-width: 280px;
+}
+
+.normal-overlay-content h4 {
+  margin: 0 0 12px 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.normal-overlay-content p {
+  margin: 8px 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.normal-overlay-content .normal-description {
   color: #4f46e5;
   font-weight: 500;
   background: #f0f9ff;
