@@ -5,7 +5,7 @@ import httpx
 import asyncio
 
 from fastapi import APIRouter, Body, HTTPException, Depends, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -34,6 +34,30 @@ class WebhookResponseData(BaseModel):
     recursive_depth: Optional[int] = 2  # 添加递归深度字段，默认为1
     request_id: Optional[str] = None  # 请求ID
     webhook_url: Optional[str] = None  # webhook URL
+    
+    @field_validator('total_chunks', mode='before')
+    @classmethod
+    def validate_total_chunks(cls, v):
+        """确保total_chunks是整数类型"""
+        if isinstance(v, str):
+            try:
+                return int(v)
+            except ValueError:
+                raise ValueError(f"无法将total_chunks转换为整数: {v}")
+        return v
+        
+    @field_validator('recursive_depth', mode='before')
+    @classmethod
+    def validate_recursive_depth(cls, v):
+        """确保recursive_depth是整数类型"""
+        if v is None:
+            return 2  # 默认值
+        if isinstance(v, str):
+            try:
+                return int(v)
+            except ValueError:
+                raise ValueError(f"无法将recursive_depth转换为整数: {v}")
+        return v
 
 
 class UnifiedIngestRequest(BaseModel):
@@ -340,6 +364,7 @@ async def agenttic_ingest(
         except Exception as e:
             error_message = f"Webhook回调处理失败: {e.__class__.__name__}: {str(e)}"
             print(error_message)
+            print(f"原始数据: {data}")  # 添加原始数据日志以便调试
             raise HTTPException(status_code=500, detail=error_message)
     
     # 处理客户端请求
@@ -403,8 +428,8 @@ async def agenttic_ingest(
         # 创建raw_html_chunk对象列表
         raw_html_chunk_objects = []
         for index, html in enumerate(raw_html_chunks):
-            # 生成唯一的chunk_id
-            raw = f"{FIXED_SESSION_ID}|{url}|{index}".encode("utf-8", errors="ignore")
+            # 生成唯一的chunk_id (添加'html'前缀以区分普通文本chunk)
+            raw = f"{FIXED_SESSION_ID}|{url}|html|{index}".encode("utf-8", errors="ignore")
             generated_chunk_id = hashlib.md5(raw).hexdigest()
             raw_html_chunk_obj = Chunk(
                 chunk_id=generated_chunk_id,
