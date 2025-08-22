@@ -15,7 +15,8 @@ from ..config import (
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K
 )
-from ..llm_client import DEFAULT_CHAT_MODEL
+# 移除模块级别的导入，避免循环导入
+# from ..llm_client import DEFAULT_CHAT_MODEL
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
@@ -37,8 +38,9 @@ class WebSearchTool:
         if not ENABLE_QUERY_GENERATION or not topic.strip():
             return [topic]
         
-        # 使用传入的模型或默认模型
+        # 使用传入的模型或默认模型（在函数内部导入，避免循环导入）
         if model is None:
+            from ..llm_client import DEFAULT_CHAT_MODEL
             model = DEFAULT_CHAT_MODEL
         
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE

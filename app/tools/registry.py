@@ -144,8 +144,8 @@ def register_all_tools():
     register_web_search_tool()
 
 
-# 自动注册工具
-register_all_tools()
+# 注意：工具注册将在 orchestrator 初始化时执行，避免循环导入
+# register_all_tools()  # 移除自动注册
 
 
 # 示例：注册一个简单的测试工具（当前注释掉）

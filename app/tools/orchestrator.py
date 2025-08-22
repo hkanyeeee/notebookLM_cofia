@@ -6,7 +6,7 @@ from .models import (
     ToolSchema
 )
 from .selector import StrategySelector
-from .registry import tool_registry
+from .registry import tool_registry, register_all_tools
 from .strategies.json_fc import JSONFunctionCallingStrategy
 from .strategies.react import ReActStrategy
 from .strategies.harmony import HarmonyStrategy
@@ -232,6 +232,11 @@ _orchestrator: Optional[ToolOrchestrator] = None
 def initialize_orchestrator(llm_service_url: str):
     """初始化全局编排器实例"""
     global _orchestrator
+    
+    # 先注册所有工具（避免循环导入）
+    register_all_tools()
+    
+    # 然后初始化编排器
     _orchestrator = ToolOrchestrator(llm_service_url)
 
 
