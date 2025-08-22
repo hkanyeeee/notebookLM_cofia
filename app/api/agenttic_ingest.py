@@ -228,9 +228,10 @@ async def process_webhook_response(
     if data.output and isinstance(data.output, list):
         print(f"检测到响应数据，共 {len(data.output)} 个响应项")
         
-        # 收集所有子文档URL
+        # 收集所有子文档URL，并进行去重处理
         all_sub_docs = []
-        
+        seen_urls = set()  # 用于跟踪已添加的URL，避免重复
+
         for i, output_item in enumerate(data.output):
             if isinstance(output_item, dict) and "response" in output_item:
                 response_data = output_item.get("response", {})
@@ -239,7 +240,14 @@ async def process_webhook_response(
                     if isinstance(sub_docs, list):
                         print(f"响应项 {i} 包含 {len(sub_docs)} 个子文档")
                         total_sub_docs += len(sub_docs)
-                        all_sub_docs.extend(sub_docs)
+
+                        # 逐个检查并添加URL，避免重复
+                        for url in sub_docs:
+                            if url and url not in seen_urls:
+                                all_sub_docs.append(url)
+                                seen_urls.add(url)
+                            elif url in seen_urls:
+                                print(f"跳过重复的子文档URL: {url}")
                     else:
                         print(f"响应项 {i} 的 sub_docs 不是列表格式: {type(sub_docs)}")
                 else:
