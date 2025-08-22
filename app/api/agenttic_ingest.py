@@ -118,8 +118,11 @@ async def process_sub_docs_concurrent(
                 "webhook_url": WEBHOOK_PREFIX + "/array2array"
             }
             
-            # 调用本模块的agenttic_ingest函数进行递归处理
-            result = await agenttic_ingest(sub_request_data, db)
+            # 创建一个虚拟的BackgroundTasks实例用于递归调用
+            dummy_background_tasks = BackgroundTasks()
+            
+            # 调用本模块的agenttic_ingest函数进行递归处理，参数顺序要正确
+            result = await agenttic_ingest(dummy_background_tasks, sub_request_data, db)
             
             print(f"子文档摄取成功: {sub_url}")
             return {
