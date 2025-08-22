@@ -267,7 +267,7 @@ async def process_webhook_response(
             print(f"总共发现 {len(all_sub_docs)} 个子文档URL")
             
             # 从原始数据中获取递归深度参数，默认为1
-            recursive_depth = 2
+            recursive_depth = 1
             if hasattr(data, 'recursive_depth') and isinstance(data.recursive_depth, int):
                 recursive_depth = data.recursive_depth
             
