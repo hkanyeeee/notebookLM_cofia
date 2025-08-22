@@ -34,6 +34,7 @@ class WebhookResponseData(BaseModel):
     recursive_depth: Optional[int] = 2  # 添加递归深度字段，默认为1
     request_id: Optional[str] = None  # 请求ID
     webhook_url: Optional[str] = None  # webhook URL
+    is_recursive: Optional[bool] = False  # 添加递归标记字段，默认为False
     
     @field_validator('total_chunks', mode='before')
     @classmethod
@@ -79,6 +80,7 @@ class UnifiedIngestRequest(BaseModel):
     source_id: Optional[str] = None
     session_id: Optional[str] = None
     task_name: Optional[str] = None
+    is_recursive: Optional[bool] = False  # 添加递归标记字段，默认为False
 
 
 async def process_sub_docs_concurrent(
@@ -115,7 +117,8 @@ async def process_sub_docs_concurrent(
                 "recursive_depth": recursive_depth - 1,  # 减少递归深度
                 "embedding_model": DEFAULT_EMBEDDING_MODEL,
                 "embedding_dimensions": 1024,
-                "webhook_url": WEBHOOK_PREFIX + "/array2array"
+                "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                "is_recursive": True  # 标记为递归调用
             }
             
             # 创建一个虚拟的BackgroundTasks实例用于递归调用
@@ -380,15 +383,23 @@ async def agenttic_ingest(
     embedding_dimensions = data.get("embedding_dimensions", 1024)
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
     recursive_depth = data.get("recursive_depth", 1)  # 默认递归深度为1
+    is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
 
     try:
-        # 1. 使用大模型生成文档名称和collection名称
+        # 1. 使用大模型生成文档名称和collection名称（仅在非递归调用时）
         print("正在生成文档名称...")
-        names = await generate_document_names(url)
-        document_name = names["document_name"]
-        # 使用URL的hash生成稳定的collection名称，确保同一URL总是得到相同的collection_name
-        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-        collection_name = f"collection_{url_hash}"
+        if is_recursive:
+            # 递归调用时，从数据中获取已有的文档名称和collection名称
+            document_name = data.get("document_name")
+            collection_name = data.get("collection_name")
+            print(f"检测到递归调用，使用已有的文档名称: {document_name}, collection名称: {collection_name}")
+        else:
+            # 非递归调用时，正常生成文档名称和collection名称
+            names = await generate_document_names(url)
+            document_name = names["document_name"]
+            # 使用URL的hash生成稳定的collection名称，确保同一URL总是得到相同的collection_name
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+            collection_name = f"collection_{url_hash}"
         
         print(f"文档名称: {document_name}")
         print(f"Collection名称: {collection_name}")
