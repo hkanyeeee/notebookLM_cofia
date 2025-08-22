@@ -1,4 +1,5 @@
 import httpx
+import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,22 +8,49 @@ from datetime import datetime
 
 from ..database import get_db
 from ..models import WorkflowExecution
-from ..config import get_settings
+from ..config import N8N_BASE_URL, N8N_API_KEY, N8N_USERNAME, N8N_PASSWORD
 
-settings = get_settings()
+# 设置日志
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# n8n API 配置
-N8N_BASE_URL = "http://localhost:5678/api/v1"  # 根据实际n8n部署地址调整
-N8N_AUTH = None  # 如果n8n启用了认证，在这里配置
+# n8n API 配置 - 从环境变量读取
+# N8N_BASE_URL, N8N_API_KEY, N8N_USERNAME, N8N_PASSWORD 从 config.py 导入
 
 class N8nClient:
     """n8n API 客户端"""
-    
-    def __init__(self, base_url: str = N8N_BASE_URL, auth: Optional[Dict] = N8N_AUTH):
-        self.base_url = base_url
-        self.auth = auth
+
+    def __init__(self):
+        self.base_url = N8N_BASE_URL
+        self.auth = self._build_auth()
+        self._validate_config()
+
+    def _build_auth(self) -> Optional[Dict]:
+        """构建认证配置"""
+        if N8N_API_KEY:
+            return {"api_key": N8N_API_KEY}
+        elif N8N_USERNAME and N8N_PASSWORD:
+            return {"username": N8N_USERNAME, "password": N8N_PASSWORD}
+        return None
+
+    def _validate_config(self):
+        """验证配置"""
+        if not self.base_url:
+            raise ValueError("N8N_BASE_URL 不能为空")
+
+        logger.info(f"N8N 客户端配置: base_url={self.base_url}, auth_type={type(self.auth).__name__ if self.auth else 'None'}")
+
+    async def test_connection(self) -> bool:
+        """测试 N8N 连接"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                headers = self._build_headers()
+                response = await client.get(f"{self.base_url}/", headers=headers)
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"N8N 连接测试失败: {str(e)}")
+            return False
 
     async def get_executions(self, status: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
         """获取工作流执行列表"""
@@ -30,31 +58,72 @@ class N8nClient:
             params = {"limit": limit}
             if status:
                 params["status"] = status
-                
+
+            logger.info(f"获取 N8N 执行列表: status={status}, limit={limit}")
+
             async with httpx.AsyncClient(timeout=10.0) as client:
+                headers = self._build_headers()
                 response = await client.get(
                     f"{self.base_url}/executions",
                     params=params,
-                    auth=self.auth
+                    headers=headers
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data.get("data", [])
+                executions = data.get("data", [])
+                logger.info(f"成功获取 {len(executions)} 个工作流执行记录")
+                return executions
+        except httpx.TimeoutException:
+            logger.error("N8N API 请求超时")
+            raise HTTPException(status_code=504, detail="N8N API 请求超时")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"N8N API HTTP 错误: {e.response.status_code} - {e.response.text}")
+            raise HTTPException(status_code=502, detail=f"N8N API 响应错误: {e.response.status_code}")
         except Exception as e:
+            logger.error(f"N8N API 调用失败: {str(e)}")
             raise HTTPException(status_code=500, detail=f"调用n8n API失败: {str(e)}")
 
     async def get_execution_by_id(self, execution_id: str) -> Dict[str, Any]:
         """根据执行ID获取执行详情"""
         try:
+            logger.info(f"获取 N8N 执行详情: execution_id={execution_id}")
+
             async with httpx.AsyncClient(timeout=10.0) as client:
+                headers = self._build_headers()
                 response = await client.get(
                     f"{self.base_url}/executions/{execution_id}",
-                    auth=self.auth
+                    headers=headers
                 )
                 response.raise_for_status()
-                return response.json()
+                execution_data = response.json()
+                logger.info(f"成功获取执行详情: {execution_id}")
+                return execution_data
+        except httpx.TimeoutException:
+            logger.error(f"N8N API 请求超时: execution_id={execution_id}")
+            raise HTTPException(status_code=504, detail="N8N API 请求超时")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"N8N API HTTP 错误: {e.response.status_code} - {e.response.text}")
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail=f"找不到执行记录: {execution_id}")
+            raise HTTPException(status_code=502, detail=f"N8N API 响应错误: {e.response.status_code}")
         except Exception as e:
+            logger.error(f"获取执行详情失败: {str(e)}")
             raise HTTPException(status_code=500, detail=f"获取执行详情失败: {str(e)}")
+
+    def _build_headers(self) -> Dict[str, str]:
+        """构建请求头，支持不同认证方式"""
+        headers = {"Content-Type": "application/json"}
+
+        if self.auth:
+            if "api_key" in self.auth:
+                headers["X-N8N-API-KEY"] = self.auth["api_key"]
+            elif "username" in self.auth and "password" in self.auth:
+                import base64
+                credentials = f"{self.auth['username']}:{self.auth['password']}"
+                encoded_credentials = base64.b64encode(credentials.encode()).decode()
+                headers["Authorization"] = f"Basic {encoded_credentials}"
+
+        return headers
 
 # 全局n8n客户端实例
 n8n_client = N8nClient()

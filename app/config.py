@@ -64,6 +64,12 @@ HTTP_PROXY = get_config_value("HTTP_PROXY")
 HTTPS_PROXY = get_config_value("HTTPS_PROXY")
 PROXY_URL = get_config_value("PROXY_URL") or HTTP_PROXY or HTTPS_PROXY
 
+# N8N Configuration
+N8N_BASE_URL = get_config_value("N8N_BASE_URL", "http://localhost:5678/api/v1")
+N8N_API_KEY = get_config_value("N8N_API_KEY")
+N8N_USERNAME = get_config_value("N8N_USERNAME")
+N8N_PASSWORD = get_config_value("N8N_PASSWORD")
+
 print("--- Application Configuration ---")
 print(f"DATABASE_URL: {DATABASE_URL}")
 print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
