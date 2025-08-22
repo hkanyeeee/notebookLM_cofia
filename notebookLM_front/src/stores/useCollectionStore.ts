@@ -1,6 +1,7 @@
 import { ref, reactive } from 'vue'
 import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult, DEFAULT_TOOLS } from '../api/notebook'
-import type { Message, QueryType } from './types'
+import type { Message } from './types'
+import { QueryType } from './types'
 
 export function useCollectionStore() {
   // Agentic Ingest相关状态

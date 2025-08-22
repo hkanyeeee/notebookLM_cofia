@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { notebookApi, DEFAULT_TOOLS } from '../api/notebook'
 import { useSessionStore } from './session'
-import type { Message, Source, QueryType } from './types'
+import type { Message, Source } from './types'
+import { QueryType } from './types'
 
 export function useMessageStore() {
   const sessionStore = useSessionStore()
