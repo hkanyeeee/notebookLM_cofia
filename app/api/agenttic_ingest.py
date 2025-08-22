@@ -84,18 +84,22 @@ class UnifiedIngestRequest(BaseModel):
 
 
 async def process_sub_docs_concurrent(
-    sub_docs_urls: List[str], 
+    sub_docs_urls: List[str],
     recursive_depth: int,
-    db: AsyncSession
+    db: AsyncSession,
+    parent_doc_name: Optional[str] = None,
+    parent_collection_name: Optional[str] = None
 ) -> List[dict]:
     """
     并发处理子文档的递归摄取函数
-    
+
     Args:
         sub_docs_urls: 子文档URL列表
         recursive_depth: 递归深度限制
         db: 数据库会话
-    
+        parent_doc_name: 父级文档名称
+        parent_collection_name: 父级collection名称
+
     Returns:
         List[dict]: 每个子文档的处理结果
     """
@@ -107,10 +111,10 @@ async def process_sub_docs_concurrent(
         return results
     
     # 并发处理所有子文档URL
-    async def process_single_sub_doc(sub_url: str) -> dict:
+    async def process_single_sub_doc(sub_url: str, parent_doc_name: str = None, parent_collection_name: str = None) -> dict:
         try:
             print(f"开始递归摄取子文档: {sub_url}")
-            
+
             # 构造递归调用的请求数据
             sub_request_data = {
                 "url": sub_url,
@@ -118,7 +122,9 @@ async def process_sub_docs_concurrent(
                 "embedding_model": DEFAULT_EMBEDDING_MODEL,
                 "embedding_dimensions": 1024,
                 "webhook_url": WEBHOOK_PREFIX + "/array2array",
-                "is_recursive": True  # 标记为递归调用
+                "is_recursive": True,  # 标记为递归调用
+                "document_name": parent_doc_name,  # 传递父级文档名称
+                "collection_name": parent_collection_name  # 传递父级collection名称
             }
             
             # 创建一个虚拟的BackgroundTasks实例用于递归调用
@@ -146,7 +152,7 @@ async def process_sub_docs_concurrent(
     # 使用asyncio.gather进行并发处理
     try:
         results = await asyncio.gather(
-            *[process_single_sub_doc(url) for url in sub_docs_urls],
+            *[process_single_sub_doc(url, parent_doc_name, parent_collection_name) for url in sub_docs_urls],
             return_exceptions=False
         )
     except Exception as e:
@@ -154,33 +160,37 @@ async def process_sub_docs_concurrent(
         # 降级到串行处理
         results = []
         for sub_url in sub_docs_urls:
-            result = await process_single_sub_doc(sub_url)
+            result = await process_single_sub_doc(sub_url, parent_doc_name, parent_collection_name)
             results.append(result)
     
     return results
 
 
 async def process_sub_docs_background(
-    sub_docs_urls: List[str], 
+    sub_docs_urls: List[str],
     recursive_depth: int,
-    request_id: Optional[str] = None
+    request_id: Optional[str] = None,
+    parent_doc_name: Optional[str] = None,
+    parent_collection_name: Optional[str] = None
 ):
     """
     后台异步处理子文档的函数 - 不阻塞主响应
-    
+
     Args:
         sub_docs_urls: 子文档URL列表
         recursive_depth: 递归深度限制
         request_id: 请求ID，用于日志追踪
+        parent_doc_name: 父级文档名称
+        parent_collection_name: 父级collection名称
     """
     try:
         # 创建新的数据库会话
         from ..database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，request_id: {request_id}")
-            
-            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db)
-            
+
+            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db, parent_doc_name, parent_collection_name)
+
             success_count = len([r for r in results if r.get('success')])
             print(f"[后台任务] 子文档处理完成，成功: {success_count}/{len(results)}, request_id: {request_id}")
             
@@ -247,16 +257,18 @@ async def process_webhook_response(
             if background_tasks:
                 print("将子文档处理添加到后台任务队列...")
                 background_tasks.add_task(
-                    process_sub_docs_background, 
-                    all_sub_docs, 
+                    process_sub_docs_background,
+                    all_sub_docs,
                     recursive_depth,
-                    data.request_id
+                    data.request_id,
+                    data.document_name,
+                    data.collection_name
                 )
             else:
                 # 如果没有background_tasks，直接启动协程任务（不等待）
                 print("启动子文档后台处理协程...")
                 asyncio.create_task(
-                    process_sub_docs_background(all_sub_docs, recursive_depth, data.request_id)
+                    process_sub_docs_background(all_sub_docs, recursive_depth, data.request_id, data.document_name, data.collection_name)
                 )
                 
         else:
@@ -392,6 +404,11 @@ async def agenttic_ingest(
             # 递归调用时，从数据中获取已有的文档名称和collection名称
             document_name = data.get("document_name")
             collection_name = data.get("collection_name")
+            if not document_name or not collection_name:
+                # 如果递归调用时缺少文档名称或collection名称，使用默认值
+                document_name = document_name or f"子文档_{url.split('/')[-1] or '未命名'}"
+                url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+                collection_name = collection_name or f"subdoc_{url_hash}"
             print(f"检测到递归调用，使用已有的文档名称: {document_name}, collection名称: {collection_name}")
         else:
             # 非递归调用时，正常生成文档名称和collection名称
