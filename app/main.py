@@ -55,6 +55,7 @@ from .api.export import router as export_router
 from .api.models import router as models_router
 
 from .api.webhook import router as webhook_router
+from .api.n8n_workflow import router as n8n_workflow_router
 
 app.include_router(ingest_router)
 app.include_router(agenttic_ingest_router)
@@ -66,3 +67,4 @@ app.include_router(export_router)
 app.include_router(models_router)
 
 app.include_router(webhook_router)
+app.include_router(n8n_workflow_router)

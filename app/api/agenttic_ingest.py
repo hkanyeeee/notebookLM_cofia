@@ -1,6 +1,8 @@
 import json
 import hashlib
+import uuid
 from typing import List, Optional
+from datetime import datetime
 import httpx
 import asyncio
 
@@ -9,7 +11,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ..models import Source, Chunk
+from ..models import Source, Chunk, WorkflowExecution
 from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..chunking import chunk_text
@@ -275,6 +277,22 @@ async def process_webhook_response(
             print("未发现任何子文档URL")
     else:
         print("响应数据中未包含有效的response字段")
+    
+    # 更新工作流执行状态
+    try:
+        if data.request_id:
+            from sqlalchemy import update
+            stmt = update(WorkflowExecution).where(
+                WorkflowExecution.execution_id == data.request_id
+            ).values(
+                status="success",
+                stopped_at=datetime.utcnow()
+            )
+            await db.execute(stmt)
+            await db.commit()
+            print(f"工作流执行状态已更新为成功: {data.request_id}")
+    except Exception as e:
+        print(f"更新工作流执行状态失败: {e}")
     
     # 🚀 立即返回响应，不等待子文档处理完成
     return {
@@ -566,6 +584,22 @@ async def agenttic_ingest(
         # 8. 发送webhook（仅在递归深度大于0时）
         if recursive_depth > 0:
             print("正在发送webhook进行子文档识别...")
+            
+            # 创建工作流执行记录
+            try:
+                workflow_execution = WorkflowExecution(
+                    execution_id=request_id,  # 使用request_id作为临时execution_id
+                    document_name=document_name,
+                    status="running",
+                    session_id=FIXED_SESSION_ID
+                )
+                db.add(workflow_execution)
+                await db.commit()
+                print(f"工作流执行记录已创建: {request_id}")
+            except Exception as e:
+                print(f"创建工作流执行记录失败: {e}")
+                # 不阻塞webhook发送，继续执行
+            
             # 直接向指定的webhook URL发送POST请求
             try:
                 async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
@@ -574,6 +608,19 @@ async def agenttic_ingest(
                     print("Webhook发送成功")
             except Exception as e:
                 print(f"Webhook发送失败: {e}")
+                # 如果webhook发送失败，更新执行记录状态
+                try:
+                    from sqlalchemy import update
+                    stmt = update(WorkflowExecution).where(
+                        WorkflowExecution.execution_id == request_id
+                    ).values(
+                        status="error",
+                        stopped_at=datetime.utcnow()
+                    )
+                    await db.execute(stmt)
+                    await db.commit()
+                except Exception as update_error:
+                    print(f"更新工作流执行状态失败: {update_error}")
         else:
             print(f"递归深度为0，跳过子文档识别webhook")
 

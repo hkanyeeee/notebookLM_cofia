@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, watch, onMounted } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip, ElSelect, ElOption } from 'element-plus'
-import { Refresh, Promotion, Plus } from '@element-plus/icons-vue'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip, ElSelect, ElOption, ElDialog, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { Refresh, Promotion, Plus, Bell } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { n8nApi, type WorkflowExecution } from '../api/n8n'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.setOptions({
@@ -120,12 +121,95 @@ function handleClearMessages() {
   ElMessage.success('对话已清空')
 }
 
+// 显示工作流执行状态
+const workflowDialogVisible = ref(false)
+const runningWorkflows = ref<WorkflowExecution[]>([])
+const workflowHistory = ref<WorkflowExecution[]>([])
+const loadingWorkflows = ref(false)
+
+function handleShowWorkflows() {
+  workflowDialogVisible.value = true
+  loadWorkflowStatus()
+}
+
+// 加载工作流状态
+async function loadWorkflowStatus() {
+  try {
+    loadingWorkflows.value = true
+    
+    // 获取当前会话ID（从store获取）
+    const sessionId = store.sessionId
+    
+    // 调用API获取工作流执行状态
+    const response = await n8nApi.getWorkflowExecutions({
+      sessionId: sessionId,
+      limit: 50
+    })
+    
+    if (response.success) {
+      runningWorkflows.value = response.runningWorkflows
+      workflowHistory.value = response.workflowHistory
+      
+      console.log('工作流状态加载成功:', {
+        running: runningWorkflows.value.length,
+        history: workflowHistory.value.length
+      })
+    } else {
+      ElMessage.error('获取工作流状态失败')
+    }
+    
+  } catch (error: any) {
+    console.error('获取工作流状态失败:', error)
+    ElMessage.error(error.message || '获取工作流状态失败')
+  } finally {
+    loadingWorkflows.value = false
+  }
+}
+
 // 格式化时间
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+}
+
+// 格式化工作流时间
+function formatWorkflowTime(timeStr?: string) {
+  if (!timeStr) return '-'
+  try {
+    const date = new Date(timeStr)
+    return new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date)
+  } catch {
+    return timeStr
+  }
+}
+
+// 获取状态文本
+function getStatusText(status: string) {
+  const statusMap: Record<string, string> = {
+    'running': '执行中',
+    'success': '成功',
+    'error': '失败',
+    'stopped': '已停止'
+  }
+  return statusMap[status] || status
+}
+
+// 获取状态标签类型
+function getStatusTagType(status: string) {
+  const typeMap: Record<string, string> = {
+    'running': 'warning',
+    'success': 'success',
+    'error': 'danger',
+    'stopped': 'info'
+  }
+  return typeMap[status] || 'info'
 }
 
 // 组件挂载时加载collection列表和模型列表
@@ -251,6 +335,12 @@ function isStatusMessage(content: string) {
       </div>
       
       <div class="header-actions">
+        <ElButton text @click="handleShowWorkflows">
+          <ElIcon>
+            <Bell />
+          </ElIcon>
+          工作流状态
+        </ElButton>
         <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0">
           <ElIcon>
             <Refresh />
@@ -548,6 +638,82 @@ function isStatusMessage(content: string) {
         </span>
       </div>
     </div>
+
+    <!-- 工作流状态对话框 -->
+    <ElDialog 
+      v-model="workflowDialogVisible" 
+      title="n8n工作流执行状态" 
+      width="85%" 
+      max-height="70vh"
+    >
+      <div class="workflow-status-container" v-loading="loadingWorkflows">
+        <div class="workflow-section">
+          <h3>正在执行的工作流 ({{ runningWorkflows.length }})</h3>
+          <ElTable 
+            :data="runningWorkflows" 
+            style="width: 100%" 
+            max-height="200"
+            :empty-text="loadingWorkflows ? '加载中...' : '暂无正在执行的工作流'"
+          >
+            <ElTableColumn prop="executionId" label="执行ID" width="180" />
+            <ElTableColumn prop="documentName" label="文档名称" min-width="250" />
+            <ElTableColumn prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <ElTag type="warning" effect="plain">{{ getStatusText(row.status) }}</ElTag>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn prop="startedAt" label="开始时间" width="160">
+              <template #default="{ row }">
+                {{ formatWorkflowTime(row.startedAt) }}
+              </template>
+            </ElTableColumn>
+          </ElTable>
+        </div>
+
+        <div class="workflow-section">
+          <h3 style="margin-top: 20px;">执行历史 ({{ workflowHistory.length }})</h3>
+          <ElTable 
+            :data="workflowHistory" 
+            style="width: 100%" 
+            max-height="300"
+            :empty-text="loadingWorkflows ? '加载中...' : '暂无执行历史'"
+          >
+            <ElTableColumn prop="executionId" label="执行ID" width="180" />
+            <ElTableColumn prop="documentName" label="文档名称" min-width="250" />
+            <ElTableColumn prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <ElTag 
+                  :type="getStatusTagType(row.status)" 
+                  effect="plain"
+                >
+                  {{ getStatusText(row.status) }}
+                </ElTag>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn prop="startedAt" label="开始时间" width="160">
+              <template #default="{ row }">
+                {{ formatWorkflowTime(row.startedAt) }}
+              </template>
+            </ElTableColumn>
+            <ElTableColumn prop="stoppedAt" label="结束时间" width="160">
+              <template #default="{ row }">
+                {{ formatWorkflowTime(row.stoppedAt) }}
+              </template>
+            </ElTableColumn>
+          </ElTable>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="dialog-footer">
+          <ElButton @click="loadWorkflowStatus" :loading="loadingWorkflows">
+            <ElIcon><Refresh /></ElIcon>
+            刷新
+          </ElButton>
+          <ElButton @click="workflowDialogVisible = false">关闭</ElButton>
+        </div>
+      </template>
+    </ElDialog>
   </div>
 </template>
 
