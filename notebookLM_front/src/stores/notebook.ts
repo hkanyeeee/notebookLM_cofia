@@ -27,7 +27,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   
   // 计算属性：当前模式是否应该启用web search工具
   const shouldUseWebSearch = computed(() => 
-    queryType.value === QueryType.NORMAL || queryType.value === QueryType.COLLECTION
+    queryType.value === QueryType.NORMAL  // 只有普通问答使用web search
   )
 
   // 合并loading状态
@@ -54,7 +54,7 @@ export const useNotebookStore = defineStore('notebook', () => {
         return await collectionStore.performCollectionQuery(
           query, 
           queryType.value,
-          shouldUseWebSearch.value,
+          false, // Collection问答不使用web search
           messageStore.messages.value,
           (messageIndex: number, messageUpdate: any) => {
             messageStore.messages.value[messageIndex] = {
@@ -123,6 +123,8 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 模型相关 (来自 modelStore)
     models: modelStore.models,
     selectedModel: modelStore.selectedModel,
+    normalChatModelError: modelStore.normalChatModelError,
+    NORMAL_CHAT_MODEL: modelStore.NORMAL_CHAT_MODEL,
     
     // 加载状态
     loading: loadingWithQuery,
@@ -148,6 +150,8 @@ export const useNotebookStore = defineStore('notebook', () => {
     
     // 模型方法
     loadModels: modelStore.loadModels,
+    validateNormalChatModel: modelStore.validateNormalChatModel,
+    forceSelectNormalChatModel: modelStore.forceSelectNormalChatModel,
     
     // 辅助方法
     handleDocumentAdded,

@@ -47,13 +47,19 @@ export function useMessageStore() {
       
       // 根据问答类型决定文档范围和工具配置
       if (queryType === QueryType.DOCUMENT) {
-        // 文档问答模式：使用已添加的文档，不启用工具
+        // 文档问答模式：使用已添加的文档，不启用工具，不使用消息历史
         queryParams.document_ids = documentIds || []
         queryParams.tool_mode = 'off'
       } else if (queryType === QueryType.NORMAL) {
-        // 普通问答模式：不限制文档范围，启用web search工具
+        // 普通问答模式：不限制文档范围，启用web search工具，使用消息历史
         queryParams.tool_mode = 'auto'
         queryParams.tools = DEFAULT_TOOLS
+        // 添加消息历史 (排除刚添加的用户消息)
+        const conversationHistory = messages.value.slice(0, -1).map(msg => ({
+          role: msg.type === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }))
+        queryParams.conversation_history = conversationHistory
       }
       
       const response = await fetch(`${notebookApi.getBaseUrl()}/query`, {

@@ -5,27 +5,35 @@ from app.config import LLM_SERVICE_URL
 from .tools.models import RunConfig, ToolMode
 from .tools.orchestrator import get_orchestrator
 from .tools.selector import StrategySelector
+from .tools.intelligent_orchestrator import IntelligentOrchestrator
 
 
 # DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
 DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
 # DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
 
-async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL) -> str:
+async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL, conversation_history: List[Dict] = None) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
     url = f"{LLM_SERVICE_URL}/chat/completions"
 
     system_prompt = (
         "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析；你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。必须使用中文进行回答"
     )
+    
+    # 构建消息列表
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # 添加对话历史（如果提供）
+    if conversation_history:
+        messages.extend(conversation_history)
+    
+    # 添加当前问题
     user_content = "参考资料：\n" + "\n".join(contexts) + f"\n\n用户问题：{question}"
+    messages.append({"role": "user", "content": user_content})
 
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
+        "messages": messages,
     }
 
     print(len(contexts), "contexts")
@@ -43,6 +51,7 @@ async def stream_answer(
     question: str,
     contexts: List[str],
     model: str = DEFAULT_CHAT_MODEL,
+    conversation_history: List[Dict] = None,
 ) -> AsyncGenerator[dict, None]:
     """以 OpenAI 流式接口风格，逐块产出内容增量。
 
@@ -57,14 +66,21 @@ async def stream_answer(
     system_prompt = (
         "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析；你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。必须使用中文进行回答"
     )
+    
+    # 构建消息列表
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # 添加对话历史（如果提供）
+    if conversation_history:
+        messages.extend(conversation_history)
+    
+    # 添加当前问题
     user_content = "参考资料：\n" + "\n".join(contexts) + f"\n\n用户问题：{question}"
+    messages.append({"role": "user", "content": user_content})
 
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
+        "messages": messages,
         "stream": True,
     }
 
@@ -102,7 +118,8 @@ async def stream_answer(
 async def generate_answer_with_tools(
     question: str, 
     contexts: List[str], 
-    run_config: RunConfig
+    run_config: RunConfig,
+    use_intelligent_orchestrator: bool = True
 ) -> Dict[str, Any]:
     """使用工具进行非流式问答
     
@@ -141,6 +158,19 @@ async def generate_answer_with_tools(
     if not run_config.model:
         run_config.model = DEFAULT_CHAT_MODEL
     
+    # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
+    if use_intelligent_orchestrator:
+        try:
+            intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
+            result = await intelligent_orchestrator.process_query_intelligently(
+                question, contexts, run_config
+            )
+            await intelligent_orchestrator.close()
+            return result
+        except Exception as e:
+            print(f"智能编排器执行失败，回退到原有工具编排器: {e}")
+            # 继续使用原有编排器
+    
     result = await orchestrator.execute_non_stream(question, contexts, run_config)
     result["tool_mode"] = run_config.tool_mode.value
     
@@ -150,7 +180,8 @@ async def generate_answer_with_tools(
 async def stream_answer_with_tools(
     question: str,
     contexts: List[str],
-    run_config: RunConfig
+    run_config: RunConfig,
+    use_intelligent_orchestrator: bool = True
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """使用工具进行流式问答
     
@@ -180,6 +211,20 @@ async def stream_answer_with_tools(
     # 设置模型
     if not run_config.model:
         run_config.model = DEFAULT_CHAT_MODEL
+    
+    # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
+    if use_intelligent_orchestrator:
+        try:
+            intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
+            async for event in intelligent_orchestrator.process_query_intelligently_stream(
+                question, contexts, run_config
+            ):
+                yield event
+            await intelligent_orchestrator.close()
+            return
+        except Exception as e:
+            print(f"智能编排器流式执行失败，回退到原有工具编排器: {e}")
+            # 继续使用原有编排器
     
     # 流式执行工具编排
     async for event in orchestrator.execute_stream(question, contexts, run_config):

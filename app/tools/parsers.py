@@ -170,8 +170,16 @@ class HarmonyParser:
             try:
                 arguments = json.loads(json_content)
                 
-                # 对web_search工具进行参数映射兼容
+                # 对web_search工具进行参数映射兼容和验证
                 if tool_name == "web_search":
+                    # 检查必需参数
+                    if "query" not in arguments:
+                        # 检查是否包含明显无效的参数组合
+                        invalid_params = {"id", "cursor", "index", "page"}
+                        if any(param in arguments for param in invalid_params):
+                            print(f"[HarmonyParser] 检测到无效的web_search工具调用，缺少query参数，包含无效参数: {list(arguments.keys())}")
+                            continue  # 跳过此无效工具调用
+                    
                     # 映射旧参数名到新参数名
                     if "topn" in arguments:
                         # topn在web_search中没有直接对应，移除该参数
@@ -181,6 +189,13 @@ class HarmonyParser:
                         # source映射到categories
                         arguments["categories"] = arguments.pop("source", "")
                         print(f"[HarmonyParser] 映射source到categories: {arguments['categories']}")
+                    
+                    # 移除明显无效的参数
+                    invalid_params = {"id", "cursor", "index", "page"}
+                    for param in invalid_params:
+                        if param in arguments:
+                            removed_value = arguments.pop(param)
+                            print(f"[HarmonyParser] 移除无效参数: {param} = {removed_value}")
                 
                 tool_calls.append(ToolCall(
                     name=tool_name,

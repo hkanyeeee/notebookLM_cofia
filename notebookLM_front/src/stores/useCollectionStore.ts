@@ -1,5 +1,5 @@
 import { ref, reactive } from 'vue'
-import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult, DEFAULT_TOOLS } from '../api/notebook'
+import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
 import type { Message } from './types'
 import { QueryType } from './types'
 
@@ -79,7 +79,7 @@ export function useCollectionStore() {
   async function performCollectionQuery(
     query: string, 
     queryType: QueryType,
-    shouldUseWebSearch: boolean,
+    _unused: boolean, // 保持参数兼容，但不再使用
     messages: Message[],
     onMessageUpdate: (messageIndex: number, message: Partial<Message>) => void
   ) {
@@ -114,22 +114,14 @@ export function useCollectionStore() {
     loading.queryingCollection = true
 
     try {
-      const request: CollectionQueryRequest & { 
-        use_web_search?: boolean, 
-        tools?: any[], 
-        tool_mode?: string 
-      } = {
+      const request: CollectionQueryRequest = {
         collection_id: collectionId,
         query,
         top_k: 20
       }
       
-      // 如果应该启用web search，添加工具配置
-      if (shouldUseWebSearch) {
-        request.use_web_search = true
-        request.tools = DEFAULT_TOOLS
-        request.tool_mode = 'auto'
-      }
+      // Collection问答不使用web search工具
+      // 移除web search工具配置，确保只使用collection内的内容
 
       // 使用流式查询
       await notebookApi.queryCollectionStream(

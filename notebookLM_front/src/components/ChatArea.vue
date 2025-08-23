@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
 import { ElSelect, ElOption, ElButton, ElIcon, ElMessage } from 'element-plus'
@@ -73,8 +73,21 @@ onMounted(async () => {
     }
     
     await Promise.all(loadPromises)
+    
+    // 如果当前是普通问答模式，强制选择指定模型
+    if (store.queryType === QueryType.NORMAL) {
+      store.forceSelectNormalChatModel()
+    }
   } catch (error) {
     console.warn('初始加载数据失败:', error)
+  }
+})
+
+// 监听问答类型变化
+watch(() => store.queryType, (newType) => {
+  if (newType === QueryType.NORMAL) {
+    // 切换到普通问答模式时，强制选择指定模型
+    store.forceSelectNormalChatModel()
   }
 })
 </script>
@@ -91,6 +104,7 @@ onMounted(async () => {
             placeholder="选择模型"
             class="model-select"
             :loading="store.loading.loadingModels"
+            :disabled="store.queryType === QueryType.NORMAL"
             clearable
             filterable
           >
@@ -101,6 +115,22 @@ onMounted(async () => {
               :value="model.id"
             />
           </ElSelect>
+          
+          <!-- 普通问答模式提示 -->
+          <div 
+            v-if="store.queryType === QueryType.NORMAL" 
+            class="model-hint"
+          >
+            普通问答模式使用 {{ store.NORMAL_CHAT_MODEL }}
+          </div>
+          
+          <!-- 模型错误提示 -->
+          <div 
+            v-if="store.normalChatModelError" 
+            class="model-error"
+          >
+            {{ store.normalChatModelError }}
+          </div>
         </div>
       </div>
 
@@ -257,6 +287,24 @@ onMounted(async () => {
 
 .model-select {
   width: 200px;
+}
+
+.model-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.model-error {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 4px;
+  line-height: 1.4;
+  background: #fef2f2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
 }
 
 .header-actions {

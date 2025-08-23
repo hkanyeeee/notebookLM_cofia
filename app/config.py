@@ -24,19 +24,19 @@ RERANKER_MAX_TOKENS = int(get_config_value("RERANKER_MAX_TOKENS", "3072"))
 RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRENCY", 4))
 
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
-EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 2))
+EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 4))
 WEBHOOK_TIMEOUT = int(get_config_value("WEBHOOK_TIMEOUT", 30))
 WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/webhook")
 
 # 工具相关配置
 DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
-MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "6"))
+MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 
 # Web 搜索相关配置
 WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "3"))
-WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "3"))
-WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "6"))
-WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "3"))
+WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "4"))
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "8"))
+WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "4"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
 
 # Web 爬取相关配置  
@@ -47,15 +47,21 @@ PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "30.0"))
 ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
 QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
     "QUERY_GENERATION_PROMPT_TEMPLATE", 
-    "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的英文查询。返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
+    "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的、使用空格分割的英文关键词的组合，用于查询。返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
 )
 
+# 网页内容缓存配置
+WEB_CACHE_ENABLED = get_config_value("WEB_CACHE_ENABLED", "true").lower() == "true"
+WEB_CACHE_MAX_SIZE = int(get_config_value("WEB_CACHE_MAX_SIZE", "1000"))
+WEB_CACHE_TTL_SECONDS = int(get_config_value("WEB_CACHE_TTL_SECONDS", "3600"))  # 1小时
+WEB_CACHE_MAX_CONTENT_SIZE = int(get_config_value("WEB_CACHE_MAX_CONTENT_SIZE", "1048576"))  # 1MB
+
 # 文档处理配置
-CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "400"))
-CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "40"))
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "500"))
+CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "50"))
 
 # RAG 相关配置
-RAG_TOP_K = int(get_config_value("RAG_TOP_K", "15"))
+RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
 RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "5"))
 
 # Proxy configuration (optional)

@@ -5,12 +5,9 @@ import time
 import random
 from .models import ToolSchema, ToolCall, ToolResult, ToolMetadata
 from .parsers import ToolCallValidator
-from .errors import (
-    global_error_handler, ToolExecutionError, TimeoutError, 
-    ValidationError, NetworkError
-)
-from .cache import global_tool_cache, CacheConfig
-from .observability import global_observability
+# 错误处理已简化，使用标准Python异常
+# 缓存功能已简化
+# 可观测性功能已简化
 
 if TYPE_CHECKING:
     from .models import ToolExecutionContext
@@ -27,7 +24,7 @@ class ToolRegistry:
         # 简单断路器：当连续失败次数超过阈值时短时间拒绝请求
         self._cb_failures: Dict[str, int] = {}
         self._cb_open_until: Dict[str, float] = {}
-        self.logger = global_observability.get_logger("registry")
+        # 简化日志系统
     
     def register_tool(self, schema: ToolSchema, handler: Callable, metadata: Optional[ToolMetadata] = None):
         """注册工具
@@ -44,14 +41,7 @@ class ToolRegistry:
         # 为每个工具创建并发限流器
         self._semaphores[schema.name] = asyncio.Semaphore(max(1, meta.max_concurrency))
         
-        # 配置工具缓存
-        if meta.cache_enabled:
-            cache_config = CacheConfig(
-                ttl_seconds=meta.cache_ttl or 3600.0,  # 默认1小时
-                max_size=meta.cache_max_size or 1000,
-                namespace=f"tool_{schema.name}"
-            )
-            global_tool_cache.configure_tool(schema.name, cache_config)
+        # 缓存功能已简化
     
     def get_tool_schema(self, name: str) -> Optional[ToolSchema]:
         """获取工具 Schema"""
@@ -78,14 +68,12 @@ class ToolRegistry:
         Returns:
             工具执行结果
         """
-        self.logger.info("收到工具调用请求", 
-                         tool_name=tool_call.name, 
-                         arguments=tool_call.arguments,
-                         call_id=tool_call.call_id)
+        print(f"[Registry] 收到工具调用请求: {tool_call.name}, 参数: {tool_call.arguments}, call_id: {tool_call.call_id}")
         
         if not self.is_allowed(tool_call.name):
-            self.logger.warning("工具未找到或不允许", tool_name=tool_call.name)
-            global_observability.metrics_collector.counter('tool_requests_rejected', 1.0, {'tool': tool_call.name, 'reason': 'not_allowed'})
+            print(f"[Registry] 工具未找到或不允许: {tool_call.name}")
+            # 记录被拒绝的工具调用
+            print(f"[Registry] 工具调用被拒绝: {tool_call.name}")
             return ToolResult(
                 name=tool_call.name,
                 result=f"工具 '{tool_call.name}' 不在允许列表中",
@@ -94,31 +82,8 @@ class ToolRegistry:
                 call_id=tool_call.call_id
             )
         
-        # 检查缓存
+        # 缓存功能已简化直接执行工具
         meta = self._metadata.get(tool_call.name) or ToolMetadata()
-        if meta.cache_enabled:
-            self.logger.debug("检查缓存", tool_name=tool_call.name)
-            cached_result = await global_tool_cache.get(tool_call.name, tool_call.arguments)
-            if cached_result is not None:
-                self.logger.info("缓存命中", tool_name=tool_call.name)
-                global_observability.performance_monitor.record_cache_hit(tool_call.name, hit=True)
-                # 从缓存恢复ToolResult
-                if isinstance(cached_result, dict) and 'name' in cached_result:
-                    cached_tool_result = ToolResult(**cached_result)
-                    cached_tool_result.call_id = tool_call.call_id  # 更新call_id
-                    return cached_tool_result
-                else:
-                    # 兼容简单值缓存
-                    return ToolResult(
-                        name=tool_call.name,
-                        result=cached_result,
-                        success=True,
-                        call_id=tool_call.call_id,
-                        latency_ms=0.0,  # 缓存命中，延迟为0
-                        retries=0
-                    )
-            else:
-                global_observability.performance_monitor.record_cache_hit(tool_call.name, hit=False)
         
         handler = self._handlers.get(tool_call.name)
         if not handler:
@@ -155,8 +120,13 @@ class ToolRegistry:
                     tool_args = ToolCallValidator.sanitize_arguments(tool_args)
                     ok, err = ToolCallValidator.validate_json_schema(tool_args, schema.parameters)
                     if not ok:
+                        # 参数验证失败是不可重试的错误，直接抛出特殊异常
                         raise ValueError(f"参数验证失败: {err}")
+                except ValueError as ve:
+                    # 参数验证错误不应重试
+                    raise ve
                 except Exception as ve:
+                    # 其他验证异常也不应重试
                     raise ve
             # 自动注入模型参数
             if context and hasattr(handler, '__code__'):
@@ -209,28 +179,27 @@ class ToolRegistry:
                         retries=attempt,
                     )
                     
-                    # 缓存成功的结果
-                    if meta.cache_enabled:
-                        try:
-                            await global_tool_cache.put(
-                                tool_call.name, 
-                                tool_call.arguments,
-                                tool_result.dict(),  # 缓存整个ToolResult
-                                ttl=meta.cache_ttl
-                            )
-                            print(f"[Registry] 结果已缓存: {tool_call.name}")
-                        except Exception as cache_error:
-                            print(f"[Registry] 缓存保存失败: {cache_error}")
+                    # 缓存功能已简化
                     
                     return tool_result
                 except asyncio.TimeoutError as e:
                     last_error = e
                     print(f"[Registry] 工具超时: {tool_call.name} after {timeout_s}s (尝试 {attempt+1})")
+                except ValueError as e:
+                    # 参数验证失败等不可重试的错误，立即返回
+                    if "参数验证失败" in str(e):
+                        last_error = e
+                        print(f"[Registry] 工具执行异常: {tool_call.name}, 错误: {str(e)} (尝试 {attempt+1})")
+                        break  # 立即跳出重试循环
+                    else:
+                        last_error = e
+                        print(f"[Registry] 工具执行异常: {tool_call.name}, 错误: {str(e)} (尝试 {attempt+1})")
                 except Exception as e:
                     last_error = e
                     print(f"[Registry] 工具执行异常: {tool_call.name}, 错误: {str(e)} (尝试 {attempt+1})")
                 attempt += 1
-                if attempt <= max_retries:
+                if attempt <= max_retries and last_error and "参数验证失败" not in str(last_error):
+                    # 只有非参数验证错误才进行重试等待
                     # 指数退避 + 抖动
                     backoff = min(1.5 ** attempt, 10.0) * (0.5 + random.random())
                     try:
@@ -247,13 +216,10 @@ class ToolRegistry:
             self._cb_open_until[tool_call.name] = _time.monotonic() + open_seconds
             print(f"[Registry] 断路器打开: {tool_call.name} {open_seconds:.0f}s")
         
-        # 使用错误处理器处理最终错误
+        # 简化错误处理
         if last_error:
-            error_info = global_error_handler.handle_error(
-                last_error, 
-                context={'tool_name': tool_call.name, 'retries': max_retries}
-            )
-            error_message = error_info['user_message']
+            print(f"[Registry] 工具执行错误处理: {tool_call.name} - {str(last_error)}")
+            error_message = str(last_error)
         else:
             error_message = '未知错误'
         
@@ -316,9 +282,7 @@ def register_web_search_tool():
         timeout_s=600.0, 
         max_retries=1, 
         max_concurrency=4,
-        cache_enabled=True,
-        cache_ttl=1800.0,  # 30分钟缓存
-        cache_max_size=500
+        cache_enabled=False  # 简化系统，暂时禁用缓存
     )
     tool_registry.register_tool(web_search_schema, web_search, metadata=meta)
 

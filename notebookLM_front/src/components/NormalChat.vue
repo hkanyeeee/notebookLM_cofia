@@ -137,7 +137,7 @@ function isStatusMessage(content: string) {
             </ElCollapse>
           </div>
           <div class="message-text" v-if="message.content" v-html="marked(message.content)" :class="{ 'status-message': isStatusMessage(message.content) }"></div>
-          <div class="message-text" v-else>信息加载中...</div>
+          <div class="message-text" v-else>思考中...</div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
 
           <!-- Sources (for assistant messages) -->
@@ -163,7 +163,7 @@ function isStatusMessage(content: string) {
       <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">        
         <ElInput
           v-model="queryInput"
-          placeholder="请输入您的问题（将使用网络搜索）..."
+          placeholder="请输入您的问题..."
           class="query-input"
           type="textarea"
           :rows="2"
@@ -181,7 +181,7 @@ function isStatusMessage(content: string) {
         </ElButton>
       </div>
       <div class="input-hint">
-        <span>普通问答模式（已启用网络搜索）</span>
+        <span>普通问答模式</span>
       </div>
     </div>
   </div>
@@ -372,8 +372,6 @@ function isStatusMessage(content: string) {
 
 /* 状态消息样式 */
 .status-message {
-  background: #f7f7f8 !important;
-  border: 1px solid #e4e4e7 !important;
   border-radius: 8px !important;
   padding: 12px 16px !important;
   margin: 8px 0 !important;

@@ -8,6 +8,8 @@ from sqlalchemy.future import select
 from sqlalchemy import distinct
 import json
 
+from app.config import EMBEDDING_BATCH_SIZE
+
 from ..models import Source, Chunk
 from ..database import get_db
 from ..vector_db_client import query_hybrid
@@ -133,7 +135,7 @@ async def query_collection(
             query_embeddings = await embed_texts(
                 texts=[request.query],
                 model=DEFAULT_EMBEDDING_MODEL,
-                batch_size=1,
+                batch_size=EMBEDDING_BATCH_SIZE,
                 dimensions=1024
             )
             
@@ -341,7 +343,7 @@ async def query_collection_stream(
                 query_embeddings = await embed_texts(
                     texts=[request.query],
                     model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=1,
+                    batch_size=EMBEDDING_BATCH_SIZE,
                     dimensions=1024
                 )
                 

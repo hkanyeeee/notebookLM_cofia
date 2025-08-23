@@ -42,6 +42,11 @@ class HarmonyStrategy(BaseStrategy):
             tools_desc += "5. 禁止连续调用多个工具，执行一个工具后必须立即给出最终答案\n\n"
             tools_desc += "工具调用格式：\n"
             tools_desc += '<tool name="工具名称">{"参数名": "参数值"}</tool>\n\n'
+            tools_desc += "重要注意事项：\n"
+            tools_desc += "- 每个工具调用必须包含所有必需参数\n"
+            tools_desc += "- web_search 工具必须包含 'query' 参数\n"
+            tools_desc += "- 不要生成无效的参数如 'id', 'cursor' 等\n"
+            tools_desc += "- 工具执行完成后，基于结果直接给出最终答案，不要再次调用工具\n\n"
         else:
             tools_desc = "当前没有可用工具，请直接根据提供的参考资料回答问题。\n\n"
         

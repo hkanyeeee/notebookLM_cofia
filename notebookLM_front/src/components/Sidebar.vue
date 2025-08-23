@@ -198,7 +198,7 @@ function handleRemoveFailedUrl(url: string) {
         <div class="normal-overlay-content">
           <h4>普通问答模式</h4>
           <p>当前正在使用网络搜索进行问答</p>
-          <p class="normal-description">该模式将使用网络搜索为您提供最新的信息和答案</p>
+          <p class="normal-description">该模式将自动使用工具为您提供最新的信息和答案</p>
         </div>
       </div>
     </div>

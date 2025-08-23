@@ -228,7 +228,7 @@ function getInputPlaceholder() {
             </ElCollapse>
           </div>
           <div class="message-text" v-if="message.content" v-html="marked(message.content)" :class="{ 'status-message': isStatusMessage(message.content) }"></div>
-          <div class="message-text" v-else>信息加载中...</div>
+          <div class="message-text" v-else>思考中...</div>
           <div class="message-time">{{ formatTime(message.timestamp) }}</div>
 
           <!-- Sources (for assistant messages) -->
@@ -316,7 +316,7 @@ function getInputPlaceholder() {
       </div>
       <div class="input-hint">
         <span>
-          Collection问答模式{{ shouldUseWebSearch ? '（已启用网络搜索）' : '' }}：
+          Collection问答模式：
           {{ selectedCollection 
             ? collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知Collection' 
             : '请选择Collection' }}
@@ -627,8 +627,6 @@ function getInputPlaceholder() {
 
 /* 状态消息样式 */
 .status-message {
-  background: #f7f7f8 !important;
-  border: 1px solid #e4e4e7 !important;
   border-radius: 8px !important;
   padding: 12px 16px !important;
   margin: 8px 0 !important;

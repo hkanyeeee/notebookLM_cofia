@@ -48,6 +48,8 @@ async def query(
     tool_mode = data.get("tool_mode", "auto")  # "off" | "auto" | "json" | "react" | "harmony"
     tools_data = data.get("tools", [])  # 工具定义列表
     max_steps = data.get("max_steps", 6)  # 最大执行步数
+    query_type = data.get("query_type", "normal")  # 查询类型
+    conversation_history = data.get("conversation_history", [])  # 消息历史
     
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
@@ -197,15 +199,14 @@ async def query(
             # 无效的工具模式，使用默认值
             tool_mode_enum = ToolMode.AUTO
         
-        # 解析工具定义（当前为空列表，后续可扩展）
+        # 解析工具定义（前端传递的工具配置）
         tools_schemas = []
-        if tools_data:
-            for tool_data in tools_data:
-                try:
-                    schema = ToolSchema(**tool_data)
-                    tools_schemas.append(schema)
-                except Exception as e:
-                    print(f"解析工具定义失败: {e}")
+        for tool_data in tools_data:
+            try:
+                schema = ToolSchema(**tool_data)
+                tools_schemas.append(schema)
+            except Exception as e:
+                print(f"解析工具定义失败: {e}")
         
         run_config = RunConfig(
             tool_mode=tool_mode_enum,
@@ -217,10 +218,15 @@ async def query(
         # 判断是否使用工具功能
         use_tools = StrategySelector.should_use_tools(run_config, llm_model)
         
+        # 检查是否是普通问答模式，如果是则使用智能编排器
+        use_intelligent_orchestrator = (query_type == "normal" and use_tools)
+        
         if not stream:
             # 非流式响应
             if use_tools:
-                result = await generate_answer_with_tools(q, contexts, run_config)
+                result = await generate_answer_with_tools(
+                    q, contexts, run_config, use_intelligent_orchestrator
+                )
                 sources = [
                     {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
                     for chunk, score in final_hits
@@ -234,7 +240,9 @@ async def query(
                 }
             else:
                 # 使用传统问答
-                answer = await generate_answer(q, contexts, model=llm_model)
+                # 只有普通问答模式才传入消息历史
+                history = conversation_history if query_type == "normal" else None
+                answer = await generate_answer(q, contexts, model=llm_model, conversation_history=history)
                 sources = [
                     {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
                     for chunk, score in final_hits
@@ -246,7 +254,9 @@ async def query(
                 try:
                     if use_tools:
                         # 使用工具流式问答
-                        async for event in stream_answer_with_tools(q, contexts, run_config):
+                        async for event in stream_answer_with_tools(
+                            q, contexts, run_config, use_intelligent_orchestrator
+                        ):
                             et = event.get("type")
                             if et == "reasoning":
                                 yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(event['content'], ensure_ascii=False)} }}\n\n"
@@ -281,7 +291,9 @@ async def query(
                                 }, ensure_ascii=False) + "\n\n"
                     else:
                         # 使用传统流式问答
-                        async for delta in stream_answer(q, contexts, model=llm_model):
+                        # 只有普通问答模式才传入消息历史
+                        history = conversation_history if query_type == "normal" else None
+                        async for delta in stream_answer(q, contexts, model=llm_model, conversation_history=history):
                             if delta["type"] == "reasoning":
                                 yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
                             elif delta["type"] == "content":

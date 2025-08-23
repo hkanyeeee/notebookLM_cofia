@@ -8,14 +8,16 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
+from difflib import SequenceMatcher
 
 from ..config import (
-    LLM_SERVICE_URL, SEARXNG_QUERY_URL,
+    EMBEDDING_BATCH_SIZE, LLM_SERVICE_URL, SEARXNG_QUERY_URL,
     WEB_SEARCH_RESULT_COUNT, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS,
     WEB_SEARCH_CONCURRENT_REQUESTS, WEB_SEARCH_TIMEOUT,
     WEB_LOADER_ENGINE, PLAYWRIGHT_TIMEOUT,
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
-    CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K
+    CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K,
+    WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE
 )
 # 移除模块级别的导入，避免循环导入
 # from ..llm_client import DEFAULT_CHAT_MODEL
@@ -26,6 +28,7 @@ from ..vector_db_client import add_embeddings, query_hybrid
 from ..rerank_client import rerank
 from ..models import Chunk, Source
 from ..database import AsyncSessionLocal
+from ..cache import get_web_content_cache
 
 
 class WebSearchTool:
@@ -34,18 +37,116 @@ class WebSearchTool:
     def __init__(self):
         self.name = "web_search"
         self.description = "搜索网络信息，爬取相关网页内容，并进行向量化索引和智能召回"
-        pass  # 缓存现在由统一的缓存系统处理
+        
+        # 初始化缓存（如果启用）
+        if WEB_CACHE_ENABLED:
+            self.cache = get_web_content_cache()
+            # 更新缓存配置
+            self.cache.max_cache_size = WEB_CACHE_MAX_SIZE
+            self.cache.default_ttl = WEB_CACHE_TTL_SECONDS
+            self.cache.max_content_size = WEB_CACHE_MAX_CONTENT_SIZE
+            print(f"[WebSearch] 缓存已启用 (max_size={WEB_CACHE_MAX_SIZE}, ttl={WEB_CACHE_TTL_SECONDS}s)")
+        else:
+            self.cache = None
+            print("[WebSearch] 缓存已禁用")
+        
+        # 搜索结果缓存和去重
+        self.search_result_cache = {}  # 基于查询fingerprint的搜索结果缓存
+        self.executed_queries = set()  # 已执行的查询fingerprint集合
 
     def _normalize_query(self, text: str) -> str:
         if not isinstance(text, str):
             return ""
         s = text.strip().lower()
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？“”\"'`（）()\[\]{}]", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\[\]{}]", "", s)
         s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
         return s
 
-    # _fingerprint 方法已移除，缓存键生成由统一缓存系统处理
+    def _generate_search_fingerprint(self, queries: List[str], language: str = "en-US", categories: str = "") -> str:
+        """生成搜索查询的fingerprint，用于去重和缓存"""
+        normalized_queries = sorted([self._normalize_query(q) for q in queries if q.strip()])
+        params_str = f"lang:{language}|cat:{categories}"
+        fingerprint = f"queries:{'|'.join(normalized_queries)}|{params_str}"
+        return fingerprint
+    
+    def _similarity_check(self, fp1: str, fp2: str) -> float:
+        """检查两个fingerprint的相似度 (0-1)"""
+        # 提取查询部分
+        try:
+            queries1 = set(fp1.split('|')[0].replace('queries:', '').split('|'))
+            queries2 = set(fp2.split('|')[0].replace('queries:', '').split('|'))
+            
+            if not queries1 or not queries2:
+                return 0.0
+            
+            # 计算Jaccard相似度
+            intersection = len(queries1.intersection(queries2))
+            union = len(queries1.union(queries2))
+            return intersection / union if union > 0 else 0.0
+        except:
+            return 0.0
+    
+    def _calculate_content_similarity(self, text1: str, text2: str) -> float:
+        """计算两个文本内容的相似度 (0-1)"""
+        if not text1 or not text2:
+            return 0.0
+        
+        # 标准化文本（去除空白字符和标点）
+        def normalize_text(text):
+            # 移除多余空白和常见标点
+            normalized = re.sub(r'\s+', ' ', text.strip())
+            normalized = re.sub(r'[^\w\s\u4e00-\u9fff]', '', normalized)  # 保留中英文字符
+            return normalized.lower()
+        
+        norm_text1 = normalize_text(text1)
+        norm_text2 = normalize_text(text2)
+        
+        # 使用SequenceMatcher计算相似度
+        similarity = SequenceMatcher(None, norm_text1, norm_text2).ratio()
+        return similarity
+    
+    def _deduplicate_documents(self, documents: List[Dict[str, str]], similarity_threshold: float = 0.8) -> List[Dict[str, str]]:
+        """
+        对文档进行内容去重
+        
+        Args:
+            documents: 文档列表
+            similarity_threshold: 相似度阈值，超过此值认为是重复内容
+        
+        Returns:
+            去重后的文档列表
+        """
+        if not documents:
+            return documents
+        
+        unique_documents = []
+        removed_count = 0
+        
+        for doc in documents:
+            content = doc.get("content", "")
+            if not content.strip():
+                continue  # 跳过空内容
+            
+            # 检查是否与已有文档重复
+            is_duplicate = False
+            for existing_doc in unique_documents:
+                existing_content = existing_doc.get("content", "")
+                similarity = self._calculate_content_similarity(content, existing_content)
+                
+                if similarity > similarity_threshold:
+                    print(f"[WebSearch] 发现重复内容(相似度:{similarity:.2f})，跳过: {doc['url']}")
+                    is_duplicate = True
+                    removed_count += 1
+                    break
+            
+            if not is_duplicate:
+                unique_documents.append(doc)
+        
+        if removed_count > 0:
+            print(f"[WebSearch] 内容去重完成，移除了 {removed_count} 个重复文档，保留 {len(unique_documents)} 个")
+        
+        return unique_documents
     
     async def generate_search_queries(self, topic: str, model: str = None) -> List[str]:
         """生成搜索关键词"""
@@ -161,8 +262,16 @@ class WebSearchTool:
             return []
     
     async def fetch_web_content(self, url: str) -> Optional[str]:
-        """爬取网页内容"""
+        """爬取网页内容，支持缓存"""
+        # 如果启用缓存，先检查缓存
+        if self.cache and WEB_CACHE_ENABLED:
+            cached_content = self.cache.get(url)
+            if cached_content is not None:
+                return cached_content
+        
+        # 缓存未命中或未启用缓存，进行实际爬取
         try:
+            content = None
             if WEB_LOADER_ENGINE == "playwright":
                 # 使用 Playwright 渲染模式
                 content = await fetch_rendered_text(
@@ -178,11 +287,12 @@ class WebSearchTool:
                     timeout=WEB_SEARCH_TIMEOUT
                 )
             
-            # 限制内容长度
-            # if content and len(content) > WEB_SEARCH_MAX_CONTENT_LENGTH:
-            #     content = content[:WEB_SEARCH_MAX_CONTENT_LENGTH] + "..."
+            # 如果成功获取内容且启用缓存，将内容存入缓存
+            if content and self.cache and WEB_CACHE_ENABLED:
+                self.cache.put(url, content)
             
             return content
+            
         except Exception as e:
             print(f"爬取网页内容失败 {url}: {e}")
             return None
@@ -276,7 +386,7 @@ class WebSearchTool:
                 embeddings = await embed_texts(
                     chunk_texts,
                     model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=2
+                    batch_size=EMBEDDING_BATCH_SIZE
                 )
                 all_embeddings_flat.extend(embeddings)
             
@@ -334,7 +444,9 @@ class WebSearchTool:
         language: str = "en-US",
         categories: str = "",
         filter_list: Optional[List[str]] = None,
-        model: str = None
+        model: str = None,
+        predefined_queries: Optional[List[str]] = None,
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """执行完整的 Web 搜索流程
         
@@ -344,14 +456,15 @@ class WebSearchTool:
             categories: 搜索类别列表，默认为 ""
             filter_list: 域名过滤列表，用于过滤搜索结果
             model: 用于关键词生成的LLM模型名称，默认使用系统配置
+            predefined_queries: 预定义的搜索关键词列表，如果提供则跳过关键词生成
+            session_id: 会话ID，如果提供则使用此ID而不是生成新的
             
         Returns:
             包含搜索结果和召回内容的字典
         """
-        # 缓存现在由统一缓存系统处理，此处移除原有缓存逻辑
-
-        # 内部自动生成会话ID
-        session_id = str(uuid.uuid4())
+        # 使用提供的session_id或生成新的
+        if not session_id:
+            session_id = str(uuid.uuid4())
         
         result = {
             "session_id": session_id,
@@ -362,22 +475,55 @@ class WebSearchTool:
             "success": True,
             "message": "",
             "cached": False,
+            "reused": False,
+            "similar_query": None,
             "metrics": {
                 "step_durations_ms": {}
             }
         }
         
         try:
-            # 1. 生成搜索关键词
-            print(f"[WebSearch] 开始生成搜索关键词...")
-            t0 = time.perf_counter()
-            queries = await self.generate_search_queries(query, model)
-            self_time = (time.perf_counter() - t0) * 1000.0
-            result["metrics"]["step_durations_ms"]["generate_queries"] = self_time
-            print(f"[WebSearch] 生成搜索关键词耗时: {self_time/1000.0:.2f}s")
-            print(f"[WebSearch] 生成的搜索关键词: {queries}")
+            # 1. 使用预定义的搜索关键词或生成新的
+            if predefined_queries and predefined_queries[0].strip():
+                queries = predefined_queries
+                print(f"[WebSearch] 使用预定义搜索关键词: {queries}")
+                result["metrics"]["step_durations_ms"]["generate_queries"] = 0
+            else:
+                print(f"[WebSearch] 开始生成搜索关键词...")
+                t0 = time.perf_counter()
+                queries = await self.generate_search_queries(query, model)
+                self_time = (time.perf_counter() - t0) * 1000.0
+                result["metrics"]["step_durations_ms"]["generate_queries"] = self_time
+                print(f"[WebSearch] 生成搜索关键词耗时: {self_time/1000.0:.2f}s")
+                print(f"[WebSearch] 生成的搜索关键词: {queries}")
             
-            # 2. 并发搜索
+            # 2. 生成搜索fingerprint并检查缓存和去重
+            fingerprint = self._generate_search_fingerprint(queries, language, categories)
+            print(f"[WebSearch] 搜索fingerprint: {fingerprint}")
+            
+            # 检查完全匹配的缓存
+            if fingerprint in self.search_result_cache:
+                cached_result = self.search_result_cache[fingerprint]
+                print("[WebSearch] 发现完全匹配的缓存结果，直接返回")
+                cached_result["cached"] = True
+                return cached_result
+            
+            # 检查相似查询（相似度>0.7认为是重复）
+            similar_threshold = 0.7
+            for existing_fp in self.executed_queries:
+                similarity = self._similarity_check(fingerprint, existing_fp)
+                if similarity > similar_threshold:
+                    if existing_fp in self.search_result_cache:
+                        cached_result = self.search_result_cache[existing_fp]
+                        print(f"[WebSearch] 发现相似查询(相似度:{similarity:.2f})，复用结果")
+                        cached_result["reused"] = True
+                        cached_result["similar_query"] = existing_fp
+                        return cached_result
+            
+            # 记录此次查询
+            self.executed_queries.add(fingerprint)
+            
+            # 3. 并发搜索
             print(f"[WebSearch] 开始并发搜索...")
             t1 = time.perf_counter()
             search_tasks = [self.search_searxng(q, language, categories) for q in queries]
@@ -435,10 +581,10 @@ class WebSearchTool:
                 result["metrics"]["step_durations_ms"]["crawl_first_batch"] = first_batch_time
                 result["metrics"]["step_durations_ms"]["crawl_remaining_batches"] = (time.perf_counter() - t2b) * 1000.0
                 # 组装文档
-                documents = []
+                raw_documents = []
                 for item, content in zip(all_results, contents):
                     if isinstance(content, str) and content:
-                        documents.append({
+                        raw_documents.append({
                             "url": item["url"],
                             "title": item["title"],
                             "content": content,
@@ -448,7 +594,10 @@ class WebSearchTool:
                     else:
                         print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}: {str(content)[:100] if content else 'None'}")
                 
-                print(f"成功爬取 {len(documents)} 个网页")
+                print(f"成功爬取 {len(raw_documents)} 个网页")
+                
+                # 对文档进行内容去重
+                documents = self._deduplicate_documents(raw_documents, similarity_threshold=0.8)
                 result["search_results"] = documents
                 
                 if documents:
@@ -501,7 +650,17 @@ class WebSearchTool:
             result["message"] = f"Web 搜索执行失败: {str(e)}"
             print(f"Web 搜索工具执行错误: {e}")
         
-        # 缓存写入由统一缓存系统处理，移除原有缓存逻辑
+        # 将成功的搜索结果存入缓存
+        if result["success"] and result["retrieved_content"]:
+            self.search_result_cache[fingerprint] = result.copy()
+            print(f"[WebSearch] 搜索结果已存入缓存，fingerprint: {fingerprint}")
+            
+            # 限制缓存大小，移除最老的条目
+            if len(self.search_result_cache) > 50:  # 限制最多缓存50个查询结果
+                oldest_fp = next(iter(self.search_result_cache))
+                del self.search_result_cache[oldest_fp]
+                self.executed_queries.discard(oldest_fp)
+                print("[WebSearch] 缓存已满，移除最老的条目")
 
         return result
 
@@ -517,6 +676,8 @@ async def web_search(
     categories: str = "",
     filter_list: Optional[List[str]] = None,
     model: str = None,
+    predefined_queries: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
     **kwargs  # 接受额外的参数用于向后兼容
 ) -> str:
     """Web 搜索工具函数
@@ -527,6 +688,8 @@ async def web_search(
         categories: 搜索类别列表，默认为 ""
         filter_list: 域名过滤列表，用于过滤搜索结果
         model: 用于关键词生成的LLM模型名称，默认使用系统配置
+        predefined_queries: 预定义的搜索关键词列表，如果提供则跳过关键词生成
+        session_id: 会话ID，如果提供则使用此ID而不是生成新的
         **kwargs: 额外参数（用于向后兼容）
     
     Returns:
@@ -543,7 +706,7 @@ async def web_search(
         # topn参数目前没有直接映射，可以记录日志或忽略
         print(f"[WebSearch] 注意：topn参数 ({kwargs['topn']}) 当前未使用")
     
-    result = await web_search_tool.execute(query, language, categories, filter_list, model)
+    result = await web_search_tool.execute(query, language, categories, filter_list, model, predefined_queries, session_id)
     
     # 构建返回的摘要信息
     if result["success"]:

@@ -23,7 +23,7 @@ async def _embed_batch(texts: List[str], model: str, client: httpx.AsyncClient, 
     # OpenAI API 保证输出顺序与输入顺序一致
     return [item["embedding"] for item in data["data"]]
 
-async def embed_texts(texts: List[str], model: str = DEFAULT_EMBEDDING_MODEL, batch_size: int = 8, dimensions: Optional[int] = None) -> List[List[float]]:
+async def embed_texts(texts: List[str], model: str = DEFAULT_EMBEDDING_MODEL, batch_size: int = 4, dimensions: Optional[int] = None) -> List[List[float]]:
     """
     调用 embedding 服务接口，将文本列表转为向量列表。
     支持分批处理以避免单个请求过大。

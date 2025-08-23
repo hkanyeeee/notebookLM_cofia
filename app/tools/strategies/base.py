@@ -6,11 +6,7 @@ from typing import Dict, List, Any, Optional, AsyncGenerator, Union
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
 from ..registry import tool_registry
 from ..parsers import ToolCallValidator
-from ..errors import (
-    global_error_handler, ToolSystemError, NetworkError, TimeoutError, 
-    ValidationError, PermissionError, ToolExecutionError, RateLimitError
-)
-from ..observability import global_observability
+# 错误处理和可观测性功能已简化
 
 
 class BaseStrategy(ABC):
@@ -19,7 +15,7 @@ class BaseStrategy(ABC):
     def __init__(self, llm_service_url: str):
         self.llm_service_url = llm_service_url
         self._http_client: Optional[httpx.AsyncClient] = None
-        self.logger = global_observability.get_logger(f"strategy.{self.__class__.__name__.lower()}")
+        # 简化日志系统
     
     async def get_http_client(self) -> httpx.AsyncClient:
         """获取HTTP客户端（单例模式，复用连接）"""
@@ -72,50 +68,45 @@ class BaseStrategy(ABC):
         
         url = f"{self.llm_service_url}/chat/completions"
         
-        self.logger.debug("调用LLM服务", url=url, model=payload.get('model'), stream=stream)
+        print(f"[BaseStrategy] 调用LLM服务: {self.__class__.__name__} - {url}, model={payload.get('model')}, stream={stream}")
         
         try:
-            with global_observability.metrics_collector.timer('llm_request_duration_ms', {'model': payload.get('model', 'unknown')}):
-                client = await self.get_http_client()
+            # 指标收集已简化
+            client = await self.get_http_client()
+            
+            if stream:
+                return client.stream("POST", url, json=payload)
+            else:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
                 
-                if stream:
-                    return client.stream("POST", url, json=payload)
-                else:
-                    response = await client.post(url, json=payload)
-                    response.raise_for_status()
-                    result = response.json()
-                    
-                    self.logger.info("LLM调用成功", 
-                                   model=payload.get('model'), 
-                                   response_size=len(str(result)))
-                    return result
+                print(f"[BaseStrategy] LLM调用成功: {self.__class__.__name__} - model={payload.get('model')}, response_size={len(str(result))}")
+                return result
                 
         except httpx.TimeoutException as e:
-            self.logger.error("LLM服务调用超时", error=str(e), url=url)
-            global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'timeout'})
-            raise TimeoutError(f"LLM服务调用超时: {str(e)}", original_exception=e)
+            print(f"[BaseStrategy] LLM服务调用超时: {self.__class__.__name__} - {str(e)}, url={url}")
+            print(f"[BaseStrategy] LLM请求超时: {self.__class__.__name__}")
+            raise TimeoutError(f"LLM服务调用超时: {str(e)}")
         except httpx.NetworkError as e:
-            self.logger.error("LLM网络连接错误", error=str(e), url=url)
-            global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'network'})
-            raise NetworkError(f"网络连接错误: {str(e)}", original_exception=e)
+            print(f"[BaseStrategy] LLM网络连接错误: {self.__class__.__name__} - {str(e)}, url={url}")
+            print(f"[BaseStrategy] 网络错误: {self.__class__.__name__}")
+            raise ConnectionError(f"网络连接错误: {str(e)}")
         except httpx.HTTPStatusError as e:
-            self.logger.error("LLM HTTP错误", 
-                            status_code=e.response.status_code, 
-                            error=str(e), 
-                            url=url)
+            print(f"[BaseStrategy] LLM HTTP错误: {self.__class__.__name__} - status_code={e.response.status_code}, error={str(e)}, url={url}")
             if e.response.status_code == 429:
-                global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'rate_limit'})
-                raise RateLimitError(f"请求频率过高: {str(e)}", original_exception=e)
+                print(f"[BaseStrategy] 频率限制: {self.__class__.__name__}")
+                raise ValueError(f"请求频率过高: {str(e)}")
             elif e.response.status_code in [401, 403]:
-                global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'auth'})
-                raise PermissionError(f"认证或权限错误: {str(e)}", original_exception=e)
+                print(f"[BaseStrategy] 认证错误: {self.__class__.__name__}")
+                raise PermissionError(f"认证或权限错误: {str(e)}")
             else:
-                global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'http_error'})
-                raise NetworkError(f"HTTP错误 {e.response.status_code}: {str(e)}", original_exception=e)
+                print(f"[BaseStrategy] HTTP错误: {self.__class__.__name__}")
+                raise ConnectionError(f"HTTP错误 {e.response.status_code}: {str(e)}")
         except Exception as e:
-            self.logger.error("LLM调用未知错误", error=str(e), error_type=type(e).__name__, url=url)
-            global_observability.metrics_collector.counter('llm_requests_failed', 1.0, {'reason': 'unknown'})
-            raise ToolSystemError(f"LLM调用出现未知错误: {str(e)}", original_exception=e)
+            print(f"[BaseStrategy] LLM调用未知错误: {self.__class__.__name__} - error={str(e)}, error_type={type(e).__name__}, url={url}")
+            print(f"[BaseStrategy] 未知错误: {self.__class__.__name__}")
+            raise RuntimeError(f"LLM调用出现未知错误: {str(e)}")
     
     def validate_tool_call(self, tool_call: ToolCall, context: ToolExecutionContext) -> Optional[ToolResult]:
         """验证工具调用，如果有问题返回错误结果"""
@@ -194,10 +185,8 @@ class BaseStrategy(ABC):
     def create_error_step(self, error_msg: str, error: Optional[Exception] = None) -> Step:
         """创建错误步骤"""
         if error:
-            error_info = global_error_handler.handle_error(error, context={'strategy': self.__class__.__name__})
-            content = f"执行出错: {error_info['user_message']}"
-            if error_info['recovery_attempted']:
-                content += f" ({error_info['recovery_details'].get('details', '已尝试自动恢复')})"
+            print(f"[BaseStrategy] 策略执行错误: {self.__class__.__name__} - {str(error)}")
+            content = f"执行出错: {str(error)}"
         else:
             content = f"执行出错: {error_msg}"
         
