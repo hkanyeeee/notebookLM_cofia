@@ -116,7 +116,7 @@ export function useMessageStore() {
               if (!accumulatedContent && isToolRunning) {
                 messages.value[messageIndex] = {
                   ...messages.value[messageIndex],
-                  content: '🔍 正在处理工具结果，请稍候...',
+                  content: '正在思考...',
                 };
               } else {
                 accumulatedContent += evt.content;
@@ -131,9 +131,9 @@ export function useMessageStore() {
               const toolName = evt.tool_name || evt.name || 'unknown';
               let statusMessage = '';
               if (toolName === 'web_search') {
-                statusMessage = '🔍 正在搜索网络信息...';
+                statusMessage = '搜索中...';
               } else {
-                statusMessage = `🔧 正在调用工具: ${toolName}...`;
+                statusMessage = '正在思考...';
               }
               messages.value[messageIndex] = {
                 ...messages.value[messageIndex],
@@ -145,9 +145,9 @@ export function useMessageStore() {
               const toolName = evt.tool_name || evt.name || 'unknown';
               let statusMessage = '';
               if (toolName === 'web_search') {
-                statusMessage = '✅ 网络搜索完成，正在生成回答...';
+                statusMessage = '再次思考中...';
               } else {
-                statusMessage = `✅ 工具 ${toolName} 执行完成，正在处理结果...`;
+                statusMessage = '再次思考中...';
               }
               messages.value[messageIndex] = {
                 ...messages.value[messageIndex],

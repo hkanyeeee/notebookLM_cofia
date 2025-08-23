@@ -12,7 +12,7 @@ export type { Document, Source, Message, IngestionProgress } from './types'
 
 export const useNotebookStore = defineStore('notebook', () => {
   // 问答类型状态
-  const queryType = ref<QueryType>(QueryType.DOCUMENT) // 默认为文档问答
+  const queryType = ref<QueryType>(QueryType.NORMAL) // 默认为普通问答
 
   // 初始化各个子store
   const documentStore = useDocumentStore()

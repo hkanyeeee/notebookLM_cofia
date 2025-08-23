@@ -247,23 +247,28 @@ async def query(
                     if use_tools:
                         # 使用工具流式问答
                         async for event in stream_answer_with_tools(q, contexts, run_config):
-                            if event.get("type") == "reasoning":
+                            et = event.get("type")
+                            if et == "reasoning":
                                 yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(event['content'], ensure_ascii=False)} }}\n\n"
-                            elif event.get("type") == "content":
+                            elif et == "content":
                                 yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(event['content'], ensure_ascii=False)} }}\n\n"
-                            elif event.get("type") == "action":
+                            # 为 Harmony/JSON 统一透传工具相关事件
+                            elif et in ("tool_call", "action"):
                                 yield "data: " + json.dumps({
-                                    "type": "action",
-                                    "name": event["name"],
-                                    "args": event["args"]
+                                    "type": "tool_call",
+                                    "name": event.get("name"),
+                                    "tool_name": event.get("tool_name") or event.get("name"),
+                                    "args": event.get("args", {})
                                 }, ensure_ascii=False) + "\n\n"
-                            elif event.get("type") == "observation":
+                            elif et in ("tool_result", "observation"):
                                 yield "data: " + json.dumps({
-                                    "type": "observation",
-                                    "name": event["name"],
-                                    "result": event["result"]
+                                    "type": "tool_result",
+                                    "name": event.get("name"),
+                                    "tool_name": event.get("tool_name") or event.get("name"),
+                                    "result": event.get("result"),
+                                    "success": event.get("success", True)
                                 }, ensure_ascii=False) + "\n\n"
-                            elif event.get("type") == "error":
+                            elif et == "error":
                                 yield "data: " + json.dumps({
                                     "type": "error",
                                     "message": event["message"]

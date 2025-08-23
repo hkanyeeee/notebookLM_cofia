@@ -1,6 +1,7 @@
 """Harmony DSL 策略实现"""
 import json
 import httpx
+import re
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
 from ..registry import tool_registry
@@ -16,11 +17,9 @@ class HarmonyStrategy:
     def build_system_prompt(self, context: ToolExecutionContext) -> str:
         """构建 Harmony DSL 系统提示"""
         base_prompt = (
-            "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，"
-            "根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析；"
-            "你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；"
-            "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、"
-            "根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
+            "你是一位严谨的助手"
+            "根据问题进行多角度推理，合理使用工具，结合你自己的知识提供直击题干的回答和分析；"
+            "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
             "必须使用中文进行回答。\n\n"
         )
         
@@ -107,6 +106,38 @@ class HarmonyStrategy:
         remaining_content = remaining_content.strip()
         
         return tool_calls, remaining_content
+
+    def _normalize_query(self, text: str) -> str:
+        """对查询文本做温和归一化，避免无意义重复调用。
+        - 小写
+        - 去除空白与常见标点
+        - 少量中文同义词归一：今日→今天，明日→明天，重庆市→重庆
+        """
+        if not isinstance(text, str):
+            return ""
+        s = text.strip().lower()
+        # 去空白与标点
+        s = re.sub(r"\s+", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？“”\"'`（）()\[\]{}]", "", s)
+        # 简单中文同义归一
+        s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
+        return s
+
+    def _fingerprint_web_search(self, arguments: Dict[str, Any]) -> str:
+        """根据 web_search 的入参生成指纹。仅当参数本质相同才认为重复。
+        参与指纹的字段：query、language、categories、filter_list、model
+        其中 query 做温和归一化；filter_list 排序并归一化大小写。
+        """
+        query = self._normalize_query(str(arguments.get("query", "")))
+        language = str(arguments.get("language", "")).strip().lower()
+        categories = str(arguments.get("categories", "")).strip().lower()
+        model = str(arguments.get("model", "")).strip()
+        filters = arguments.get("filter_list") or []
+        if isinstance(filters, list):
+            filters_norm = ",".join(sorted([str(x).strip().lower() for x in filters]))
+        else:
+            filters_norm = str(filters).strip().lower()
+        return f"web_search|q={query}|lang={language}|cat={categories}|filters={filters_norm}|model={model}"
     
     async def execute_step(self, context: ToolExecutionContext) -> Optional[Step]:
         """执行单个步骤"""
@@ -133,6 +164,29 @@ class HarmonyStrategy:
             if tool_calls:
                 tool_call = tool_calls[0]  # 一次处理一个工具调用
                 print(f"[Harmony Strategy] 准备执行工具: {tool_call.name}")
+                
+                # 对 web_search 做跨步骤去重：若上下文中已有等价调用且有结果，则复用
+                if tool_call.name == "web_search":
+                    new_fp = self._fingerprint_web_search(tool_call.arguments)
+                    reused_result: Optional[ToolResult] = None
+                    # 从后往前查找最近一次相同指纹的调用结果
+                    for prev in reversed(context.steps):
+                        if prev.tool_call and prev.tool_call.name == "web_search" and prev.tool_result:
+                            try:
+                                prev_fp = self._fingerprint_web_search(prev.tool_call.arguments or {})
+                            except Exception:
+                                continue
+                            if prev_fp == new_fp:
+                                reused_result = prev.tool_result
+                                break
+                    if reused_result is not None:
+                        print("[Harmony Strategy] 去重：复用前次相同 web_search 结果")
+                        return Step(
+                            step_type=StepType.OBSERVATION,
+                            content=f"工具执行结果：{reused_result.result}",
+                            tool_call=tool_call,
+                            tool_result=reused_result
+                        )
                 
                 # 验证工具调用
                 if not tool_registry.is_allowed(tool_call.name):
@@ -198,6 +252,9 @@ class HarmonyStrategy:
     async def stream_execute_step(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行单个步骤"""
         payload = self.build_payload(context)
+        # 重要：开启流式返回，确保 LLM 以 SSE 形式输出增量结果
+        # 否则将不会产生以 "data:" 开头的行，导致前端一直停留在“信息加载中”。
+        payload["stream"] = True
         
         try:
             url = f"{self.llm_service_url}/chat/completions"
@@ -208,7 +265,12 @@ class HarmonyStrategy:
                     
                     accumulated_content = ""
                     in_tool_block = False
+                    in_channel_block = False
                     current_tool_content = ""
+                    current_channel_content = ""
+                    # 本轮流式内的去重缓存
+                    executed_fingerprints = set()
+                    fingerprint_to_result: Dict[str, ToolResult] = {}
                     
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data:"):
@@ -234,32 +296,63 @@ class HarmonyStrategy:
                             
                             accumulated_content += delta_text
                             
-                            # 检查是否在工具块中
-                            if "<tool" in delta_text:
-                                in_tool_block = True
-                                current_tool_content += delta_text
-                            elif in_tool_block:
-                                current_tool_content += delta_text
-                                if "</tool>" in delta_text:
-                                    # 工具块结束，解析工具调用
-                                    tool_calls = HarmonyParser.parse_tool_calls(current_tool_content)
+                            # 检查是否在 Channel Commentary 块中（GPT OSS 格式）
+                            if "<|channel|>" in delta_text and not in_channel_block:
+                                in_channel_block = True
+                                current_channel_content = delta_text
+                                print(f"[Harmony Stream] 检测到 Channel Commentary 开始: {delta_text[:50]}...")
+                            elif in_channel_block:
+                                current_channel_content += delta_text
+                                # 检查是否有完整的工具调用信息（包含 JSON 部分）
+                                if "}" in current_channel_content:
+                                    print(f"[Harmony Stream] Channel Commentary 内容: {current_channel_content}")
+                                    # 尝试解析完整的工具调用
+                                    tool_calls = HarmonyParser.parse_tool_calls(current_channel_content)
                                     if tool_calls:
                                         tool_call = tool_calls[0]
+                                        print(f"[Harmony Stream] 解析出工具调用: {tool_call.name}, 参数: {tool_call.arguments}")
                                         
                                         yield {
-                                            "type": "action",
+                                            "type": "tool_call",
                                             "name": tool_call.name,
+                                            "tool_name": tool_call.name,
                                             "args": tool_call.arguments
                                         }
                                         
                                         # 执行工具
                                         if tool_registry.is_allowed(tool_call.name):
-                                            tool_result = await tool_registry.execute_tool(tool_call)
+                                            # 对 web_search 做单轮去重复用
+                                            if tool_call.name == "web_search":
+                                                fp = self._fingerprint_web_search(tool_call.arguments)
+                                                if fp in executed_fingerprints:
+                                                    print("[Harmony Stream] 去重：跳过重复 web_search，复用前次结果")
+                                                    reused = fingerprint_to_result.get(fp)
+                                                    if reused is not None:
+                                                        yield {
+                                                            "type": "tool_result",
+                                                            "name": tool_call.name,
+                                                            "tool_name": tool_call.name,
+                                                            "result": str(reused.result),
+                                                            "success": reused.success
+                                                        }
+                                                        context.add_step(Step(
+                                                            step_type=StepType.OBSERVATION,
+                                                            content=f"工具执行结果：{reused.result}",
+                                                            tool_result=reused
+                                                        ))
+                                                        in_channel_block = False
+                                                        current_channel_content = ""
+                                                        continue
+                                            print(f"[Harmony Stream] 开始执行工具: {tool_call.name}")
+                                            tool_result = await tool_registry.execute_tool(tool_call, context)
+                                            print(f"[Harmony Stream] 工具执行完成: 成功={tool_result.success}")
                                             
                                             yield {
-                                                "type": "observation",
+                                                "type": "tool_result",
                                                 "name": tool_call.name,
-                                                "result": str(tool_result.result)
+                                                "tool_name": tool_call.name,
+                                                "result": str(tool_result.result),
+                                                "success": tool_result.success
                                             }
                                             
                                             # 添加步骤到上下文
@@ -274,26 +367,117 @@ class HarmonyStrategy:
                                                 content=f"工具执行结果：{tool_result.result}",
                                                 tool_result=tool_result
                                             ))
+                                            # 记录指纹结果，便于后续复用
+                                            if tool_call.name == "web_search":
+                                                fp = self._fingerprint_web_search(tool_call.arguments)
+                                                executed_fingerprints.add(fp)
+                                                fingerprint_to_result[fp] = tool_result
                                         else:
                                             yield {
-                                                "type": "observation",
+                                                "type": "tool_result",
                                                 "name": tool_call.name,
-                                                "result": f"工具 '{tool_call.name}' 不在允许列表中"
+                                                "tool_name": tool_call.name,
+                                                "result": f"工具 '{tool_call.name}' 不在允许列表中",
+                                                "success": False
+                                            }
+                                    
+                                    in_channel_block = False
+                                    current_channel_content = ""
+                            # 检查是否在标准工具块中
+                            elif "<tool" in delta_text and not in_tool_block:
+                                in_tool_block = True
+                                current_tool_content = delta_text
+                            elif in_tool_block:
+                                current_tool_content += delta_text
+                                if "</tool>" in delta_text:
+                                    # 工具块结束，解析工具调用
+                                    tool_calls = HarmonyParser.parse_tool_calls(current_tool_content)
+                                    if tool_calls:
+                                        tool_call = tool_calls[0]
+                                        
+                                        yield {
+                                            "type": "tool_call",
+                                            "name": tool_call.name,
+                                            "tool_name": tool_call.name,
+                                            "args": tool_call.arguments
+                                        }
+                                        
+                                        # 执行工具
+                                        if tool_registry.is_allowed(tool_call.name):
+                                            # 对 web_search 做单轮去重复用
+                                            if tool_call.name == "web_search":
+                                                fp = self._fingerprint_web_search(tool_call.arguments)
+                                                if fp in executed_fingerprints:
+                                                    print("[Harmony Stream] 去重：跳过重复 web_search，复用前次结果")
+                                                    reused = fingerprint_to_result.get(fp)
+                                                    if reused is not None:
+                                                        yield {
+                                                            "type": "tool_result",
+                                                            "name": tool_call.name,
+                                                            "tool_name": tool_call.name,
+                                                            "result": str(reused.result),
+                                                            "success": reused.success
+                                                        }
+                                                        context.add_step(Step(
+                                                            step_type=StepType.OBSERVATION,
+                                                            content=f"工具执行结果：{reused.result}",
+                                                            tool_result=reused
+                                                        ))
+                                                        in_tool_block = False
+                                                        current_tool_content = ""
+                                                        continue
+                                            tool_result = await tool_registry.execute_tool(tool_call, context)
+                                            
+                                            yield {
+                                                "type": "tool_result",
+                                                "name": tool_call.name,
+                                                "tool_name": tool_call.name,
+                                                "result": str(tool_result.result),
+                                                "success": tool_result.success
+                                            }
+                                            
+                                            # 添加步骤到上下文
+                                            context.add_step(Step(
+                                                step_type=StepType.ACTION,
+                                                content=f"调用工具: {tool_call.name}",
+                                                tool_call=tool_call
+                                            ))
+                                            
+                                            context.add_step(Step(
+                                                step_type=StepType.OBSERVATION,
+                                                content=f"工具执行结果：{tool_result.result}",
+                                                tool_result=tool_result
+                                            ))
+                                            # 记录指纹结果，便于后续复用
+                                            if tool_call.name == "web_search":
+                                                fp = self._fingerprint_web_search(tool_call.arguments)
+                                                executed_fingerprints.add(fp)
+                                                fingerprint_to_result[fp] = tool_result
+                                        else:
+                                            yield {
+                                                "type": "tool_result",
+                                                "name": tool_call.name,
+                                                "tool_name": tool_call.name,
+                                                "result": f"工具 '{tool_call.name}' 不在允许列表中",
+                                                "success": False
                                             }
                                     
                                     in_tool_block = False
                                     current_tool_content = ""
                             else:
-                                # 普通内容
-                                if reasoning_content:
-                                    yield {"type": "reasoning", "content": reasoning_content}
-                                elif content:
-                                    yield {"type": "content", "content": content}
+                                # 普通内容（不在任何工具块中）
+                                if not in_tool_block and not in_channel_block:
+                                    if reasoning_content:
+                                        yield {"type": "reasoning", "content": reasoning_content}
+                                    elif content:
+                                        yield {"type": "content", "content": content}
                         
-                        except Exception:
+                        except Exception as e:
+                            print(f"[Harmony Stream] 解析流式数据时出错: {e}")
                             continue
         
         except Exception as e:
+            print(f"[Harmony Stream] 流式执行出错: {e}")
             yield {
                 "type": "error",
                 "message": f"流式执行出错: {str(e)}"

@@ -105,11 +105,9 @@ function formatTime(date: Date) {
 // 判断消息是否为状态消息
 function isStatusMessage(content: string) {
   const statusPatterns = [
-    /🔍.*搜索/,
-    /✅.*完成/,
-    /🔧.*工具/,
-    /正在处理.*请稍候/,
-    /正在生成.*回答/,
+    /正在思考\.\.\./,
+    /搜索中\.\.\./,
+    /再次思考中\.\.\./,
   ]
   return statusPatterns.some(pattern => pattern.test(content))
 }
@@ -520,37 +518,42 @@ function isQueryDisabled() {
 
 /* 状态消息样式 */
 .status-message {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%) !important;
-  border: 1px solid #b3e5fc !important;
+  background: #f7f7f8 !important;
+  border: 1px solid #e4e4e7 !important;
   border-radius: 8px !important;
   padding: 12px 16px !important;
   margin: 8px 0 !important;
-  color: #0277bd !important;
-  font-weight: 500 !important;
-  animation: statusPulse 1.5s ease-in-out infinite !important;
-  box-shadow: 0 2px 8px rgba(2, 119, 189, 0.1) !important;
+  color: #6b7280 !important;
+  font-weight: 400 !important;
   position: relative !important;
+  overflow: hidden !important;
 }
 
 .status-message::before {
   content: '';
   position: absolute;
-  left: 0;
   top: 0;
-  bottom: 0;
-  width: 4px;
-  background: linear-gradient(to bottom, #29b6f6, #0288d1);
-  border-radius: 8px 0 0 8px;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    transparent 100%
+  );
+  animation: highlightSweep 1.5s ease-in-out infinite;
 }
 
-@keyframes statusPulse {
-  0%, 100% {
-    opacity: 0.9;
-    transform: scale(1);
+@keyframes highlightSweep {
+  0% {
+    left: -100%;
   }
   50% {
-    opacity: 1;
-    transform: scale(1.01);
+    left: 100%;
+  }
+  100% {
+    left: 100%;
   }
 }
 
