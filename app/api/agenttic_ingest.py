@@ -112,51 +112,54 @@ async def process_sub_docs_concurrent(
         print(f"达到递归深度限制，跳过 {len(sub_docs_urls)} 个子文档的处理")
         return results
     
+    # 使用信号量控制并发数量
+    MAX_CONCURRENT_SUB_DOCS = int(EMBEDDING_MAX_CONCURRENCY)
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
+    
     # 并发处理所有子文档URL
     async def process_single_sub_doc(sub_url: str, parent_doc_name: str = None, parent_collection_name: str = None) -> dict:
-        try:
-            print(f"开始递归摄取子文档: {sub_url}")
+        async with semaphore:  # 使用信号量控制并发
+            try:
+                print(f"开始递归摄取子文档: {sub_url}")
 
-            # 构造递归调用的请求数据
-            sub_request_data = {
-                "url": sub_url,
-                "recursive_depth": recursive_depth - 1,  # 减少递归深度
-                "embedding_model": DEFAULT_EMBEDDING_MODEL,
-                "embedding_dimensions": 1024,
-                "webhook_url": WEBHOOK_PREFIX + "/array2array",
-                "is_recursive": True,  # 标记为递归调用
-                "document_name": parent_doc_name,  # 传递父级文档名称
-                "collection_name": parent_collection_name  # 传递父级collection名称
-            }
-            
-            # 创建一个虚拟的BackgroundTasks实例用于递归调用
-            dummy_background_tasks = BackgroundTasks()
-            
-            # 调用本模块的agenttic_ingest函数进行递归处理，参数顺序要正确
-            result = await agenttic_ingest(dummy_background_tasks, sub_request_data, db)
-            
-            print(f"子文档摄取成功: {sub_url}")
-            return {
-                "url": sub_url,
-                "success": True,
-                "result": result
-            }
-            
-        except Exception as e:
-            error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
-            print(error_msg)
-            return {
-                "url": sub_url,
-                "success": False,
-                "error": error_msg
-            }
+                # 构造递归调用的请求数据
+                sub_request_data = {
+                    "url": sub_url,
+                    "recursive_depth": recursive_depth - 1,  # 减少递归深度
+                    "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                    "embedding_dimensions": 1024,
+                    "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                    "is_recursive": True,  # 标记为递归调用
+                    "document_name": parent_doc_name,  # 传递父级文档名称
+                    "collection_name": parent_collection_name  # 传递父级collection名称
+                }
+                
+                # 创建一个虚拟的BackgroundTasks实例用于递归调用
+                dummy_background_tasks = BackgroundTasks()
+                
+                # 调用本模块的agenttic_ingest函数进行递归处理，参数顺序要正确
+                result = await agenttic_ingest(dummy_background_tasks, sub_request_data, db)
+                
+                print(f"子文档摄取成功: {sub_url}")
+                return {
+                    "url": sub_url,
+                    "success": True,
+                    "result": result
+                }
+                
+            except Exception as e:
+                error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
+                print(error_msg)
+                return {
+                    "url": sub_url,
+                    "success": False,
+                    "error": error_msg
+                }
     
-    # 使用asyncio.gather进行并发处理
+    # 使用asyncio.gather进行并发处理，但通过信号量控制最大并发数
     try:
-        results = await asyncio.gather(
-            *[process_single_sub_doc(url, parent_doc_name, parent_collection_name) for url in sub_docs_urls],
-            return_exceptions=False
-        )
+        tasks = [process_single_sub_doc(url, parent_doc_name, parent_collection_name) for url in sub_docs_urls]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
     except Exception as e:
         print(f"并发处理子文档时出现异常: {str(e)}")
         # 降级到串行处理
