@@ -441,46 +441,9 @@ export function cleanupSession(sessionId: string) {
  * 以下是如何使用工具功能的不同方式：
  */
 
-// 示例 1: 使用默认工具进行查询
-export async function queryWithDefaultTools(query: string) {
-  return await notebookApi.queryDocumentsWithTools(
-    query,
-    undefined, // 不指定文档ID
-    'auto', // 自动选择工具策略
-    DEFAULT_TOOLS, // 使用预定义的工具
-    6 // 最大执行步数
-  )
-}
-
-// 示例 2: 只使用网络搜索工具
-export async function queryWithWebSearch(query: string) {
-  const webSearchOnly = DEFAULT_TOOLS.filter(tool => tool.name === 'web_search')
-
-  return await notebookApi.queryDocumentsWithTools(
-    query,
-    undefined,
-    'json', // 指定使用 JSON Function Calling 策略
-    webSearchOnly,
-    4
-  )
-}
-
-// 示例 3: 禁用工具功能
-export async function queryWithoutTools(query: string, documentIds?: string[]) {
-  return await notebookApi.queryDocuments(
-    query,
-    documentIds,
-    { tool_mode: 'off' }
-  )
-}
-
-// 示例 4: 自定义工具配置
-export async function queryWithCustomTools(query: string, customTools: ToolSchema[]) {
-  return await notebookApi.queryDocumentsWithTools(
-    query,
-    undefined,
-    'auto',
-    customTools,
-    8
-  )
-}
+/**
+ * 工具调用已整合到主要问答流程中：
+ * - 普通问答：自动使用智能编排器进行问题拆解-思考-工具调用
+ * - 文档问答：仅使用已上传文档，不启用工具
+ * - Collection问答：仅使用collection内容，不启用工具
+ */
