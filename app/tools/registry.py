@@ -1,7 +1,10 @@
 """工具注册表"""
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
 import asyncio
 from .models import ToolSchema, ToolCall, ToolResult
+
+if TYPE_CHECKING:
+    from .models import ToolExecutionContext
 
 
 class ToolRegistry:
@@ -37,7 +40,7 @@ class ToolRegistry:
         """检查是否有可用工具"""
         return len(self._tools) > 0
     
-    async def execute_tool(self, tool_call: ToolCall) -> ToolResult:
+    async def execute_tool(self, tool_call: ToolCall, context: Optional['ToolExecutionContext'] = None) -> ToolResult:
         """执行工具调用
         
         Args:
@@ -71,11 +74,24 @@ class ToolRegistry:
         
         try:
             print(f"[Registry] 开始执行工具处理函数: {tool_call.name}")
+            
+            # 准备工具函数参数
+            tool_args = dict(tool_call.arguments)
+            
+            # 如果有执行上下文且工具支持模型参数，自动添加模型信息
+            if context and hasattr(handler, '__code__'):
+                param_names = handler.__code__.co_varnames[:handler.__code__.co_argcount]
+                if 'model' in param_names and 'model' not in tool_args:
+                    # 自动传递当前执行上下文中的模型
+                    if context.run_config.model:
+                        tool_args['model'] = context.run_config.model
+                        print(f"[Registry] 自动传递模型参数: {context.run_config.model}")
+            
             # 执行工具函数
             if asyncio.iscoroutinefunction(handler):
-                result = await handler(**tool_call.arguments)
+                result = await handler(**tool_args)
             else:
-                result = handler(**tool_call.arguments)
+                result = handler(**tool_args)
                 
             print(f"[Registry] 工具执行成功: {tool_call.name}, 结果长度: {len(str(result)) if result else 0}")
             return ToolResult(
@@ -129,6 +145,11 @@ def register_web_search_tool():
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "域名过滤列表，包含需要从搜索结果中排除的域名。例如：['example.com', 'badsite.org']"
+                },
+                "model": {
+                    "type": "string",
+                    "description": "用于关键词生成的LLM模型名称，默认使用系统配置。传入此参数可覆盖系统默认模型",
+                    "default": ""
                 }
             },
             "required": ["query"]

@@ -180,7 +180,7 @@ class ReActStrategy:
                         )
                 
                 # 执行工具
-                tool_result = await tool_registry.execute_tool(tool_call)
+                tool_result = await tool_registry.execute_tool(tool_call, context)
                 
                 return Step(
                     step_type=StepType.OBSERVATION,
@@ -257,7 +257,7 @@ class ReActStrategy:
                             }
                             
                             # 执行工具
-                            tool_result = await tool_registry.execute_tool(tool_call)
+                            tool_result = await tool_registry.execute_tool(tool_call, context)
                             
                             yield {
                                 "type": "observation",

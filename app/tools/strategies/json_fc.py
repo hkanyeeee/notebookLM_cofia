@@ -181,7 +181,7 @@ class JSONFunctionCallingStrategy:
                         )
                 
                 # 执行工具
-                tool_result = await tool_registry.execute_tool(tool_call)
+                tool_result = await tool_registry.execute_tool(tool_call, context)
                 
                 return Step(
                     step_type=StepType.OBSERVATION,
@@ -291,7 +291,7 @@ class JSONFunctionCallingStrategy:
                         
                         # 执行工具
                         if tool_registry.is_allowed(tool_call.name):
-                            tool_result = await tool_registry.execute_tool(tool_call)
+                            tool_result = await tool_registry.execute_tool(tool_call, context)
                             
                             yield {
                                 "type": "observation",

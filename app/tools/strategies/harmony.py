@@ -168,7 +168,7 @@ class HarmonyStrategy:
                 
                 # 执行工具
                 print(f"[Harmony Strategy] 开始执行工具: {tool_call.name}")
-                tool_result = await tool_registry.execute_tool(tool_call)
+                tool_result = await tool_registry.execute_tool(tool_call, context)
                 print(f"[Harmony Strategy] 工具执行完成: 成功={tool_result.success}")
                 if not tool_result.success:
                     print(f"[Harmony Strategy] 工具执行错误: {tool_result.error}")

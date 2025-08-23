@@ -199,16 +199,29 @@ class WebSearchTool:
                 if not content:
                     continue
                 
-                # 创建 Source 记录
-                source = Source(
-                    session_id=session_id,
-                    url=url,
-                    title=title
+                # 检查是否已存在相同URL的Source记录
+                from sqlalchemy import select
+                existing_source = await db.execute(
+                    select(Source).where(Source.url == url)
                 )
-                db.add(source)
-                await db.commit()
-                await db.refresh(source)
-                source_ids.append(source.id)
+                source = existing_source.scalar_one_or_none()
+                
+                if source:
+                    # 使用现有的Source记录
+                    print(f"[WebSearch] 使用现有Source记录: {url}")
+                    source_ids.append(source.id)
+                else:
+                    # 创建新的 Source 记录
+                    source = Source(
+                        session_id=session_id,
+                        url=url,
+                        title=title
+                    )
+                    db.add(source)
+                    await db.commit()
+                    await db.refresh(source)
+                    source_ids.append(source.id)
+                    print(f"[WebSearch] 创建新Source记录: {url}")
                 
                 # 文档切分
                 chunks_text = chunk_text(
@@ -336,12 +349,18 @@ class WebSearchTool:
         
         try:
             # 1. 生成搜索关键词
+            print(f"[WebSearch] 开始生成搜索关键词...")
+            start_time = asyncio.get_event_loop().time()
             queries = await self.generate_search_queries(query, model)
-            print(f"生成的搜索关键词: {queries}")
+            print(f"[WebSearch] 生成搜索关键词耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+            print(f"[WebSearch] 生成的搜索关键词: {queries}")
             
             # 2. 并发搜索
+            print(f"[WebSearch] 开始并发搜索...")
+            start_time = asyncio.get_event_loop().time()
             search_tasks = [self.search_searxng(q, language, categories) for q in queries]
             search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
+            print(f"[WebSearch] 并发搜索耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
             
             # 合并搜索结果并去重
             all_results = []
@@ -367,6 +386,8 @@ class WebSearchTool:
             
             if all_results:
                 # 3. 并发爬取网页内容
+                print(f"[WebSearch] 开始并发爬取网页内容...")
+                start_time = asyncio.get_event_loop().time()
                 content_tasks = []
                 for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
                     content_tasks.append(self.fetch_web_content(item["url"]))
@@ -374,6 +395,7 @@ class WebSearchTool:
                 # 处理剩余的 URL（分批）
                 remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
                 contents = await asyncio.gather(*content_tasks, return_exceptions=True)
+                print(f"[WebSearch] 第一批爬取耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
                 
                 # 处理剩余的批次
                 for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
@@ -392,23 +414,32 @@ class WebSearchTool:
                             "content": content,
                             "snippet": item.get("snippet", "")
                         })
+                        print(f"[WebSearch] ✓ 成功爬取: {item['url']}")
+                    else:
+                        print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}: {str(content)[:100] if content else 'None'}")
                 
                 print(f"成功爬取 {len(documents)} 个网页")
                 result["search_results"] = documents
                 
                 if documents:
                     # 4. 处理文档（切分、embedding、存储）
+                    print(f"[WebSearch] 开始处理文档（切分、embedding、存储）...")
+                    start_time = asyncio.get_event_loop().time()
                     source_ids = await self.process_documents(documents, session_id)
                     result["source_ids"] = source_ids
-                    print(f"处理了 {len(source_ids)} 个文档源")
+                    print(f"[WebSearch] 文档处理耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+                    print(f"[WebSearch] 处理了 {len(source_ids)} 个文档源")
             
             # 5. 搜索和召回
             if result["source_ids"]:
+                print(f"[WebSearch] 开始搜索和召回...")
+                start_time = asyncio.get_event_loop().time()
                 hits = await self.search_and_retrieve(
                     query, 
                     session_id, 
                     source_ids=result["source_ids"]
                 )
+                print(f"[WebSearch] 搜索和召回耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
                 
                 # 格式化召回内容
                 retrieved_content = []
