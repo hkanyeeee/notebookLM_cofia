@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
 from datetime import datetime
+import pytz
 
 from ..database import get_db
 from ..models import WorkflowExecution
@@ -194,7 +195,7 @@ async def update_workflow_status(
         if status_data.get("stopped_at"):
             execution.stopped_at = datetime.fromisoformat(status_data["stopped_at"])
         elif status_data["status"] in ["success", "error", "stopped"]:
-            execution.stopped_at = datetime.utcnow()
+            execution.stopped_at = datetime.now(pytz.timezone('Asia/Shanghai'))
         
         await db.commit()
         

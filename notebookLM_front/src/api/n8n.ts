@@ -62,3 +62,18 @@ export interface WorkflowExecutionsResponse {
   workflowHistory: WorkflowExecution[]
   total: number
 }
+
+// 工具函数：将ISO时间字符串转换为北京时间显示格式
+export function formatTimeToBeijing(isoString?: string): string {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}

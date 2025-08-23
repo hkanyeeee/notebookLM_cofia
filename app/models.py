@@ -1,6 +1,7 @@
 from sqlalchemy import String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
+import pytz
 from typing import List
 
 class Base(DeclarativeBase):
@@ -43,10 +44,10 @@ class WorkflowExecution(Base):
     document_name: Mapped[str] = mapped_column(String(500), nullable=False)  # 文档名称
     workflow_id: Mapped[str] = mapped_column(String, nullable=True)  # n8n工作流ID（可选）
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="running")  # 执行状态
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # 开始时间
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Shanghai')))  # 开始时间
     stopped_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # 结束时间
     session_id: Mapped[str] = mapped_column(String, index=True, nullable=False)  # 会话ID
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Shanghai')))
 
     def __repr__(self) -> str:
         return f"<WorkflowExecution(id={self.id}, execution_id='{self.execution_id}', document_name='{self.document_name}', status='{self.status}')>"
