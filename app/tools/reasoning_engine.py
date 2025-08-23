@@ -27,6 +27,13 @@ class ReasoningEngine:
 - 只有在确实需要实时、准确、具体数据时才标记为高重要性知识缺口
 - 避免为了信息完整性而过度标记知识缺口
 
+搜索关键词生成指导：
+- 使用简单直接的词语，避免过于技术化的术语
+- 保持原语言（中文问题用中文关键词），便于本地化搜索
+- 关键词应该是普通用户会搜索的自然语言
+- 避免生成过长或过于复杂的搜索词组
+- 每个关键词应该是完整且有意义的搜索查询
+
 请进行深入思考并返回以下JSON格式:
 {{
   "question": "{question}",
@@ -37,7 +44,7 @@ class ReasoningEngine:
     {{
       "gap_description": "具体的知识缺口描述",
       "importance": "高|中|低",
-      "search_keywords": ["相关搜索关键词，格式：以空格分割的若干个单词组成的字符串，最适合搜索引擎搜索"]
+      "search_keywords": ["简单直接的搜索关键词，使用自然语言，便于普通用户理解和搜索"]
     }}
   ],
   "reasoning_steps": [
@@ -192,6 +199,9 @@ class ReasoningEngine:
         # 根据问题类型设置不同的知识缺口重要性
         gap_importance = "高" if is_realtime_query else "中"
         
+        # 智能生成搜索关键词
+        search_keywords = self._generate_practical_keywords(question)
+        
         return {
             "question": question,
             "thought_process": f"对于问题'{question}'，需要获取最新信息来提供准确答案。" if is_realtime_query else f"对于问题'{question}'，可能需要一些额外信息来完善回答。",
@@ -201,7 +211,7 @@ class ReasoningEngine:
                 {
                     "gap_description": f"关于'{question}'的最新具体信息" if is_realtime_query else f"关于'{question}'的详细信息",
                     "importance": gap_importance,
-                    "search_keywords": question.split()[:4] if len(question.split()) > 3 else [question]
+                    "search_keywords": search_keywords
                 }
             ],
             "reasoning_steps": [
@@ -391,3 +401,93 @@ class ReasoningEngine:
         except Exception as e:
             print(f"修复JSON时出错: {e}")
             return None
+
+    def _generate_practical_keywords(self, question: str) -> List[str]:
+        """
+        智能生成更实用的搜索关键词
+        
+        Args:
+            question: 原始问题
+            
+        Returns:
+            优化后的搜索关键词列表
+        """
+        import re
+        
+        # 移除问号和语气词
+        cleaned_question = re.sub(r'[？?吗呢啊]', '', question)
+        
+        # 常见的比较词汇和连接词，需要保留
+        comparison_words = ['对比', '比较', '和', '与', 'vs', '哪个', '更']
+        performance_words = ['性能', '快', '慢', '强', '弱', '好', '差', '优', '劣']
+        
+        keywords = []
+        
+        # 如果是比较类问题，生成针对性的关键词
+        if any(word in question for word in comparison_words):
+            # 提取主要产品/实体
+            entities = []
+            # 匹配 M4 Pro, M2 Max 等产品名
+            product_pattern = r'[A-Za-z0-9]+\s*[A-Za-z0-9]*(?:\s*[Pp]ro|[Mm]ax|[Aa]ir|[Mm]ini)?'
+            products = re.findall(product_pattern, question)
+            
+            # 匹配中文产品名
+            chinese_entities = re.findall(r'苹果|小米|华为|联想|戴尔|惠普|[A-Za-z]+', question)
+            
+            entities.extend(products)
+            entities.extend(chinese_entities)
+            
+            # 去重并过滤
+            unique_entities = []
+            seen = set()
+            for entity in entities:
+                entity_clean = entity.strip()
+                if entity_clean and entity_clean.lower() not in seen and len(entity_clean) > 1:
+                    seen.add(entity_clean.lower())
+                    unique_entities.append(entity_clean)
+            
+            # 生成具体的搜索词
+            if len(unique_entities) >= 2:
+                # 对比类搜索词
+                keywords.append(f"{unique_entities[0]} {unique_entities[1]} 对比")
+                keywords.append(f"{unique_entities[0]} vs {unique_entities[1]}")
+                
+                # 如果涉及性能问题，加上性能关键词
+                if any(word in question for word in performance_words + ['推理', '运算', '处理']):
+                    keywords.append(f"{unique_entities[0]} {unique_entities[1]} 性能测试")
+                    
+                    # 针对大模型推理的特殊处理
+                    if '大模型' in question or '推理' in question:
+                        keywords.append(f"{unique_entities[0]} {unique_entities[1]} AI性能")
+            else:
+                # 如果没有提取到足够的实体，使用简化的关键词
+                keywords.append(cleaned_question)
+        else:
+            # 非比较类问题，使用原始问题的简化版本
+            keywords.append(cleaned_question)
+            
+            # 提取核心概念
+            core_concepts = []
+            if '天气' in question:
+                core_concepts.append('天气预报')
+            if '价格' in question:
+                core_concepts.append('价格查询')
+            if '时间' in question:
+                core_concepts.append('当前时间')
+                
+            keywords.extend(core_concepts)
+        
+        # 如果没有生成任何关键词，使用原始问题
+        if not keywords:
+            keywords.append(question)
+        
+        # 限制关键词数量，去重
+        final_keywords = []
+        seen = set()
+        for kw in keywords[:3]:  # 最多3个关键词
+            kw_clean = kw.strip()
+            if kw_clean and kw_clean not in seen:
+                seen.add(kw_clean)
+                final_keywords.append(kw_clean)
+        
+        return final_keywords or [question]

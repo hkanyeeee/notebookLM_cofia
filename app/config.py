@@ -33,10 +33,10 @@ DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
 MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 
 # Web 搜索相关配置
-WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "3"))
-WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "4"))
-WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "8"))
-WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "4"))
+WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "5"))
+WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "6"))
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "24"))
+WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "5"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
 
 # Web 爬取相关配置  
@@ -47,7 +47,30 @@ PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "30.0"))
 ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
 QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
     "QUERY_GENERATION_PROMPT_TEMPLATE", 
-    "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的、使用空格分割的英文关键词的组合，用于查询。返回JSON，键为queries，值为包含3个字符串的数组，不要夹杂多余文本。"
+    """你是搜索查询优化专家。基于给定课题，生成4个简洁高效的搜索查询。
+
+**要求：**
+- 每个查询最多5个词，绝对不能超过
+- 优先使用英文关键词（搜索结果更多）
+- 包含具体的产品型号、品牌名称
+- 每个查询聚焦一个特定方面
+
+**查询类型：**
+1. **产品对比**：型号 vs 型号 + 特征（如"M4 Pro vs M2 Max"）
+2. **性能评测**：产品 + benchmark/review（如"M4 Pro benchmark"）
+3. **技术规格**：产品 + specs/cores（如"M4 Pro specs"）
+4. **应用场景**：产品 + 应用领域（如"Apple silicon ML"）
+
+**好的示例：**
+- "M4 Pro benchmark" ✅
+- "RTX 4090 specs" ✅
+- "iPhone 15 vs 14" ✅
+
+**坏的示例：**
+- "M2 Max LLM inference benchmark M4 Pro performance" ❌（太长）
+- "苹果的M4 Pro在机器学习推理方面的性能表现" ❌（太长且中文）
+
+返回JSON：{"queries": ["查询1", "查询2", "查询3", "查询4"]}"""
 )
 
 # 网页内容缓存配置
@@ -62,7 +85,7 @@ CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "50"))
 
 # RAG 相关配置
 RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
-RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "5"))
+RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")

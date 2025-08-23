@@ -59,7 +59,7 @@ class WebSearchTool:
             return ""
         s = text.strip().lower()
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\[\]{}]", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\\[\\\]{}]", "", s)
         s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
         return s
 
@@ -86,6 +86,60 @@ class WebSearchTool:
             return intersection / union if union > 0 else 0.0
         except:
             return 0.0
+
+    def _clean_and_validate_queries(self, queries: List[str], original_topic: str) -> List[str]:
+        """清理和验证生成的搜索查询"""
+        MAX_WORDS_PER_QUERY = 5
+        cleaned_queries = []
+        seen_queries = set()
+        
+        for query in queries:
+            if not query or not query.strip():
+                continue
+                
+            query = query.strip()
+            
+            # 检查长度：最多5个词
+            word_count = len(query.split())
+            if word_count > MAX_WORDS_PER_QUERY:
+                # 尝试截取前5个词
+                truncated = " ".join(query.split()[:MAX_WORDS_PER_QUERY])
+                print(f"[WebSearch] 查询过长，截取: '{query}' -> '{truncated}'")
+                query = truncated
+            
+            # 去重
+            query_normalized = query.lower()
+            if query_normalized in seen_queries:
+                continue
+            seen_queries.add(query_normalized)
+            
+            # 避免纯中文查询（搜索结果较少）
+            if len(query) > 0 and all(ord(c) > 127 and not c.isspace() for c in query if c.isalpha()):
+                # 如果是纯中文，尝试生成英文替代
+                if "vs" not in query.lower() and "对比" in original_topic:
+                    continue  # 跳过纯中文对比查询
+            
+            cleaned_queries.append(query)
+        
+        # 如果清理后没有足够的查询，生成一些基础查询
+        if len(cleaned_queries) < 2:
+            # 从原始话题提取关键英文词汇
+            topic_words = original_topic.replace("苹果", "Apple").replace("的", "").replace("？", "").replace("，", " ")
+            # 简化：只保留英文和数字
+            import re
+            topic_clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', topic_words)
+            key_words = [w for w in topic_clean.split() if len(w) > 2][:3]
+            
+            if key_words:
+                basic_query = " ".join(key_words)
+                if basic_query not in seen_queries and basic_query not in cleaned_queries:
+                    cleaned_queries.append(basic_query)
+        
+        print(f"[WebSearch] 查询清理结果: {len(queries)} -> {len(cleaned_queries)} 个查询")
+        for i, q in enumerate(cleaned_queries):
+            print(f"[WebSearch]   {i+1}. {q}")
+        
+        return cleaned_queries
     
     def _calculate_content_similarity(self, text1: str, text2: str) -> float:
         """计算两个文本内容的相似度 (0-1)"""
@@ -159,7 +213,7 @@ class WebSearchTool:
             model = DEFAULT_CHAT_MODEL
         
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE
-        user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
+        user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...', '...']}}"
         
         payload = {
             "model": model,
@@ -193,17 +247,27 @@ class WebSearchTool:
                     parsed = json.loads(json_candidate)
                     queries = parsed.get("queries") or parsed.get("Queries")
                     if isinstance(queries, list):
-                        queries = [str(q).strip() for q in queries if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
-                        if queries:
-                            # 填满 3 个
-                            while len(queries) < WEB_SEARCH_MAX_QUERIES:
-                                queries.append(topic)
-                            return queries[:WEB_SEARCH_MAX_QUERIES]
+                        # 清理和验证查询
+                        cleaned_queries = self._clean_and_validate_queries([str(q).strip() for q in queries if str(q).strip()], topic)
+                        if cleaned_queries:
+                            # 填满到配置数量
+                            while len(cleaned_queries) < WEB_SEARCH_MAX_QUERIES:
+                                cleaned_queries.append(topic)
+                            return cleaned_queries[:WEB_SEARCH_MAX_QUERIES]
                 except Exception:
                     pass
                 
-                # 兜底策略
-                return [topic, f"{topic} 相关", f"{topic} 详细信息"][:WEB_SEARCH_MAX_QUERIES]
+                # 兜底策略：生成更有效的默认查询
+                fallback_queries = [
+                    topic,
+                    f"{topic} review",
+                    f"{topic} comparison", 
+                    f"{topic} benchmark"
+                ]
+                cleaned_fallback = self._clean_and_validate_queries(fallback_queries, topic)
+                if cleaned_fallback:
+                    return cleaned_fallback[:WEB_SEARCH_MAX_QUERIES]
+                return [topic]  # 最终兜底
                 
         except Exception as e:
             print(f"生成搜索关键词失败: {e}")
@@ -262,40 +326,83 @@ class WebSearchTool:
             return []
     
     async def fetch_web_content(self, url: str) -> Optional[str]:
-        """爬取网页内容，支持缓存"""
+        """爬取网页内容，支持缓存和自动回退机制"""
         # 如果启用缓存，先检查缓存
         if self.cache and WEB_CACHE_ENABLED:
             cached_content = self.cache.get(url)
             if cached_content is not None:
                 return cached_content
         
+        # 检测特殊文件类型
+        url_lower = url.lower()
+        is_pdf = url_lower.endswith('.pdf') or '.pdf?' in url_lower
+        is_special_file = (url_lower.endswith(('.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')) or
+                          any(ext in url_lower for ext in ['.pdf?', '.doc?', '.docx?', '.xls?', '.xlsx?', '.ppt?', '.pptx?']))
+        
         # 缓存未命中或未启用缓存，进行实际爬取
-        try:
-            content = None
-            if WEB_LOADER_ENGINE == "playwright":
-                # 使用 Playwright 渲染模式
-                content = await fetch_rendered_text(
-                    url, 
-                    selector="article",
-                    timeout=PLAYWRIGHT_TIMEOUT
-                )
+        content = None
+        
+        if WEB_LOADER_ENGINE == "playwright":
+            # 对于PDF等特殊文件，直接使用safe_web模式
+            if is_special_file:
+                print(f"[WebSearch] 检测到特殊文件类型 ({url})，直接使用 safe_web 模式...")
+                try:
+                    content = await fetch_then_extract(
+                        url, 
+                        selector="article", 
+                        timeout=WEB_SEARCH_TIMEOUT
+                    )
+                    if content:
+                        print(f"[WebSearch] safe_web 模式处理特殊文件成功: {url}")
+                    else:
+                        print(f"[WebSearch] safe_web 模式无法处理特殊文件: {url}")
+                except Exception as e:
+                    print(f"[WebSearch] safe_web 模式处理特殊文件失败 {url}: {e}")
+                    content = None
             else:
-                # 使用安全模式（httpx + BeautifulSoup，失败后回退到 Playwright）
+                # 常规网页，首先尝试 Playwright 渲染模式
+                try:
+                    content = await fetch_rendered_text(
+                        url, 
+                        selector="article",
+                        timeout=PLAYWRIGHT_TIMEOUT
+                    )
+                    print(f"[WebSearch] Playwright 模式成功爬取: {url}")
+                except Exception as e:
+                    print(f"[WebSearch] Playwright 模式失败 {url}: {e}")
+                    print(f"[WebSearch] 自动回退到 safe_web 模式...")
+                    
+                    # 回退到 safe_web 模式
+                    try:
+                        content = await fetch_then_extract(
+                            url, 
+                            selector="article", 
+                            timeout=WEB_SEARCH_TIMEOUT
+                        )
+                        if content:
+                            print(f"[WebSearch] safe_web 模式回退成功: {url}")
+                        else:
+                            print(f"[WebSearch] safe_web 模式回退也未能获取内容: {url}")
+                    except Exception as fallback_e:
+                        print(f"[WebSearch] safe_web 模式回退也失败 {url}: {fallback_e}")
+                        content = None
+        else:
+            # 使用安全模式（httpx + BeautifulSoup，失败后回退到 Playwright）
+            try:
                 content = await fetch_then_extract(
                     url, 
                     selector="article", 
                     timeout=WEB_SEARCH_TIMEOUT
                 )
-            
-            # 如果成功获取内容且启用缓存，将内容存入缓存
-            if content and self.cache and WEB_CACHE_ENABLED:
-                self.cache.put(url, content)
-            
-            return content
-            
-        except Exception as e:
-            print(f"爬取网页内容失败 {url}: {e}")
-            return None
+            except Exception as e:
+                print(f"爬取网页内容失败 {url}: {e}")
+                content = None
+        
+        # 如果成功获取内容且启用缓存，将内容存入缓存
+        if content and self.cache and WEB_CACHE_ENABLED:
+            self.cache.put(url, content)
+        
+        return content
     
     async def process_documents(
         self, 

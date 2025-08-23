@@ -53,6 +53,75 @@ class IntelligentOrchestrator:
 请用自然的语言组织回答，不需要返回JSON格式。
 """
 
+    def _optimize_search_keywords(self, keywords: List[str], original_query: str) -> List[str]:
+        """
+        优化搜索关键词，生成简短有效的搜索查询
+        """
+        MAX_WORDS_PER_QUERY = 5
+        optimized_queries = []
+        seen_queries = set()
+        
+        if isinstance(keywords, str):
+            keywords = [keywords]
+        
+        for keyword in keywords:
+            if not keyword or not keyword.strip():
+                continue
+                
+            keyword = keyword.strip()
+            
+            # 如果关键词就是一个完整的查询且不太长，直接使用
+            word_count = len(keyword.split())
+            if word_count <= MAX_WORDS_PER_QUERY:
+                query_normalized = keyword.lower()
+                if query_normalized not in seen_queries:
+                    seen_queries.add(query_normalized)
+                    optimized_queries.append(keyword)
+                    continue
+            
+            # 如果太长，尝试截取或重组
+            words = keyword.split()
+            
+            # 方案1：截取前5个词
+            if word_count > MAX_WORDS_PER_QUERY:
+                truncated = " ".join(words[:MAX_WORDS_PER_QUERY])
+                truncated_normalized = truncated.lower()
+                if truncated_normalized not in seen_queries:
+                    seen_queries.add(truncated_normalized)
+                    optimized_queries.append(truncated)
+            
+            # 方案2：如果包含产品对比，优化为简短对比格式
+            if len(words) > 3 and any(vs_word in keyword.lower() for vs_word in ['vs', '对比', '比较']):
+                # 提取主要产品名
+                import re
+                products = re.findall(r'[A-Za-z0-9]+\s*[Pp]ro|[A-Za-z0-9]+\s*[Mm]ax|M[0-9]+|RTX\s*[0-9]+|苹果|华为', keyword)
+                if len(products) >= 2:
+                    simple_comparison = f"{products[0]} vs {products[1]}"
+                    if simple_comparison.lower() not in seen_queries:
+                        seen_queries.add(simple_comparison.lower())
+                        optimized_queries.append(simple_comparison)
+            
+        # 确保至少有一个查询
+        if not optimized_queries:
+            # 从原始查询中提取简短版本
+            import re
+            # 提取产品名或关键技术词汇
+            tech_terms = re.findall(r'[A-Za-z0-9]+(?:\s*[Pp]ro|[Mm]ax|[Aa]ir)?|性能|推理|对比', original_query)
+            if tech_terms:
+                simple_query = " ".join(tech_terms[:3])  # 最多3个词
+                optimized_queries.append(simple_query)
+            else:
+                optimized_queries.append(original_query)
+        
+        # 限制查询数量，避免过多
+        final_queries = optimized_queries[:2]  # 每个knowledge gap最多生成2个查询
+        
+        print(f"[IntelligentOrchestrator] 关键词优化: {len(keywords)} 个原始关键词 -> {len(final_queries)} 个优化查询")
+        for i, query in enumerate(final_queries):
+            print(f"[IntelligentOrchestrator]   {i+1}. {query}")
+        
+        return final_queries
+
     async def process_query_intelligently(
         self, 
         query: str, 
@@ -293,13 +362,14 @@ class IntelligentOrchestrator:
         if not knowledge_gaps:
             return {}
         
-        # 构建搜索查询
+        # 构建搜索查询，应用长度控制和优化
         search_queries = []
         for gap in knowledge_gaps[:3]:  # 限制最多3个高优先级缺口
             keywords = gap.get("search_keywords", [])
             if keywords:
-                search_query = " ".join(keywords) if isinstance(keywords, list) else str(keywords)
-                search_queries.append(search_query)
+                # 对关键词进行优化处理
+                optimized_queries = self._optimize_search_keywords(keywords, original_query)
+                search_queries.extend(optimized_queries)
         
         if not search_queries:
             search_queries = [original_query]  # 回退到原始查询
@@ -308,8 +378,9 @@ class IntelligentOrchestrator:
         if original_query not in search_queries:
             search_queries.insert(0, original_query)
         
-        # 限制搜索查询数量，避免过多搜索
-        final_queries = search_queries[:3]
+        # 限制搜索查询数量，使用配置文件中的设置
+        from ..config import WEB_SEARCH_MAX_QUERIES
+        final_queries = search_queries[:WEB_SEARCH_MAX_QUERIES]
         
         print(f"[IntelligentOrchestrator] 直接控制搜索关键词: {final_queries}")
         
@@ -413,13 +484,14 @@ class IntelligentOrchestrator:
             yield {"type": "final_tool_result", "result": {}}
             return
         
-        # 构建搜索查询（与非流式版本相同）
+        # 构建搜索查询，应用长度控制和优化（与非流式版本相同）
         search_queries = []
         for gap in knowledge_gaps[:3]:  # 限制最多3个高优先级缺口
             keywords = gap.get("search_keywords", [])
             if keywords:
-                search_query = " ".join(keywords) if isinstance(keywords, list) else str(keywords)
-                search_queries.append(search_query)
+                # 对关键词进行优化处理
+                optimized_queries = self._optimize_search_keywords(keywords, original_query)
+                search_queries.extend(optimized_queries)
         
         if not search_queries:
             search_queries = [original_query]  # 回退到原始查询
@@ -428,8 +500,9 @@ class IntelligentOrchestrator:
         if original_query not in search_queries:
             search_queries.insert(0, original_query)
         
-        # 限制搜索查询数量，避免过多搜索
-        final_queries = search_queries[:3]
+        # 限制搜索查询数量，使用配置文件中的设置
+        from ..config import WEB_SEARCH_MAX_QUERIES
+        final_queries = search_queries[:WEB_SEARCH_MAX_QUERIES]
         
         print(f"[IntelligentOrchestrator] 流式直接控制搜索关键词: {final_queries}")
         

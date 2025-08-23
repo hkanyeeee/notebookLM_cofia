@@ -61,13 +61,14 @@ async def generate_search_queries(
                 queries = parsed.get("queries") or parsed.get("Queries")
                 if not isinstance(queries, list):
                     raise ValueError("Invalid schema: queries not list")
-                queries = [str(q).strip() for q in queries if str(q).strip()][:3]
+                from ..config import WEB_SEARCH_MAX_QUERIES
+                queries = [str(q).strip() for q in queries if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
                 if not queries:
                     raise ValueError("Empty queries")
-                # 填满 3 个
-                while len(queries) < 3:
+                # 填满到配置的数量
+                while len(queries) < WEB_SEARCH_MAX_QUERIES:
                     queries.append(topic)
-                return {"queries": queries[:3]}
+                return {"queries": queries[:WEB_SEARCH_MAX_QUERIES]}
             except Exception:
                 # 宽松处理：把单引号换成双引号再试一次
                 try:
@@ -75,10 +76,10 @@ async def generate_search_queries(
                     parsed2 = _json.loads(relaxed)
                     qs = parsed2.get("queries") or parsed2.get("Queries")
                     if isinstance(qs, list):
-                        qs = [str(q).strip() for q in qs if str(q).strip()][:3]
-                        while len(qs) < 3:
+                        qs = [str(q).strip() for q in qs if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
+                        while len(qs) < WEB_SEARCH_MAX_QUERIES:
                             qs.append(topic)
-                        return {"queries": qs[:3]}
+                        return {"queries": qs[:WEB_SEARCH_MAX_QUERIES]}
                 except Exception:
                     pass
 
@@ -90,14 +91,14 @@ async def generate_search_queries(
                         obj = _json.loads(lines[0].replace("'", '"'))
                         if isinstance(obj.get("queries"), list):
                             arr = [str(q).strip() for q in obj["queries"] if str(q).strip()]
-                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:3]}
+                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:WEB_SEARCH_MAX_QUERIES]}
                     except Exception:
                         pass
 
-                queries = lines[:3]
+                queries = lines[:WEB_SEARCH_MAX_QUERIES]
                 if not queries:
                     queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
-                return {"queries": queries[:3]}
+                return {"queries": queries[:WEB_SEARCH_MAX_QUERIES]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generate queries failed: {e}")
 

@@ -27,6 +27,8 @@ const emit = defineEmits<{
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
+// 控制思维链和参考来源的展开状态，默认展开思维链
+const activeNames = ref(['reasoning'])
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -130,7 +132,7 @@ function isStatusMessage(content: string) {
         <div class="message-content">
           <!-- Reasoning Chain (for assistant messages) -->
           <div v-if="message.type === 'assistant' && message.reasoning" class="reasoning-section">
-            <ElCollapse>
+            <ElCollapse v-model="activeNames">
               <ElCollapseItem :title="`思维链（${message.reasoning.length} 字）`" name="reasoning">
                 <div class="reasoning-content" v-html="marked(message.reasoning)"></div>
               </ElCollapseItem>

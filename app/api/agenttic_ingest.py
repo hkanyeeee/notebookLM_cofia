@@ -80,6 +80,7 @@ class UnifiedIngestRequest(BaseModel):
     total_chunks: Optional[int] = None
     chunks: Optional[List[dict]] = None
     source_id: Optional[str] = None
+    parent_source_id: Optional[int] = None  # 添加父级Source ID字段
     session_id: Optional[str] = None
     task_name: Optional[str] = None
     is_recursive: Optional[bool] = False  # 添加递归标记字段，默认为False
@@ -90,7 +91,8 @@ async def process_sub_docs_concurrent(
     recursive_depth: int,
     db: AsyncSession,
     parent_doc_name: Optional[str] = None,
-    parent_collection_name: Optional[str] = None
+    parent_collection_name: Optional[str] = None,
+    parent_source_id: Optional[int] = None
 ) -> List[dict]:
     """
     并发处理子文档的递归摄取函数
@@ -101,6 +103,7 @@ async def process_sub_docs_concurrent(
         db: 数据库会话
         parent_doc_name: 父级文档名称
         parent_collection_name: 父级collection名称
+        parent_source_id: 父级Source ID，用于将子文档内容添加到同一个collection
 
     Returns:
         List[dict]: 每个子文档的处理结果
@@ -117,7 +120,7 @@ async def process_sub_docs_concurrent(
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
     
     # 并发处理所有子文档URL
-    async def process_single_sub_doc(sub_url: str, parent_doc_name: str = None, parent_collection_name: str = None) -> dict:
+    async def process_single_sub_doc(sub_url: str, parent_doc_name: str = None, parent_collection_name: str = None, parent_source_id: int = None) -> dict:
         async with semaphore:  # 使用信号量控制并发
             try:
                 print(f"开始递归摄取子文档: {sub_url}")
@@ -131,7 +134,8 @@ async def process_sub_docs_concurrent(
                     "webhook_url": WEBHOOK_PREFIX + "/array2array",
                     "is_recursive": True,  # 标记为递归调用
                     "document_name": parent_doc_name,  # 传递父级文档名称
-                    "collection_name": parent_collection_name  # 传递父级collection名称
+                    "collection_name": parent_collection_name,  # 传递父级collection名称
+                    "parent_source_id": parent_source_id  # 传递父级Source ID
                 }
                 
                 # 创建一个虚拟的BackgroundTasks实例用于递归调用
@@ -158,14 +162,14 @@ async def process_sub_docs_concurrent(
     
     # 使用asyncio.gather进行并发处理，但通过信号量控制最大并发数
     try:
-        tasks = [process_single_sub_doc(url, parent_doc_name, parent_collection_name) for url in sub_docs_urls]
+        tasks = [process_single_sub_doc(url, parent_doc_name, parent_collection_name, parent_source_id) for url in sub_docs_urls]
         results = await asyncio.gather(*tasks, return_exceptions=False)
     except Exception as e:
         print(f"并发处理子文档时出现异常: {str(e)}")
         # 降级到串行处理
         results = []
         for sub_url in sub_docs_urls:
-            result = await process_single_sub_doc(sub_url, parent_doc_name, parent_collection_name)
+            result = await process_single_sub_doc(sub_url, parent_doc_name, parent_collection_name, parent_source_id)
             results.append(result)
     
     return results
@@ -176,7 +180,8 @@ async def process_sub_docs_background(
     recursive_depth: int,
     request_id: Optional[str] = None,
     parent_doc_name: Optional[str] = None,
-    parent_collection_name: Optional[str] = None
+    parent_collection_name: Optional[str] = None,
+    parent_source_id: Optional[int] = None
 ):
     """
     后台异步处理子文档的函数 - 不阻塞主响应
@@ -187,6 +192,7 @@ async def process_sub_docs_background(
         request_id: 请求ID，用于日志追踪
         parent_doc_name: 父级文档名称
         parent_collection_name: 父级collection名称
+        parent_source_id: 父级Source ID，用于将子文档内容添加到同一个collection
     """
     try:
         # 创建新的数据库会话
@@ -194,7 +200,7 @@ async def process_sub_docs_background(
         async with AsyncSessionLocal() as db:
             print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，request_id: {request_id}")
 
-            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db, parent_doc_name, parent_collection_name)
+            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db, parent_doc_name, parent_collection_name, parent_source_id)
 
             success_count = len([r for r in results if r.get('success')])
             print(f"[后台任务] 子文档处理完成，成功: {success_count}/{len(results)}, request_id: {request_id}")
@@ -275,6 +281,26 @@ async def process_webhook_response(
                 recursive_depth = data.recursive_depth
             
             # 🚀 关键优化：将子文档处理作为后台任务异步执行，不阻塞响应
+            # 获取Source ID（这里的data是webhook响应，需要通过document_name和collection找到对应的source_id）
+            source_id = None
+            if data.document_name:
+                try:
+                    from sqlalchemy.future import select
+                    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+                    stmt = select(Source).where(
+                        Source.title == data.document_name,
+                        Source.session_id == FIXED_SESSION_ID
+                    ).order_by(Source.created_at.desc())  # 获取最新创建的source
+                    result = await db.execute(stmt)
+                    source = result.scalar_one_or_none()
+                    if source:
+                        source_id = source.id
+                        print(f"找到父级Source ID: {source_id}")
+                    else:
+                        print(f"未找到匹配的Source，文档名称: {data.document_name}")
+                except Exception as e:
+                    print(f"查找父级Source失败: {e}")
+                    
             if background_tasks:
                 print("将子文档处理添加到后台任务队列...")
                 background_tasks.add_task(
@@ -283,13 +309,14 @@ async def process_webhook_response(
                     recursive_depth,
                     data.request_id,
                     data.document_name,
-                    data.collection_name
+                    data.collection_name,
+                    source_id
                 )
             else:
                 # 如果没有background_tasks，直接启动协程任务（不等待）
                 print("启动子文档后台处理协程...")
                 asyncio.create_task(
-                    process_sub_docs_background(all_sub_docs, recursive_depth, data.request_id, data.document_name, data.collection_name)
+                    process_sub_docs_background(all_sub_docs, recursive_depth, data.request_id, data.document_name, data.collection_name, source_id)
                 )
                 
         else:
@@ -473,11 +500,27 @@ async def agenttic_ingest(
         total_chunks = len(chunks)
         print(f"总共生成了 {total_chunks} 个文本块")
 
-        # 4. 创建Source和Chunk对象
+        # 4. 创建或获取Source对象
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         
-        # 创建Source对象
-        source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
+        # 检查是否为递归调用且提供了parent_source_id
+        parent_source_id = data.get("parent_source_id")
+        if is_recursive and parent_source_id:
+            # 递归调用时，获取父级Source对象而不是创建新的
+            print(f"递归调用：尝试获取父级Source ID: {parent_source_id}")
+            stmt = select(Source).where(Source.id == parent_source_id)
+            result = await db.execute(stmt)
+            source = result.scalar_one_or_none()
+            
+            if not source:
+                print(f"警告：未找到父级Source ID {parent_source_id}，创建新的Source")
+                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
+            else:
+                print(f"成功获取父级Source: {source.title} (ID: {source.id})")
+        else:
+            # 非递归调用时，创建新的Source对象
+            print("非递归调用：创建新的Source对象")
+            source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
         
         # 创建Chunk对象列表
         chunk_objects = []
@@ -510,8 +553,11 @@ async def agenttic_ingest(
         
         # 5. 将chunk对象保存到数据库
         print("正在保存chunk到数据库...")
-        db.add(source)
-        await db.flush()
+        
+        # 只有在创建新Source时才需要添加到数据库
+        if not (is_recursive and parent_source_id and source.id):
+            db.add(source)
+            await db.flush()
         
         # 为每个chunk设置source_id
         for chunk in chunk_objects:
@@ -600,8 +646,8 @@ async def agenttic_ingest(
             "recursive_depth": recursive_depth,  # 添加递归深度参数
         }
 
-        # 8. 发送webhook（仅在递归深度大于0时）
-        if recursive_depth > 0:
+        # 8. 发送webhook（仅在递归深度大于0且非递归调用时）
+        if recursive_depth > 0 and not is_recursive:
             print("正在发送webhook进行子文档识别...")
             
             # 创建工作流执行记录
@@ -648,7 +694,8 @@ async def agenttic_ingest(
             "message": f"成功摄取文档，共处理了 {total_chunks} 个文本块",
             "document_name": document_name,
             "collection_name": collection_name,
-            "total_chunks": total_chunks
+            "total_chunks": total_chunks,
+            "source_id": source.id  # 返回Source ID用于递归调用
         }
 
     except Exception as e:
