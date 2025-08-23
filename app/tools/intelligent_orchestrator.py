@@ -155,7 +155,7 @@ class IntelligentOrchestrator:
             if complexity == "简单" and self._should_use_fast_route(query):
                 yield {
                     "type": "reasoning",
-                    "content": "🚀 检测到简单查询，直接获取信息..."
+                    "content": "检测到简单查询，直接获取信息..."
                 }
                 async for event in self._handle_simple_query_directly_stream(query, contexts, run_config):
                     yield event
@@ -175,7 +175,7 @@ class IntelligentOrchestrator:
             
             yield {
                 "type": "reasoning",
-                "content": f"问题拆解完成，识别到{sub_queries_count}个关键子问题"
+                "content": f"问题拆解完成，识别到{sub_queries_count}个关键子问题。"
             }
             
             # 逐一显示每个子问题
@@ -207,7 +207,7 @@ class IntelligentOrchestrator:
             
             yield {
                 "type": "reasoning",
-                "content": f"思考完成，整体置信度: {overall_confidence}"
+                "content": f"思考完成，整体置信度: {overall_confidence}。"
             }
             
             # 第三步：决定是否需要工具调用
