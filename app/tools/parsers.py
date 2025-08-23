@@ -276,5 +276,14 @@ class ToolCallValidator:
                         cleaned[key] = float(value)
                 except ValueError:
                     pass
+                # 布尔值字符串
+                low = value.strip().lower()
+                if low in ("true", "false"):
+                    cleaned[key] = (low == "true")
+                # 逗号分隔数组
+                if ',' in value and key.endswith(('_list', 's')):
+                    arr = [item.strip() for item in value.split(',') if item.strip()]
+                    if arr:
+                        cleaned[key] = arr
         
         return cleaned

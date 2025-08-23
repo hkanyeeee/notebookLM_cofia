@@ -1,34 +1,23 @@
 """JSON Function Calling 策略实现"""
 import json
-import httpx
 from typing import Dict, List, Any, Optional, AsyncGenerator
+from .base import BaseStrategy
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
 from ..registry import tool_registry
-from ..parsers import ToolCallValidator
 
 
-class JSONFunctionCallingStrategy:
+class JSONFunctionCallingStrategy(BaseStrategy):
     """JSON Function Calling 策略（OpenAI 风格）"""
     
     def __init__(self, llm_service_url: str):
-        self.llm_service_url = llm_service_url
+        super().__init__(llm_service_url)
     
     def build_messages(self, context: ToolExecutionContext) -> List[Dict[str, Any]]:
         """构建 messages 用于 OpenAI 兼容接口"""
-        system_prompt = (
-            "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，"
-            "根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析；"
-            "你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；"
-            "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、"
-            "根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
-            "必须使用中文进行回答。"
-        )
-        
-        messages = [{"role": "system", "content": system_prompt}]
+        messages = [{"role": "system", "content": self.build_base_system_prompt()}]
         
         # 添加用户问题
-        user_content = "参考资料：\n" + "\n".join(context.contexts) + f"\n\n用户问题：{context.question}"
-        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": self.build_user_content(context)})
         
         # 添加历史步骤
         for step in context.steps:
@@ -70,39 +59,27 @@ class JSONFunctionCallingStrategy:
         
         # 如果有可用工具，添加 tools 参数
         if tool_registry.has_tools():
+            allowed_tools = self.get_allowed_tools(context)
             tools = []
-            for schema in tool_registry.get_all_schemas():
-                tool_def = {
-                    "type": "function",
-                    "function": {
-                        "name": schema.name,
-                        "description": schema.description,
-                        "parameters": schema.parameters
+            registry_schemas = tool_registry.get_all_schemas()
+            for schema in registry_schemas:
+                if schema.name in allowed_tools:
+                    tool_def = {
+                        "type": "function",
+                        "function": {
+                            "name": schema.name,
+                            "description": schema.description,
+                            "parameters": schema.parameters
+                        }
                     }
-                }
-                tools.append(tool_def)
-            
+                    tools.append(tool_def)
             if tools:
                 payload["tools"] = tools
                 payload["tool_choice"] = "auto"
         
         return payload
     
-    async def call_llm(self, payload: Dict[str, Any], stream: bool = False) -> Any:
-        """调用 LLM 服务"""
-        if stream:
-            payload["stream"] = True
-        
-        url = f"{self.llm_service_url}/chat/completions"
-        
-        async with httpx.AsyncClient(timeout=300 if not stream else None) as client:
-            if stream:
-                response = client.stream("POST", url, json=payload)
-                return response
-            else:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
-                return response.json()
+
     
     def parse_response(self, response_data: Dict[str, Any]) -> tuple[Optional[ToolCall], Optional[str]]:
         """解析 LLM 响应
@@ -135,7 +112,7 @@ class JSONFunctionCallingStrategy:
             ), None
         
         # 没有工具调用，返回内容
-        content = message.get("reasoning_content") or message.get("content") or ""
+        content = self.extract_response_content(response_data)
         return None, content
     
     async def execute_step(self, context: ToolExecutionContext) -> Optional[Step]:
@@ -147,48 +124,9 @@ class JSONFunctionCallingStrategy:
             tool_call, content = self.parse_response(response_data)
             
             if tool_call:
-                # 验证工具调用
-                if not tool_registry.is_allowed(tool_call.name):
-                    return Step(
-                        step_type=StepType.OBSERVATION,
-                        content=f"错误：工具 '{tool_call.name}' 不在允许列表中",
-                        tool_result=ToolResult(
-                            name=tool_call.name,
-                            result=f"工具 '{tool_call.name}' 不在允许列表中",
-                            success=False,
-                            error="Tool not allowed",
-                            call_id=tool_call.call_id
-                        )
-                    )
-                
-                # 参数验证
-                tool_schema = tool_registry.get_tool_schema(tool_call.name)
-                if tool_schema:
-                    is_valid, error_msg = ToolCallValidator.validate_json_schema(
-                        tool_call.arguments, tool_schema.parameters
-                    )
-                    if not is_valid:
-                        return Step(
-                            step_type=StepType.OBSERVATION,
-                            content=f"参数验证失败: {error_msg}",
-                            tool_result=ToolResult(
-                                name=tool_call.name,
-                                result=f"参数验证失败: {error_msg}",
-                                success=False,
-                                error=error_msg,
-                                call_id=tool_call.call_id
-                            )
-                        )
-                
-                # 执行工具
-                tool_result = await tool_registry.execute_tool(tool_call, context)
-                
-                return Step(
-                    step_type=StepType.OBSERVATION,
-                    content=f"Observation: {tool_result.result}",
-                    tool_call=tool_call,
-                    tool_result=tool_result
-                )
+                # 执行工具（包含所有验证）
+                tool_result = await self.execute_tool_with_validation(tool_call, context)
+                return self.create_observation_step(tool_call, tool_result, format_content=True)
             
             elif content:
                 # 最终答案
@@ -200,20 +138,15 @@ class JSONFunctionCallingStrategy:
             return None
             
         except Exception as e:
-            return Step(
-                step_type=StepType.OBSERVATION,
-                content=f"LLM 调用出错: {str(e)}"
-            )
+            return self.create_error_step(f"LLM 调用出错: {str(e)}", error=e)
     
     async def stream_execute_step(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行单个步骤"""
         payload = self.build_payload(context)
         
         try:
-            url = f"{self.llm_service_url}/chat/completions"
-            
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("POST", url, json=payload) as response:
+            client = await self.get_http_client()
+            async with await self.call_llm(payload, stream=True) as response:
                     response.raise_for_status()
                     
                     accumulated_content = ""
@@ -256,8 +189,7 @@ class JSONFunctionCallingStrategy:
                                     tool_call_data["function"]["arguments"] += function_delta["arguments"]
                             
                             # 检查常规内容
-                            reasoning_content = delta.get("reasoning_content")
-                            content = delta.get("content")
+                            reasoning_content, content = self.parse_stream_delta(delta)
                             
                             if reasoning_content:
                                 accumulated_content += reasoning_content

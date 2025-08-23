@@ -3,6 +3,8 @@
 import asyncio
 import json
 import uuid
+import time
+import re
 from typing import List, Dict, Any, Optional, Tuple
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +34,18 @@ class WebSearchTool:
     def __init__(self):
         self.name = "web_search"
         self.description = "搜索网络信息，爬取相关网页内容，并进行向量化索引和智能召回"
+        pass  # 缓存现在由统一的缓存系统处理
+
+    def _normalize_query(self, text: str) -> str:
+        if not isinstance(text, str):
+            return ""
+        s = text.strip().lower()
+        s = re.sub(r"\s+", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？“”\"'`（）()\[\]{}]", "", s)
+        s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
+        return s
+
+    # _fingerprint 方法已移除，缓存键生成由统一缓存系统处理
     
     async def generate_search_queries(self, topic: str, model: str = None) -> List[str]:
         """生成搜索关键词"""
@@ -334,6 +348,8 @@ class WebSearchTool:
         Returns:
             包含搜索结果和召回内容的字典
         """
+        # 缓存现在由统一缓存系统处理，此处移除原有缓存逻辑
+
         # 内部自动生成会话ID
         session_id = str(uuid.uuid4())
         
@@ -344,23 +360,31 @@ class WebSearchTool:
             "retrieved_content": [],
             "source_ids": [],
             "success": True,
-            "message": ""
+            "message": "",
+            "cached": False,
+            "metrics": {
+                "step_durations_ms": {}
+            }
         }
         
         try:
             # 1. 生成搜索关键词
             print(f"[WebSearch] 开始生成搜索关键词...")
-            start_time = asyncio.get_event_loop().time()
+            t0 = time.perf_counter()
             queries = await self.generate_search_queries(query, model)
-            print(f"[WebSearch] 生成搜索关键词耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+            self_time = (time.perf_counter() - t0) * 1000.0
+            result["metrics"]["step_durations_ms"]["generate_queries"] = self_time
+            print(f"[WebSearch] 生成搜索关键词耗时: {self_time/1000.0:.2f}s")
             print(f"[WebSearch] 生成的搜索关键词: {queries}")
             
             # 2. 并发搜索
             print(f"[WebSearch] 开始并发搜索...")
-            start_time = asyncio.get_event_loop().time()
+            t1 = time.perf_counter()
             search_tasks = [self.search_searxng(q, language, categories) for q in queries]
             search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
-            print(f"[WebSearch] 并发搜索耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+            search_time = (time.perf_counter() - t1) * 1000.0
+            result["metrics"]["step_durations_ms"]["searxng_search"] = search_time
+            print(f"[WebSearch] 并发搜索耗时: {search_time/1000.0:.2f}s")
             
             # 合并搜索结果并去重
             all_results = []
@@ -387,7 +411,7 @@ class WebSearchTool:
             if all_results:
                 # 3. 并发爬取网页内容
                 print(f"[WebSearch] 开始并发爬取网页内容...")
-                start_time = asyncio.get_event_loop().time()
+                t2 = time.perf_counter()
                 content_tasks = []
                 for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
                     content_tasks.append(self.fetch_web_content(item["url"]))
@@ -395,15 +419,21 @@ class WebSearchTool:
                 # 处理剩余的 URL（分批）
                 remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
                 contents = await asyncio.gather(*content_tasks, return_exceptions=True)
-                print(f"[WebSearch] 第一批爬取耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+                first_batch_time = (time.perf_counter() - t2) * 1000.0
+                print(f"[WebSearch] 第一批爬取耗时: {first_batch_time/1000.0:.2f}s")
                 
                 # 处理剩余的批次
+                t2b = time.perf_counter()
                 for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
                     batch = remaining_urls[i:i + WEB_SEARCH_CONCURRENT_REQUESTS]
                     batch_tasks = [self.fetch_web_content(item["url"]) for item in batch]
                     batch_contents = await asyncio.gather(*batch_tasks, return_exceptions=True)
                     contents.extend(batch_contents)
                 
+                crawl_time = (time.perf_counter() - t2) * 1000.0
+                result["metrics"]["step_durations_ms"]["crawl_contents_total"] = crawl_time
+                result["metrics"]["step_durations_ms"]["crawl_first_batch"] = first_batch_time
+                result["metrics"]["step_durations_ms"]["crawl_remaining_batches"] = (time.perf_counter() - t2b) * 1000.0
                 # 组装文档
                 documents = []
                 for item, content in zip(all_results, contents):
@@ -424,22 +454,26 @@ class WebSearchTool:
                 if documents:
                     # 4. 处理文档（切分、embedding、存储）
                     print(f"[WebSearch] 开始处理文档（切分、embedding、存储）...")
-                    start_time = asyncio.get_event_loop().time()
+                    t3 = time.perf_counter()
                     source_ids = await self.process_documents(documents, session_id)
                     result["source_ids"] = source_ids
-                    print(f"[WebSearch] 文档处理耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+                    proc_time = (time.perf_counter() - t3) * 1000.0
+                    result["metrics"]["step_durations_ms"]["process_documents"] = proc_time
+                    print(f"[WebSearch] 文档处理耗时: {proc_time/1000.0:.2f}s")
                     print(f"[WebSearch] 处理了 {len(source_ids)} 个文档源")
             
             # 5. 搜索和召回
             if result["source_ids"]:
                 print(f"[WebSearch] 开始搜索和召回...")
-                start_time = asyncio.get_event_loop().time()
+                t4 = time.perf_counter()
                 hits = await self.search_and_retrieve(
                     query, 
                     session_id, 
                     source_ids=result["source_ids"]
                 )
-                print(f"[WebSearch] 搜索和召回耗时: {asyncio.get_event_loop().time() - start_time:.2f}s")
+                retrieve_time = (time.perf_counter() - t4) * 1000.0
+                result["metrics"]["step_durations_ms"]["search_and_retrieve"] = retrieve_time
+                print(f"[WebSearch] 搜索和召回耗时: {retrieve_time/1000.0:.2f}s")
                 
                 # 格式化召回内容
                 retrieved_content = []
@@ -467,6 +501,8 @@ class WebSearchTool:
             result["message"] = f"Web 搜索执行失败: {str(e)}"
             print(f"Web 搜索工具执行错误: {e}")
         
+        # 缓存写入由统一缓存系统处理，移除原有缓存逻辑
+
         return result
 
 

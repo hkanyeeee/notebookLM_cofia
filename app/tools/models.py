@@ -40,6 +40,9 @@ class ToolResult(BaseModel):
     success: bool = True
     error: Optional[str] = None
     call_id: Optional[str] = None
+    # 统计与可观测性
+    latency_ms: Optional[float] = None
+    retries: int = 0
     
     class Config:
         extra = "forbid"
@@ -70,6 +73,28 @@ class RunConfig(BaseModel):
     tools: List[ToolSchema] = []
     max_steps: int = 6
     model: Optional[str] = None
+    # 可选：按工具名覆盖的运行控制参数
+    tool_timeouts: Optional[Dict[str, float]] = None  # seconds
+    tool_max_retries: Optional[Dict[str, int]] = None
+    # 运行与步骤超时（秒）
+    run_timeout_s: Optional[float] = None
+    step_timeout_s: Optional[float] = None
+    
+    class Config:
+        extra = "forbid"
+
+
+class ToolMetadata(BaseModel):
+    """工具元数据与运行控制（注册时可选提供）"""
+    timeout_s: float = 300.0
+    max_retries: int = 1
+    max_concurrency: int = 8
+    description_override: Optional[str] = None
+    # 缓存配置
+    cache_enabled: bool = True
+    cache_ttl: Optional[float] = None  # 如果不设置，使用默认TTL
+    cache_max_size: Optional[int] = None
+    # 预留：未来可加入 rate_limit, circuit breaker 等
     
     class Config:
         extra = "forbid"

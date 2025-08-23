@@ -1,39 +1,47 @@
 """Harmony DSL 策略实现"""
 import json
-import httpx
 import re
 from typing import Dict, List, Any, Optional, AsyncGenerator
+from .base import BaseStrategy
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
 from ..registry import tool_registry
-from ..parsers import HarmonyParser, ToolCallValidator
+from ..parsers import HarmonyParser
 
 
-class HarmonyStrategy:
+class HarmonyStrategy(BaseStrategy):
     """Harmony DSL 工具标记策略（仅适用于 gpt-oss 模型）"""
     
     def __init__(self, llm_service_url: str):
-        self.llm_service_url = llm_service_url
+        super().__init__(llm_service_url)
     
     def build_system_prompt(self, context: ToolExecutionContext) -> str:
         """构建 Harmony DSL 系统提示"""
         base_prompt = (
-            "你是一位严谨的助手"
-            "根据问题进行多角度推理，合理使用工具，结合你自己的知识提供直击题干的回答和分析；"
-            "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
-            "必须使用中文进行回答。\n\n"
+            "你是一位高效智能的助手。请仔细分析用户问题，合理判断是否需要使用工具获取信息。"
+            "优先使用你已有的知识回答问题，只有在确实需要最新信息或特定数据时才使用工具。"
+            "使用工具时要精准高效：一次工具调用通常就足够了，不要进行重复或冗余的搜索。"
+            "重要：工具执行完成后，请立即基于工具返回的结果给出完整的最终答案，不要再次调用相同或类似的工具。"
+            "回答要简洁准确，不要使用'可能'、'大概'、'也许'等不确定词汇，"
+            "也不要说'根据搜索结果'或'根据获取的信息'等提示性词语。"
+            "必须使用中文回答。\n\n"
         )
         
         # 添加工具说明
         if tool_registry.has_tools():
-            tools_desc = "你可以使用以下工具来获取额外信息：\n"
+            tools_desc = "可用工具：\n"
+            allowed_tools = self.get_allowed_tools(context)
             for schema in tool_registry.get_all_schemas():
-                tools_desc += f"- {schema.name}: {schema.description}\n"
+                if schema.name in allowed_tools:
+                    tools_desc += f"- {schema.name}: {schema.description}\n"
             
-            tools_desc += "\n如需使用工具，请使用以下格式：\n"
+            tools_desc += "\n工具使用原则：\n"
+            tools_desc += "1. 只有在确实需要实时信息时才使用工具\n"
+            tools_desc += "2. 一次精准的工具调用通常就足够了\n"
+            tools_desc += "3. 工具调用后立即基于结果回答，不要再次搜索相同或相似信息\n"
+            tools_desc += "4. 对于简单查询（如天气、新闻），一次搜索即可\n"
+            tools_desc += "5. 禁止连续调用多个工具，执行一个工具后必须立即给出最终答案\n\n"
+            tools_desc += "工具调用格式：\n"
             tools_desc += '<tool name="工具名称">{"参数名": "参数值"}</tool>\n\n'
-            tools_desc += "你可以在回答中使用多个工具调用。每个工具调用完成后，"
-            tools_desc += "系统会返回结果，你可以继续使用其他工具或给出最终答案。\n"
-            tools_desc += "如果不需要使用工具，请直接给出答案。\n\n"
         else:
             tools_desc = "当前没有可用工具，请直接根据提供的参考资料回答问题。\n\n"
         
@@ -45,8 +53,7 @@ class HarmonyStrategy:
         messages = [{"role": "system", "content": system_prompt}]
         
         # 添加用户问题
-        user_content = "参考资料：\n" + "\n".join(context.contexts) + f"\n\n用户问题：{context.question}"
-        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": self.build_user_content(context)})
         
         # 添加历史对话
         for step in context.steps:
@@ -71,21 +78,7 @@ class HarmonyStrategy:
             "messages": messages,
         }
     
-    async def call_llm(self, payload: Dict[str, Any], stream: bool = False) -> Any:
-        """调用 LLM 服务"""
-        if stream:
-            payload["stream"] = True
-        
-        url = f"{self.llm_service_url}/chat/completions"
-        
-        async with httpx.AsyncClient(timeout=300 if not stream else None) as client:
-            if stream:
-                response = client.stream("POST", url, json=payload)
-                return response
-            else:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
-                return response.json()
+
     
     def parse_response(self, response_text: str) -> tuple[List[ToolCall], str]:
         """解析 Harmony DSL 格式的响应
@@ -188,51 +181,14 @@ class HarmonyStrategy:
                             tool_result=reused_result
                         )
                 
-                # 验证工具调用
-                if not tool_registry.is_allowed(tool_call.name):
-                    return Step(
-                        step_type=StepType.OBSERVATION,
-                        content=f"错误：工具 '{tool_call.name}' 不在允许列表中",
-                        tool_result=ToolResult(
-                            name=tool_call.name,
-                            result=f"工具 '{tool_call.name}' 不在允许列表中",
-                            success=False,
-                            error="Tool not allowed"
-                        )
-                    )
-                
-                # 参数验证和清理
-                tool_schema = tool_registry.get_tool_schema(tool_call.name)
-                if tool_schema:
-                    tool_call.arguments = ToolCallValidator.sanitize_arguments(tool_call.arguments)
-                    is_valid, error_msg = ToolCallValidator.validate_json_schema(
-                        tool_call.arguments, tool_schema.parameters
-                    )
-                    if not is_valid:
-                        return Step(
-                            step_type=StepType.OBSERVATION,
-                            content=f"参数验证失败: {error_msg}",
-                            tool_result=ToolResult(
-                                name=tool_call.name,
-                                result=f"参数验证失败: {error_msg}",
-                                success=False,
-                                error=error_msg
-                            )
-                        )
-                
-                # 执行工具
+                # 执行工具（包含所有验证）
                 print(f"[Harmony Strategy] 开始执行工具: {tool_call.name}")
-                tool_result = await tool_registry.execute_tool(tool_call, context)
+                tool_result = await self.execute_tool_with_validation(tool_call, context)
                 print(f"[Harmony Strategy] 工具执行完成: 成功={tool_result.success}")
                 if not tool_result.success:
                     print(f"[Harmony Strategy] 工具执行错误: {tool_result.error}")
                 
-                return Step(
-                    step_type=StepType.OBSERVATION,
-                    content=f"工具执行结果：{tool_result.result}",
-                    tool_call=tool_call,
-                    tool_result=tool_result
-                )
+                return self.create_observation_step(tool_call, tool_result, format_content=False)
             
             # 没有工具调用，返回最终内容
             elif remaining_content:
@@ -244,23 +200,19 @@ class HarmonyStrategy:
             return None
             
         except Exception as e:
-            return Step(
-                step_type=StepType.OBSERVATION,
-                content=f"LLM 调用出错: {str(e)}"
-            )
+            return self.create_error_step(f"LLM 调用出错: {str(e)}", error=e)
     
     async def stream_execute_step(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行单个步骤"""
         payload = self.build_payload(context)
         # 重要：开启流式返回，确保 LLM 以 SSE 形式输出增量结果
-        # 否则将不会产生以 "data:" 开头的行，导致前端一直停留在“信息加载中”。
+        # 否则将不会产生以 "data:" 开头的行，导免前端一直停留在"信息加载中"。
         payload["stream"] = True
         
         try:
             url = f"{self.llm_service_url}/chat/completions"
             
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("POST", url, json=payload) as response:
+            async with await self.call_llm(payload, stream=True) as response:
                     response.raise_for_status()
                     
                     accumulated_content = ""
@@ -271,6 +223,10 @@ class HarmonyStrategy:
                     # 本轮流式内的去重缓存
                     executed_fingerprints = set()
                     fingerprint_to_result: Dict[str, ToolResult] = {}
+                    # 标记是否已经有实质内容输出（非工具调用）
+                    has_content_output = False
+                    # 标记是否已经执行了工具
+                    has_executed_tool = False
                     
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data:"):
@@ -278,6 +234,28 @@ class HarmonyStrategy:
                         
                         data_str = line[5:].strip()
                         if not data_str or data_str == "[DONE]":
+                            # 检查是否应该发送最终答案
+                            if has_content_output and accumulated_content.strip():
+                                # 检查当前上下文中是否已有工具执行记录
+                                context_has_tool_result = any(step.step_type == StepType.OBSERVATION and step.tool_result 
+                                                            for step in context.steps)
+                                
+                                if context_has_tool_result and not has_executed_tool:
+                                    # 这是基于已有工具结果的回答，是最终答案
+                                    print("[Harmony Stream] 检测到基于工具结果的回答，这是最终答案")
+                                    yield {
+                                        "type": "final_answer",
+                                        "content": accumulated_content.strip(),
+                                        "message": "基于工具结果的最终回答"
+                                    }
+                                elif not context_has_tool_result and not has_executed_tool:
+                                    # 未使用工具的直接回答
+                                    print("[Harmony Stream] 流式结束，未使用工具，标记为最终答案")
+                                    yield {
+                                        "type": "final_answer", 
+                                        "content": accumulated_content.strip(),
+                                        "message": "未使用工具的直接回答"
+                                    }
                             continue
                         
                         try:
@@ -333,7 +311,9 @@ class HarmonyStrategy:
                                                             "name": tool_call.name,
                                                             "tool_name": tool_call.name,
                                                             "result": str(reused.result),
-                                                            "success": reused.success
+                                                            "success": reused.success,
+                                                            "latency_ms": reused.latency_ms,
+                                                            "retries": reused.retries,
                                                         }
                                                         context.add_step(Step(
                                                             step_type=StepType.OBSERVATION,
@@ -352,7 +332,9 @@ class HarmonyStrategy:
                                                 "name": tool_call.name,
                                                 "tool_name": tool_call.name,
                                                 "result": str(tool_result.result),
-                                                "success": tool_result.success
+                                                "success": tool_result.success,
+                                                "latency_ms": tool_result.latency_ms,
+                                                "retries": tool_result.retries,
                                             }
                                             
                                             # 添加步骤到上下文
@@ -372,6 +354,9 @@ class HarmonyStrategy:
                                                 fp = self._fingerprint_web_search(tool_call.arguments)
                                                 executed_fingerprints.add(fp)
                                                 fingerprint_to_result[fp] = tool_result
+                                            
+                                            # 标记已执行工具
+                                            has_executed_tool = True
                                         else:
                                             yield {
                                                 "type": "tool_result",
@@ -416,7 +401,9 @@ class HarmonyStrategy:
                                                             "name": tool_call.name,
                                                             "tool_name": tool_call.name,
                                                             "result": str(reused.result),
-                                                            "success": reused.success
+                                                            "success": reused.success,
+                                                            "latency_ms": reused.latency_ms,
+                                                            "retries": reused.retries,
                                                         }
                                                         context.add_step(Step(
                                                             step_type=StepType.OBSERVATION,
@@ -433,7 +420,9 @@ class HarmonyStrategy:
                                                 "name": tool_call.name,
                                                 "tool_name": tool_call.name,
                                                 "result": str(tool_result.result),
-                                                "success": tool_result.success
+                                                "success": tool_result.success,
+                                                "latency_ms": tool_result.latency_ms,
+                                                "retries": tool_result.retries,
                                             }
                                             
                                             # 添加步骤到上下文
@@ -453,6 +442,9 @@ class HarmonyStrategy:
                                                 fp = self._fingerprint_web_search(tool_call.arguments)
                                                 executed_fingerprints.add(fp)
                                                 fingerprint_to_result[fp] = tool_result
+                                            
+                                            # 标记已执行工具
+                                            has_executed_tool = True
                                         else:
                                             yield {
                                                 "type": "tool_result",
@@ -470,11 +462,30 @@ class HarmonyStrategy:
                                     if reasoning_content:
                                         yield {"type": "reasoning", "content": reasoning_content}
                                     elif content:
+                                        # 标记已有内容输出
+                                        has_content_output = True
                                         yield {"type": "content", "content": content}
+                                        
+                                        # 不在工具执行的同一轮中立即结束，让模型完成输出
                         
                         except Exception as e:
                             print(f"[Harmony Stream] 解析流式数据时出错: {e}")
                             continue
+        
+                    # 流式处理完成，根据情况决定后续处理
+                    if has_executed_tool:
+                        print("[Harmony Stream] 本轮工具执行完成，让 orchestrator 继续下一轮")
+                        # 工具执行完成，添加步骤到上下文，让orchestrator继续
+                    elif has_content_output and accumulated_content.strip():
+                        # 未使用工具且有内容输出，这是直接回答
+                        print("[Harmony Stream] 未使用工具，有内容输出，这是直接的最终答案")
+                        yield {
+                            "type": "final_answer",
+                            "content": accumulated_content.strip(),
+                            "message": "未使用工具的直接回答"
+                        }
+                    else:
+                        print("[Harmony Stream] 本轮结束，无特殊处理")
         
         except Exception as e:
             print(f"[Harmony Stream] 流式执行出错: {e}")

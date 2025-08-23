@@ -23,6 +23,14 @@ class ToolOrchestrator:
             ToolMode.HARMONY: HarmonyStrategy(llm_service_url)
         }
     
+    async def close(self):
+        """清理资源，关闭HTTP连接"""
+        for strategy in self.strategies.values():
+            try:
+                await strategy.close()
+            except Exception as e:
+                print(f"[Orchestrator] 清理策略资源时出错: {e}")
+    
     def _select_strategy(self, context: ToolExecutionContext):
         """选择执行策略"""
         # 确定实际使用的策略
@@ -55,6 +63,9 @@ class ToolOrchestrator:
         # 如果没有可用工具，直接结束（让策略处理）
         if not tool_registry.has_tools():
             return False
+        
+        # 检查是否应该继续执行更多步骤
+        # 允许工具执行后进行一轮最终回答生成
         
         return True
     
@@ -90,8 +101,17 @@ class ToolOrchestrator:
         
         # 执行主循环
         try:
+            # 运行级别超时
+            run_deadline = None
+            if run_config.run_timeout_s and run_config.run_timeout_s > 0:
+                run_deadline = asyncio.get_event_loop().time() + run_config.run_timeout_s
             while self._should_continue(context):
-                step = await strategy.execute_step(context)
+                if run_deadline is not None and asyncio.get_event_loop().time() >= run_deadline:
+                    break
+                if run_config.step_timeout_s and run_config.step_timeout_s > 0:
+                    step = await asyncio.wait_for(strategy.execute_step(context), timeout=run_config.step_timeout_s)
+                else:
+                    step = await strategy.execute_step(context)
                 
                 if not step:
                     break
@@ -171,6 +191,7 @@ class ToolOrchestrator:
         
         try:
             step_count = 0
+            
             while step_count < run_config.max_steps:
                 step_count += 1
                 
@@ -180,13 +201,35 @@ class ToolOrchestrator:
                 
                 # 流式执行步骤
                 step_executed = False
-                async for event in strategy.stream_execute_step(context):
-                    step_executed = True
-                    yield event
-                    
-                    # 如果是最终答案相关的事件，结束
-                    if event.get("type") == "final_answer":
-                        return
+                if run_config.step_timeout_s and run_config.step_timeout_s > 0:
+                    # 将流式输出转入内部队列，以便应用超时
+                    queue: asyncio.Queue = asyncio.Queue()
+                    async def _pump():
+                        try:
+                            async for ev in strategy.stream_execute_step(context):
+                                await queue.put(ev)
+                        finally:
+                            await queue.put({"__done__": True})
+                    task = asyncio.create_task(_pump())
+                    try:
+                        while True:
+                            event = await asyncio.wait_for(queue.get(), timeout=run_config.step_timeout_s)
+                            if event.get("__done__"):
+                                break
+                            step_executed = True
+                            yield event
+                            if event.get("type") == "final_answer":
+                                return
+                    finally:
+                        task.cancel()
+                else:
+                    async for event in strategy.stream_execute_step(context):
+                        step_executed = True
+                        yield event
+                        
+                        # 如果是最终答案相关的事件，结束
+                        if event.get("type") == "final_answer":
+                            return
                 
                 # 如果没有执行任何步骤，退出循环
                 if not step_executed:

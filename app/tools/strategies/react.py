@@ -1,34 +1,29 @@
 """ReAct 策略实现"""
 import json
-import httpx
 from typing import Dict, List, Any, Optional, AsyncGenerator
+from .base import BaseStrategy
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
 from ..registry import tool_registry
-from ..parsers import ReActParser, ToolCallValidator
+from ..parsers import ReActParser
 
 
-class ReActStrategy:
+class ReActStrategy(BaseStrategy):
     """ReAct (Reason + Act) 策略实现"""
     
     def __init__(self, llm_service_url: str):
-        self.llm_service_url = llm_service_url
+        super().__init__(llm_service_url)
     
     def build_system_prompt(self, context: ToolExecutionContext) -> str:
         """构建 ReAct 系统提示"""
-        base_prompt = (
-            "你是一位严谨的助手，请阅读提供的参考资料，提取有效信息、排除数据杂音，"
-            "根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析；"
-            "你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；"
-            "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、"
-            "根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
-            "必须使用中文进行回答。\n\n"
-        )
+        base_prompt = self.build_base_system_prompt()
         
         # 添加工具说明
         if tool_registry.has_tools():
             tools_desc = "你可以使用以下工具来获取额外信息（如需要）：\n"
+            allowed_tools = self.get_allowed_tools(context)
             for schema in tool_registry.get_all_schemas():
-                tools_desc += f"- {schema.name}: {schema.description}\n"
+                if schema.name in allowed_tools:
+                    tools_desc += f"- {schema.name}: {schema.description}\n"
             
             tools_desc += "\n请严格按照以下格式进行推理和操作：\n"
             tools_desc += "Thought: [你的思考过程]\n"
@@ -49,8 +44,7 @@ class ReActStrategy:
         messages = [{"role": "system", "content": system_prompt}]
         
         # 添加用户问题
-        user_content = "参考资料：\n" + "\n".join(context.contexts) + f"\n\n用户问题：{context.question}"
-        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": self.build_user_content(context)})
         
         # 添加历史对话
         current_content = ""
@@ -84,21 +78,7 @@ class ReActStrategy:
             "messages": messages,
         }
     
-    async def call_llm(self, payload: Dict[str, Any], stream: bool = False) -> Any:
-        """调用 LLM 服务"""
-        if stream:
-            payload["stream"] = True
-        
-        url = f"{self.llm_service_url}/chat/completions"
-        
-        async with httpx.AsyncClient(timeout=300 if not stream else None) as client:
-            if stream:
-                response = client.stream("POST", url, json=payload)
-                return response
-            else:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
-                return response.json()
+
     
     def parse_response(self, response_text: str) -> tuple[Optional[ToolCall], Optional[str], Optional[str]]:
         """解析 ReAct 格式的响应
@@ -147,47 +127,9 @@ class ReActStrategy:
                 )
             
             elif tool_call:
-                # 验证工具调用
-                if not tool_registry.is_allowed(tool_call.name):
-                    return Step(
-                        step_type=StepType.OBSERVATION,
-                        content=f"错误：工具 '{tool_call.name}' 不在允许列表中",
-                        tool_result=ToolResult(
-                            name=tool_call.name,
-                            result=f"工具 '{tool_call.name}' 不在允许列表中",
-                            success=False,
-                            error="Tool not allowed"
-                        )
-                    )
-                
-                # 参数验证和清理
-                tool_schema = tool_registry.get_tool_schema(tool_call.name)
-                if tool_schema:
-                    tool_call.arguments = ToolCallValidator.sanitize_arguments(tool_call.arguments)
-                    is_valid, error_msg = ToolCallValidator.validate_json_schema(
-                        tool_call.arguments, tool_schema.parameters
-                    )
-                    if not is_valid:
-                        return Step(
-                            step_type=StepType.OBSERVATION,
-                            content=f"参数验证失败: {error_msg}，请重新尝试",
-                            tool_result=ToolResult(
-                                name=tool_call.name,
-                                result=f"参数验证失败: {error_msg}",
-                                success=False,
-                                error=error_msg
-                            )
-                        )
-                
-                # 执行工具
-                tool_result = await tool_registry.execute_tool(tool_call, context)
-                
-                return Step(
-                    step_type=StepType.OBSERVATION,
-                    content=f"Observation: {tool_result.result}",
-                    tool_call=tool_call,
-                    tool_result=tool_result
-                )
+                # 执行工具（包含所有验证）
+                tool_result = await self.execute_tool_with_validation(tool_call, context)
+                return self.create_observation_step(tool_call, tool_result, format_content=True)
             
             elif thought:
                 return Step(
@@ -198,10 +140,7 @@ class ReActStrategy:
             return None
             
         except Exception as e:
-            return Step(
-                step_type=StepType.OBSERVATION,
-                content=f"LLM 调用出错: {str(e)}"
-            )
+            return self.create_error_step(f"LLM 调用出错: {str(e)}", error=e)
     
     async def stream_execute_step(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行单个步骤"""
@@ -262,7 +201,10 @@ class ReActStrategy:
                             yield {
                                 "type": "observation",
                                 "name": tool_call.name,
-                                "result": str(tool_result.result)
+                                "result": str(tool_result.result),
+                                "success": tool_result.success,
+                                "latency_ms": tool_result.latency_ms,
+                                "retries": tool_result.retries,
                             }
                             
                             # 添加步骤到上下文

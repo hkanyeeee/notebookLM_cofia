@@ -261,13 +261,19 @@ async def query(
                                     "args": event.get("args", {})
                                 }, ensure_ascii=False) + "\n\n"
                             elif et in ("tool_result", "observation"):
-                                yield "data: " + json.dumps({
+                                payload = {
                                     "type": "tool_result",
                                     "name": event.get("name"),
                                     "tool_name": event.get("tool_name") or event.get("name"),
                                     "result": event.get("result"),
                                     "success": event.get("success", True)
-                                }, ensure_ascii=False) + "\n\n"
+                                }
+                                # 透传可观测性字段
+                                if "latency_ms" in event:
+                                    payload["latency_ms"] = event.get("latency_ms")
+                                if "retries" in event:
+                                    payload["retries"] = event.get("retries")
+                                yield "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
                             elif et == "error":
                                 yield "data: " + json.dumps({
                                     "type": "error",

@@ -119,6 +119,7 @@ export function useMessageStore() {
                   content: '正在思考...',
                 };
               } else {
+                // 累积内容并直接显示
                 accumulatedContent += evt.content;
                 messages.value[messageIndex] = {
                   ...messages.value[messageIndex],
@@ -144,15 +145,32 @@ export function useMessageStore() {
               isToolRunning = false;
               const toolName = evt.tool_name || evt.name || 'unknown';
               let statusMessage = '';
-              if (toolName === 'web_search') {
-                statusMessage = '再次思考中...';
-              } else {
-                statusMessage = '再次思考中...';
+              
+              // 可用时在控制台输出指标，后续可展示在 UI
+              if (typeof evt.latency_ms === 'number') {
+                console.log(`[tool_result] ${toolName} latency_ms=${evt.latency_ms} retries=${evt.retries ?? 0}`)
               }
-              messages.value[messageIndex] = {
-                ...messages.value[messageIndex],
-                content: statusMessage,
-              };
+              
+              // 如果工具失败，直接把错误信息展示出来，避免误导
+              if (evt.success === false) {
+                const errorText = typeof evt.result === 'string' ? evt.result : (evt.result?.error || '工具执行失败');
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: `工具失败：${errorText}`,
+                };
+              } else {
+                // 工具成功执行，显示简洁的状态信息
+                if (toolName === 'web_search') {
+                  statusMessage = '正在分析搜索结果...';
+                } else {
+                  statusMessage = '正在处理...';
+                }
+                
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: statusMessage,
+                };
+              }
             } else if (evt.type === 'status' && typeof evt.message === 'string') {
               // 状态更新
               messages.value[messageIndex] = {
@@ -164,6 +182,28 @@ export function useMessageStore() {
                 ...messages.value[messageIndex],
                 sources: (evt.sources as Source[]).sort((a: Source, b: Source) => b.score - a.score),
               };
+            } else if (evt.type === 'final_answer') {
+              // 最终答案 - 结束工具运行状态并显示最终内容
+              console.log('[Frontend] 收到最终答案事件:', evt);
+              isToolRunning = false;
+              if (evt.content && typeof evt.content === 'string') {
+                // 如果有内容，使用最终答案内容（不累积，因为可能是完整替换）
+                const finalContent = evt.content.trim();
+                if (finalContent) {
+                  messages.value[messageIndex] = {
+                    ...messages.value[messageIndex],
+                    content: finalContent,
+                  };
+                }
+              }
+              // 最终答案标记流式处理结束
+              console.log('[Frontend] 最终答案处理完成，结束流式处理');
+              break;
+            } else if (evt.type === 'complete') {
+              // 流式处理完成
+              console.log('[Frontend] 流式处理完成');
+              isToolRunning = false;
+              break;
             } else if (evt.type === 'error') {
               throw new Error(evt.message || 'stream error');
             }
