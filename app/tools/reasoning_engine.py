@@ -5,7 +5,7 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import LLM_SERVICE_URL, REASONING_TEMPERATURE, REASONING_MAX_TOKENS, REASONING_TIMEOUT
+from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, REASONING_TIMEOUT
 from .prompts import REASONING_SYSTEM_PROMPT, REASONING_USER_PROMPT_TEMPLATE
 
 
@@ -49,7 +49,7 @@ class ReasoningEngine:
                 response = await client.post(
                     f"{self.llm_service_url}/chat/completions",
                     json={
-                        "model": execution_context.run_config.model if execution_context else "qwen2.5:7b",
+                        "model": execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
                         "messages": [
                             {
                                 "role": "system",
@@ -57,8 +57,6 @@ class ReasoningEngine:
                             },
                             {"role": "user", "content": prompt}
                         ],
-                        "temperature": REASONING_TEMPERATURE,
-                        "max_tokens": REASONING_MAX_TOKENS
                     },
                     timeout=REASONING_TIMEOUT
                 )
@@ -187,7 +185,7 @@ class ReasoningEngine:
         返回形如 {"needs_realtime": bool, "reason": str} 的字典。
         """
         try:
-            model_name = execution_context.run_config.model if execution_context else "qwen2.5:7b"
+            model_name = execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL
             system_prompt = (
                 "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
                 "判断用户问题是否需要获取“实时信息”（如天气、股价、新闻、时间、价格、实时事件等）。\n"

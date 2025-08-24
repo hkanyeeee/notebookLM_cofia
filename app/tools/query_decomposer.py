@@ -5,7 +5,7 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import LLM_SERVICE_URL, LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_TIMEOUT
+from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, LLM_DEFAULT_TIMEOUT
 
 
 class QueryDecomposer:
@@ -100,7 +100,7 @@ class QueryDecomposer:
                 response = await client.post(
                     f"{self.llm_service_url}/chat/completions",
                     json={
-                        "model": context.run_config.model if context else "qwen2.5:7b",
+                        "model": context.run_config.model if context else DEFAULT_SEARCH_MODEL,
                         "messages": [
                             {
                                 "role": "system", 
@@ -108,8 +108,6 @@ class QueryDecomposer:
                             },
                             {"role": "user", "content": prompt}
                         ],
-                        "temperature": LLM_DEFAULT_TEMPERATURE,
-                        "max_tokens": LLM_DEFAULT_MAX_TOKENS
                     },
                     timeout=LLM_DEFAULT_TIMEOUT
                 )
@@ -244,7 +242,7 @@ class QueryDecomposer:
             f"问题：{query}\n"
             "只输出JSON。"
         )
-        model_name = (context.run_config.model if context else "qwen2.5:7b")
+        model_name = (context.run_config.model if context else DEFAULT_SEARCH_MODEL)
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{self.llm_service_url}/chat/completions",

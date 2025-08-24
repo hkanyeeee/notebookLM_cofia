@@ -3,8 +3,6 @@ import json
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from app.config import (
     LLM_SERVICE_URL, 
-    LLM_DEFAULT_TEMPERATURE, 
-    LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_TIMEOUT
 )
 from .tools.models import RunConfig, ToolMode
@@ -240,8 +238,6 @@ async def chat_complete(
     system_prompt: str,
     user_prompt: str,
     model: str = DEFAULT_CHAT_MODEL,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
     timeout: Optional[float] = None,
     stream: bool = False
 ) -> str:
@@ -252,8 +248,6 @@ async def chat_complete(
         system_prompt: 系统提示
         user_prompt: 用户提示
         model: 使用的模型名称
-        temperature: 温度参数
-        max_tokens: 最大token数
         timeout: 超时时间
         stream: 是否使用流式（本函数始终非流式）
         
@@ -268,8 +262,6 @@ async def chat_complete(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE,
-        "max_tokens": max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_TOKENS
     }
     
     timeout_value = timeout if timeout is not None else LLM_DEFAULT_TIMEOUT
@@ -288,8 +280,6 @@ async def chat_complete_stream(
     system_prompt: str,
     user_prompt: str,
     model: str = DEFAULT_CHAT_MODEL,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
     timeout: Optional[float] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
@@ -299,8 +289,6 @@ async def chat_complete_stream(
         system_prompt: 系统提示
         user_prompt: 用户提示
         model: 使用的模型名称
-        temperature: 温度参数
-        max_tokens: 最大token数
         timeout: 超时时间
         
     Yields:
@@ -314,8 +302,6 @@ async def chat_complete_stream(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE,
-        "max_tokens": max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_TOKENS,
         "stream": True
     }
     

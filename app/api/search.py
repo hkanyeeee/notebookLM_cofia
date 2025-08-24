@@ -3,7 +3,7 @@ import json
 import re
 from fastapi import APIRouter, Body, HTTPException
 
-from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL
+from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL
 
 
 router = APIRouter()
@@ -20,6 +20,8 @@ async def generate_search_queries(
     if not topic:
         raise HTTPException(status_code=400, detail="topic cannot be empty")
 
+    model = data.get("model", DEFAULT_SEARCH_MODEL)
+
     # 使用现有 LLM 服务，以系统提示约束返回 JSON
     prompt_system = (
         "你是搜索查询生成器。给定课题，产出3个多样化、可直接用于网页搜索的英文查询。"
@@ -28,12 +30,11 @@ async def generate_search_queries(
     user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
     payload = {
-        "model": "qwen3-30b-a3b-thinking-2507-mlx",
+        "model": model,
         "messages": [
             {"role": "system", "content": prompt_system},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.6,
     }
 
     try:

@@ -2,9 +2,12 @@ import { ref, reactive } from 'vue'
 import { notebookApi } from '../api/notebook'
 import { useSessionStore } from './session'
 import type { Document, IngestionProgress, QueryType } from './types'
+import { useModelStore } from './useModelStore'
 
-export function useDocumentStore() {
+export function useDocumentStore(initialModel?: string) {
   const sessionStore = useSessionStore()
+
+  const modelStore = useModelStore()
   
   const documents = ref<Document[]>([])
   
@@ -164,7 +167,8 @@ export function useDocumentStore() {
     generating.value = true
     candidateUrls.value = []
     try {
-      const resp = await notebookApi.generateSearchQueries(topic)
+      // 传递模型参数给API
+      const resp = await notebookApi.generateSearchQueries(topic, modelStore.selectedModel.value)
       let queries = resp?.queries as any
       // 兼容不规范返回：若 queries 为字符串，尝试解析/提取
       if (typeof queries === 'string') {

@@ -20,7 +20,7 @@ QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
 QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
 QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
-RERANKER_MAX_TOKENS = int(get_config_value("RERANKER_MAX_TOKENS", "3072"))
+RERANKER_MAX_TOKENS = int(get_config_value("RERANKER_MAX_TOKENS", "8192"))
 RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRENCY", 4))
 
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
@@ -85,13 +85,11 @@ RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
 RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 
 # LLM 调用相关配置
-LLM_DEFAULT_TEMPERATURE = float(get_config_value("LLM_DEFAULT_TEMPERATURE", "0.8"))
-LLM_DEFAULT_MAX_TOKENS = int(get_config_value("LLM_DEFAULT_MAX_TOKENS", "32000"))
 LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "3600.0"))
+DEFAULT_SEARCH_MODEL= get_config_value("DEFAULT_SEARCH_MODEL", "openai/gpt-oss-20b")
+DEFAULT_INGEST_MODEL= get_config_value("DEFAULT_INGEST_MODEL", "qwen/qwen3-coder-30b")
 
 # 思考引擎LLM配置
-REASONING_TEMPERATURE = float(get_config_value("REASONING_TEMPERATURE", "0.8"))
-REASONING_MAX_TOKENS = int(get_config_value("REASONING_MAX_TOKENS", "32000"))
 REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "3600.0"))
 
 # Web搜索关键词生成LLM配置

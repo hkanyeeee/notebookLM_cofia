@@ -15,10 +15,10 @@ export const useNotebookStore = defineStore('notebook', () => {
   const queryType = ref<QueryType>(QueryType.NORMAL) // 默认为普通问答
 
   // 初始化各个子store
-  const documentStore = useDocumentStore()
+  const modelStore = useModelStore()
+  const documentStore = useDocumentStore(modelStore.selectedModel.value)
   const messageStore = useMessageStore()
   const collectionStore = useCollectionStore()
-  const modelStore = useModelStore()
 
   // 计算属性：是否处于Collection查询模式（当问答类型为COLLECTION或选择了collection时）
   const isCollectionQueryMode = computed(() => 
@@ -153,8 +153,5 @@ export const useNotebookStore = defineStore('notebook', () => {
     validateNormalChatModel: modelStore.validateNormalChatModel,
     forceSelectNormalChatModel: modelStore.forceSelectNormalChatModel,
     
-    // 辅助方法
-    handleDocumentAdded,
-    handleCollectionAdded,
   }
 })

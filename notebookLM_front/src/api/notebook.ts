@@ -279,8 +279,12 @@ export const notebookApi = {
   },
 
   // 生成搜索查询（课题 -> 3个搜索词）
-  async generateSearchQueries(topic: string): Promise<GenerateQueriesResponse> {
-    const resp = await api.post<GenerateQueriesResponse>('/api/search/generate', { topic })
+  async generateSearchQueries(topic: string, model?: string): Promise<GenerateQueriesResponse> {
+    const payload: any = { topic }
+    if (model) {
+      payload.model = model
+    }
+    const resp = await api.post<GenerateQueriesResponse>('/api/search/generate', payload)
     return resp.data
   },
 

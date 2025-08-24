@@ -18,7 +18,7 @@ from ..config import (
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K,
     WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE,
-    LLM_DEFAULT_TEMPERATURE, WEB_SEARCH_LLM_TIMEOUT
+    WEB_SEARCH_LLM_TIMEOUT
 )
 # 移除模块级别的导入，避免循环导入
 # from ..llm_client import DEFAULT_CHAT_MODEL
@@ -191,7 +191,6 @@ class WebSearchTool:
                 {"role": "system", "content": prompt_system},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": LLM_DEFAULT_TEMPERATURE,
         }
         
         try:
