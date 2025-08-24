@@ -63,7 +63,9 @@ async def generate_search_queries(
                 if not isinstance(queries, list):
                     raise ValueError("Invalid schema: queries not list")
                 from ..config import WEB_SEARCH_MAX_QUERIES
-                queries = [str(q).strip() for q in queries if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
+                # 确保WEB_SEARCH_MAX_QUERIES是整数类型
+                max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
+                queries = [str(q).strip() for q in queries if str(q).strip()][:max_queries]
                 if not queries:
                     raise ValueError("Empty queries")
                 return {"queries": queries}
@@ -74,10 +76,11 @@ async def generate_search_queries(
                     parsed2 = _json.loads(relaxed)
                     qs = parsed2.get("queries") or parsed2.get("Queries")
                     if isinstance(qs, list):
-                        qs = [str(q).strip() for q in qs if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
-                        while len(qs) < WEB_SEARCH_MAX_QUERIES:
+                        max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
+                        qs = [str(q).strip() for q in qs if str(q).strip()][:max_queries]
+                        while len(qs) < max_queries:
                             qs.append(topic)
-                        return {"queries": qs[:WEB_SEARCH_MAX_QUERIES]}
+                        return {"queries": qs[:max_queries]}
                 except Exception:
                     pass
 
@@ -88,15 +91,17 @@ async def generate_search_queries(
                     try:
                         obj = _json.loads(lines[0].replace("'", '"'))
                         if isinstance(obj.get("queries"), list):
+                            max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
                             arr = [str(q).strip() for q in obj["queries"] if str(q).strip()]
-                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:WEB_SEARCH_MAX_QUERIES]}
+                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:max_queries]}
                     except Exception:
                         pass
 
-                queries = lines[:WEB_SEARCH_MAX_QUERIES]
+                max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
+                queries = lines[:max_queries]
                 if not queries:
                     queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
-                return {"queries": queries[:WEB_SEARCH_MAX_QUERIES]}
+                return {"queries": queries[:max_queries]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generate queries failed: {e}")
 
@@ -150,5 +155,3 @@ async def search_searxng_api(data: dict = Body(...)):
             return {"items": items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SearxNG request failed: {e}")
-
-
