@@ -244,10 +244,10 @@ class IntelligentOrchestrator:
             run_config: 运行配置
             
         Returns:
-            包含gap_recall_results和统计信息的结果字典
+            包含knowledge_gaps_search_results和统计信息的结果字典
         """
         if not knowledge_gaps:
-            return {"gap_recall_results": {}, "success": False, "message": "没有知识缺口需要搜索"}
+            return {"knowledge_gaps_search_results": {}, "success": False, "message": "没有知识缺口需要搜索"}
         
         try:
             # 1. 使用搜索规划器生成统一的查询列表
@@ -273,7 +273,7 @@ class IntelligentOrchestrator:
             
             if not search_result.get("success") or not search_result.get("source_ids"):
                 return {
-                    "gap_recall_results": {},
+                    "knowledge_gaps_search_results": {},
                     "success": False,
                     "message": "搜索失败或没有找到有效数据源",
                     "search_result": search_result
@@ -284,7 +284,7 @@ class IntelligentOrchestrator:
             
             # 3. 为每个知识缺口进行独立召回
             selected_gaps = knowledge_gaps[:MAX_KNOWLEDGE_GAPS]
-            gap_recall_results = {}
+            knowledge_gaps_search_results = {}
             
             import asyncio
             recall_tasks = []
@@ -303,23 +303,23 @@ class IntelligentOrchestrator:
             for gap_id, gap, task in recall_tasks:
                 try:
                     recalled_content = await task
-                    gap_recall_results[gap_id] = {
+                    knowledge_gaps_search_results[gap_id] = {
                         "gap": gap,
                         "recalled_content": recalled_content
                     }
                     print(f"[IntelligentOrchestrator] 知识缺口'{gap_id}'召回完成，获得{len(recalled_content)}个内容片段")
                 except Exception as e:
                     print(f"[IntelligentOrchestrator] 知识缺口'{gap_id}'召回失败: {e}")
-                    gap_recall_results[gap_id] = {
+                    knowledge_gaps_search_results[gap_id] = {
                         "gap": gap,
                         "recalled_content": []
                     }
             
             # 4. 统计信息
-            total_recalled = sum(len(result["recalled_content"]) for result in gap_recall_results.values())
+            total_recalled = sum(len(result["recalled_content"]) for result in knowledge_gaps_search_results.values())
             
             return {
-                "gap_recall_results": gap_recall_results,
+                "knowledge_gaps_search_results": knowledge_gaps_search_results,
                 "success": True,
                 "message": f"搜索和召回完成：处理了{len(final_queries)}个查询，为{len(selected_gaps)}个知识缺口召回了{total_recalled}个内容片段",
                 "session_id": unified_session_id,
@@ -337,7 +337,7 @@ class IntelligentOrchestrator:
         except Exception as e:
             print(f"[IntelligentOrchestrator] 统一搜索和召回失败: {e}")
             return {
-                "gap_recall_results": {},
+                "knowledge_gaps_search_results": {},
                 "success": False,
                 "message": f"搜索和召回过程中发生错误: {str(e)}",
                 "error": str(e)
@@ -393,12 +393,12 @@ class IntelligentOrchestrator:
             }
         
         # 格式化为最终答案
-        gap_recall_results = result.get("gap_recall_results", {})
+        knowledge_gaps_search_results = result.get("knowledge_gaps_search_results", {})
         selected_gaps = result.get("selected_gaps", [])
         statistics = result.get("statistics", {})
         
         return {
-            "answer": OutputFormatter.format_gap_based_answer(gap_recall_results, selected_gaps),
+            "answer": OutputFormatter.format_gap_based_answer(knowledge_gaps_search_results, selected_gaps),
             "success": True,
             "steps": [
                 {
@@ -413,7 +413,7 @@ class IntelligentOrchestrator:
             ],
             "tool_calls": statistics.get("query_count", 0) + statistics.get("gap_count", 0),
             "session_id": result.get("session_id"),
-            "gap_recall_results": gap_recall_results,
+            "knowledge_gaps_search_results": knowledge_gaps_search_results,
             "search_queries": result.get("search_queries", [])
         }
 
@@ -505,12 +505,12 @@ class IntelligentOrchestrator:
             
             # 发出最终结果
             if result.get("success"):
-                gap_recall_results = result.get("gap_recall_results", {})
+                knowledge_gaps_search_results = result.get("knowledge_gaps_search_results", {})
                 selected_gaps = result.get("selected_gaps", [])
                 statistics = result.get("statistics", {})
                 
                 final_result = {
-                    "answer": OutputFormatter.format_gap_based_answer(gap_recall_results, selected_gaps),
+                    "answer": OutputFormatter.format_gap_based_answer(knowledge_gaps_search_results, selected_gaps),
                     "success": True,
                     "steps": [
                         {
@@ -525,7 +525,7 @@ class IntelligentOrchestrator:
                     ],
                     "tool_calls": statistics.get("query_count", 0) + statistics.get("gap_count", 0),
                     "session_id": result.get("session_id"),
-                    "gap_recall_results": gap_recall_results,
+                    "knowledge_gaps_search_results": knowledge_gaps_search_results,
                     "search_queries": result.get("search_queries", [])
                 }
             else:

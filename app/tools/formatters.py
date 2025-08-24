@@ -88,18 +88,18 @@ class OutputFormatter:
         return "工具调用完成但提取不到具体信息"
     
     @staticmethod
-    def format_gap_based_answer(gap_recall_results: Dict[str, Any], selected_gaps: List[Dict[str, Any]]) -> str:
+    def format_gap_based_answer(knowledge_gaps_search_results: Dict[str, Any], selected_gaps: List[Dict[str, Any]]) -> str:
         """
-        基于知识缺口召回结果格式化答案，提供自然的表达
+        基于知识缺口搜索结果格式化答案，提供自然的表达
         
         Args:
-            gap_recall_results: 知识缺口召回结果
+            knowledge_gaps_search_results: 知识缺口搜索结果
             selected_gaps: 选中的知识缺口列表
         
         Returns:
             自然的答案文本，无提示性词语
         """
-        if not gap_recall_results:
+        if not knowledge_gaps_search_results:
             return "未能获取到相关信息来回答问题。"
         
         # 收集所有有效内容
@@ -108,7 +108,7 @@ class OutputFormatter:
         
         for gap_idx, gap in enumerate(selected_gaps):
             gap_id = f"gap_{gap_idx}"
-            gap_info = gap_recall_results.get(gap_id)
+            gap_info = knowledge_gaps_search_results.get(gap_id)
             
             if not gap_info or not gap_info.get("recalled_content"):
                 continue
