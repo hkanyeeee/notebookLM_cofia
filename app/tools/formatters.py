@@ -57,7 +57,6 @@ class OutputFormatter:
         answer = tool_results.get("answer", "")
         if answer and len(answer.strip()) > 10:  # 确保答案有实际内容
             # 清理答案中的提示性词语
-            cleaned_answer = OutputFormatter._clean_prompt_words(answer.strip())
             return f"获取的信息: {cleaned_answer}"
         
         # 其次使用步骤中的内容信息
@@ -70,10 +69,8 @@ class OutputFormatter:
             
             # 优先收集包含实际信息的步骤
             if step_type == "content" and content and len(content.strip()) > 10:
-                cleaned_content = OutputFormatter._clean_prompt_words(content.strip())
                 content_steps.append(cleaned_content)
             elif "天气" in content or "温度" in content or "降水" in content:  # 天气相关内容
-                cleaned_content = OutputFormatter._clean_prompt_words(content.strip())
                 content_steps.append(cleaned_content)
         
         if content_steps:
@@ -86,7 +83,6 @@ class OutputFormatter:
                 step_type = step.get("type", "unknown")
                 content = step.get("content", "")
                 if content and len(content.strip()) > 5:
-                    cleaned_content = OutputFormatter._clean_prompt_words(content.strip())
                     step_summaries.append(f"{step_type}: {cleaned_content}")
             
             if step_summaries:
@@ -132,7 +128,6 @@ class OutputFormatter:
                 if len(content) > 300:
                     content = content[:300] + "..."
                 
-                cleaned_content = OutputFormatter._clean_prompt_words(content)
                 all_content.append(cleaned_content)
                 
                 # 收集来源信息（可选显示）
@@ -181,44 +176,9 @@ class OutputFormatter:
                     content_text = content_text[:300] + "..."
                 
                 # 清理提示性词语
-                cleaned_text = OutputFormatter._clean_prompt_words(content_text)
                 content_parts.append(cleaned_text)
         
         if content_parts:
             return "\n\n".join(content_parts)
         else:
             return "未找到可用的相关信息。"
-    
-    @staticmethod
-    def _clean_prompt_words(text: str) -> str:
-        """
-        清理文本中的提示性词语
-        
-        Args:
-            text: 原始文本
-            
-        Returns:
-            清理后的文本
-        """
-        # 需要清理的提示性词语
-        prompt_patterns = [
-            "根据搜索结果",
-            "根据获取的信息",
-            "根据获得信息", 
-            "根据搜索",
-            "基于搜索结果",
-            "基于获取的信息",
-            "基于搜索",
-            "搜索结果显示",
-            "获取到的信息显示",
-            "查询结果表明",
-            "搜索显示"
-        ]
-        
-        cleaned_text = text
-        for pattern in prompt_patterns:
-            # 简单替换，去掉提示性开头
-            if cleaned_text.startswith(pattern):
-                cleaned_text = cleaned_text[len(pattern):].lstrip("，：,: ")
-        
-        return cleaned_text

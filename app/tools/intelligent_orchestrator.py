@@ -14,6 +14,22 @@ from ..config import LLM_SERVICE_URL
 from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
 from ..llm_client import chat_complete, chat_complete_stream
 import httpx
+"""
+智能编排器 - 实现"问题拆解-思考-工具调用"流程
+"""
+import json
+from typing import List, Dict, Any, Optional, AsyncGenerator
+from .models import ToolExecutionContext, RunConfig, ToolMode
+from .query_decomposer import QueryDecomposer
+from .reasoning_engine import ReasoningEngine
+from .orchestrator import ToolOrchestrator
+from .selector import StrategySelector
+from .search_planner import SearchPlanner
+from .formatters import OutputFormatter
+from ..config import LLM_SERVICE_URL
+from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
+from ..llm_client import chat_complete, chat_complete_stream
+import httpx
 
 
 class IntelligentOrchestrator:

@@ -33,7 +33,7 @@ class WebhookResponseData(BaseModel):
     session_id: Optional[str] = None
     task_name: str
     output: Optional[List[dict]] = None  # 添加output字段以包含sub_docs
-    recursive_depth: Optional[int] = 2  # 添加递归深度字段，默认为1
+    recursive_depth: Optional[int] = 1  # 添加递归深度字段，默认为1
     request_id: Optional[str] = None  # 请求ID
     webhook_url: Optional[str] = None  # webhook URL
     is_recursive: Optional[bool] = False  # 添加递归标记字段，默认为False
@@ -458,7 +458,7 @@ async def agenttic_ingest(
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", 1024)
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
-    recursive_depth = data.get("recursive_depth", 1)  # 默认递归深度为1
+    recursive_depth = data.get("recursive_depth", 2)  # 默认递归深度为2
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
 
     try:

@@ -61,7 +61,6 @@ class WebSearchTool:
         s = text.strip().lower()
         s = re.sub(r"\s+", "", s)
         s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\\[\\\]{}]", "", s)
-        s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
         return s
 
     def _generate_search_fingerprint(self, queries: List[str], language: str = "en-US", categories: str = "") -> str:

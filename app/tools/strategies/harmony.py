@@ -106,19 +106,13 @@ class HarmonyStrategy(BaseStrategy):
         return tool_calls, remaining_content
 
     def _normalize_query(self, text: str) -> str:
-        """对查询文本做温和归一化，避免无意义重复调用。
-        - 小写
-        - 去除空白与常见标点
-        - 少量中文同义词归一：今日→今天，明日→明天，重庆市→重庆
-        """
+        """对查询文本做基本归一化，避免无意义重复调用"""
         if not isinstance(text, str):
             return ""
         s = text.strip().lower()
-        # 去空白与标点
+        # 基本的空白和标点处理，不使用硬编码的同义词替换
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？“”\"'`（）()\[\]{}]", "", s)
-        # 简单中文同义归一
-        s = s.replace("今日", "今天").replace("明日", "明天").replace("重庆市", "重庆")
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\[\]{}]", "", s)
         return s
 
     def _fingerprint_web_search(self, arguments: Dict[str, Any]) -> str:

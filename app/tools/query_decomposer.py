@@ -22,13 +22,15 @@ class QueryDecomposer:
 问题复杂度: {complexity}
 
 拆解要求:
-1. 根据问题复杂度确定子问题数量：
-   - 中等复杂度：分解为最多3个核心子问题
-   - 复杂问题：分解为最多5个核心子问题
-   - 请大模型自行判断实际需要的子问题数量，不必达到上限
+1. 智能判断问题复杂度和子问题数量：
+   - 简单事实类问题（如天气查询、价格查询、定义问答等）：保持为单个问题，无需分解
+   - 中等复杂度问题（包含多个概念或需要推理）：分解为最多3个核心子问题
+   - 复杂问题（涉及多个维度、需要深入分析或包含连接词如"并且"、"同时"等）：分解为最多5个核心子问题
+   - 实时信息查询（涉及当前时间、天气、价格、新闻等）：优先标记为需要外部信息
 2. 每个子问题应该是独立且完整的，避免重复或冗余
 3. 识别问题的关键信息点和可能需要外部信息验证的部分
 4. 评估每个子问题的复杂程度和重要性
+5. 自动识别比较类问题并标记相应实体
 
 请返回以下JSON格式:
 {{
@@ -171,61 +173,19 @@ class QueryDecomposer:
 
     def analyze_query_complexity(self, query: str) -> str:
         """
-        分析问题复杂程度
+        分析问题复杂程度 - 通过 LLM 智能判断
         
         Returns:
             "简单"|"中等"|"复杂"
         """
-        # 改进的启发式规则
+        # 简化的启发式规则，主要基于长度和结构
         word_count = len(query.split())
-        question_marks = query.count('?')
+        question_marks = query.count('?') + query.count('？')
         
-        # 简单查询关键词（这些通常是可以直接回答的）
-        # 合并了原有的简单模式和快速路由模式
-        simple_patterns = [
-            # 天气相关
-            r'(今天|现在|当前|目前).*(天气|气温|温度|下雨|晴天)',
-            r'.*(天气|气温|温度).*(如何|怎么样|怎样)',
-            r'^天气.*如何.*$',
-            r'.*天气.*$',
-            r'.*会.*下雨.*吗',
-            r'.*(今天|明天|现在).*(天气|下雨|晴天|阴天)',
-            # 价格和财经
-            r'.*价格.*多少',
-            r'.*股价.*多少',
-            r'.*汇率.*多少',
-            # 位置和时间
-            r'.*在哪里',
-            r'.*时间.*什么时候',
-            r'.*(时间|几点).*现在',
-            # 定义查询
-            r'.*是什么',
-            # 新闻查询
-            r'.*新闻.*今天'
-        ]
-        
-        # 复杂查询关键词（但要排除天气相关的"如何"）
-        complex_keywords = ['怎么', '为什么', '比较', '分析', '评价', '原理', '机制', '流程', '详细']
-        
-        # 检查是否匹配简单模式
-        import re
-        is_simple_pattern = any(re.search(pattern, query) for pattern in simple_patterns)
-        
-        # 如果匹配简单模式，则不考虑"如何"为复杂关键词
-        filtered_complex_keywords = complex_keywords.copy()
-        if is_simple_pattern and '天气' in query:
-            # 对于天气相关的简单询问，"如何"不算复杂关键词
-            pass  # 已经从complex_keywords中移除了"如何"
-        
-        has_complex_keywords = any(keyword in query for keyword in filtered_complex_keywords)
-        
-        # 多个问句或连接词表示复杂问题
-        complex_connectors = ['并且', '同时', '以及', '另外', '还有', '而且']
-        has_multiple_questions = any(connector in query for connector in complex_connectors)
-        
-        if is_simple_pattern and word_count <= 15 and not has_complex_keywords:
+        # 基本的复杂度评估
+        if word_count <= 8 and question_marks <= 1:
             return "简单"
-        elif has_multiple_questions or has_complex_keywords or word_count > 25:
+        elif word_count > 25 or question_marks > 1:
             return "复杂"
         else:
             return "中等"
@@ -233,7 +193,6 @@ class QueryDecomposer:
     def should_use_fast_route(self, query: str) -> bool:
         """
         判断是否应该使用快速路由（跳过复杂分解）
-        统一的快速路由判断逻辑，代替原 IntelligentOrchestrator._should_use_fast_route
         
         Args:
             query: 用户问题

@@ -21,7 +21,7 @@ data = {
             "index": 0
         }
     ],
-    "recursive_depth": 1,
+    "recursive_depth": 2,
     "request_id": f"https://lmstudio.ai/docs/python_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 }
 

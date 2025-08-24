@@ -376,69 +376,11 @@ class ReasoningEngine:
         # 移除问号和语气词
         cleaned_question = re.sub(r'[？?吗呢啊]', '', question)
         
-        # 常见的比较词汇和连接词，需要保留
-        comparison_words = ['对比', '比较', '和', '与', 'vs', '哪个', '更']
-        performance_words = ['性能', '快', '慢', '强', '弱', '好', '差', '优', '劣']
-        
-        keywords = []
-        
-        # 如果是比较类问题，生成针对性的关键词
-        if any(word in question for word in comparison_words):
-            # 提取主要产品/实体
-            entities = []
-            # 匹配 M4 Pro, M2 Max 等产品名
-            product_pattern = r'[A-Za-z0-9]+\s*[A-Za-z0-9]*(?:\s*[Pp]ro|[Mm]ax|[Aa]ir|[Mm]ini)?'
-            products = re.findall(product_pattern, question)
-            
-            # 匹配中文产品名
-            chinese_entities = re.findall(r'苹果|小米|华为|联想|戴尔|惠普|[A-Za-z]+', question)
-            
-            entities.extend(products)
-            entities.extend(chinese_entities)
-            
-            # 去重并过滤
-            unique_entities = []
-            seen = set()
-            for entity in entities:
-                entity_clean = entity.strip()
-                if entity_clean and entity_clean.lower() not in seen and len(entity_clean) > 1:
-                    seen.add(entity_clean.lower())
-                    unique_entities.append(entity_clean)
-            
-            # 生成具体的搜索词
-            if len(unique_entities) >= 2:
-                # 对比类搜索词
-                keywords.append(f"{unique_entities[0]} {unique_entities[1]} 对比")
-                keywords.append(f"{unique_entities[0]} vs {unique_entities[1]}")
-                
-                # 如果涉及性能问题，加上性能关键词
-                if any(word in question for word in performance_words + ['推理', '运算', '处理']):
-                    keywords.append(f"{unique_entities[0]} {unique_entities[1]} 性能测试")
-                    
-                    # 针对大模型推理的特殊处理
-                    if '大模型' in question or '推理' in question:
-                        keywords.append(f"{unique_entities[0]} {unique_entities[1]} AI性能")
-            else:
-                # 如果没有提取到足够的实体，使用简化的关键词
-                keywords.append(cleaned_question)
-        else:
-            # 非比较类问题，使用原始问题的简化版本
-            keywords.append(cleaned_question)
-            
-            # 提取核心概念
-            core_concepts = []
-            if '天气' in question:
-                core_concepts.append('天气预报')
-            if '价格' in question:
-                core_concepts.append('价格查询')
-            if '时间' in question:
-                core_concepts.append('当前时间')
-                
-            keywords.extend(core_concepts)
+        keywords = [cleaned_question]
         
         # 如果没有生成任何关键词，使用原始问题
-        if not keywords:
-            keywords.append(question)
+        if not keywords or not keywords[0].strip():
+            keywords = [question]
         
         # 限制关键词数量，去重
         final_keywords = []
