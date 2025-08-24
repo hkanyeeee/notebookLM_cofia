@@ -94,11 +94,11 @@ class ReasoningEngine:
                     except Exception as repair_e:
                         print(f"JSON修复失败: {repair_e}")
                     
-                    return self._create_fallback_thinking(question, context_str)
+                    return await self._create_fallback_thinking(question, context_str, execution_context)
                     
         except Exception as e:
             print(f"独立思考失败: {e}")
-            return self._create_fallback_thinking(question, context or [])
+            return await self._create_fallback_thinking(question, context or [], execution_context)
 
     async def think_about_decomposition(
         self, 
@@ -137,33 +137,32 @@ class ReasoningEngine:
         
         return thoughts
 
-    def _create_fallback_thinking(self, question: str, context: Any) -> Dict[str, Any]:
+    async def _create_fallback_thinking(self, question: str, context: Any, execution_context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
         """
-        创建回退的思考结果
+        创建回退的思考结果（通过 LLM 判定是否属于实时信息查询）
         """
-        # 分析问题类型，决定知识缺口重要性
-        import re
-        
-        # 简单的实时查询模式
-        realtime_patterns = [
-            r'(今天|现在|当前|目前).*(天气|气温|温度)',
-            r'.*天气.*如何',
-            r'.*价格.*多少',
-            r'.*股价|股票.*价格',
-            r'.*(时间|几点).*什么时候'
-        ]
-        
-        is_realtime_query = any(re.search(pattern, question) for pattern in realtime_patterns)
-        
+        # 通过一次轻量的 LLM 分类来判断是否需要实时信息
+        classification = await self._judge_realtime_with_llm(question, execution_context)
+        is_realtime_query = bool(classification.get("needs_realtime", False))
+        judge_reason = classification.get("reason", "")
+
         # 根据问题类型设置不同的知识缺口重要性
         gap_importance = "高" if is_realtime_query else "中"
-        
+
         # 智能生成搜索关键词
         search_keywords = self._generate_practical_keywords(question)
-        
+
+        thought_process = (
+            f"模型判定为实时信息类：{judge_reason}"
+            if judge_reason else (
+                f"对于问题'{question}'，需要获取最新信息来提供准确答案。"
+                if is_realtime_query else f"对于问题'{question}'，可能需要一些额外信息来完善回答。"
+            )
+        )
+
         return {
             "question": question,
-            "thought_process": f"对于问题'{question}'，需要获取最新信息来提供准确答案。" if is_realtime_query else f"对于问题'{question}'，可能需要一些额外信息来完善回答。",
+            "thought_process": thought_process,
             "preliminary_answer": "需要获取最新信息才能回答" if is_realtime_query else "基于现有知识可以部分回答，但需要验证具体细节",
             "confidence_level": "低" if is_realtime_query else "中",
             "knowledge_gaps": [
@@ -174,13 +173,64 @@ class ReasoningEngine:
                 }
             ],
             "reasoning_steps": [
-                "分析问题类型",
-                "评估信息需求", 
+                "模型判断问题类型",
+                "评估信息需求",
                 "确定所需外部信息的重要性"
             ],
             "assumptions": [],
             "needs_verification": is_realtime_query
         }
+
+    async def _judge_realtime_with_llm(self, question: str, execution_context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
+        """
+        使用 LLM 判断问题是否需要“实时信息”。
+        返回形如 {"needs_realtime": bool, "reason": str} 的字典。
+        """
+        try:
+            model_name = execution_context.run_config.model if execution_context else "qwen2.5:7b"
+            system_prompt = (
+                "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
+                "判断用户问题是否需要获取“实时信息”（如天气、股价、新闻、时间、价格、实时事件等）。\n"
+                "输出格式：{\"needs_realtime\": true/false, \"reason\": \"不超过50字的原因\"}。\n"
+                "无法确定时，将 needs_realtime 设为 false。"
+            )
+            user_prompt = (
+                f"请判断下列问题是否需要实时信息：\n问题：{question}\n"
+                "只输出JSON。"
+            )
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{self.llm_service_url}/chat/completions",
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.0,
+                        "max_tokens": 128
+                    },
+                    timeout=REASONING_TIMEOUT
+                )
+
+            if resp.status_code != 200:
+                return {"needs_realtime": False, "reason": "分类请求失败"}
+
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            try:
+                # 复用清理逻辑，剥离可能的代码围栏
+                cleaned = self._clean_json_content(content)
+                parsed = json.loads(cleaned)
+                needs = bool(parsed.get("needs_realtime", False))
+                reason = parsed.get("reason", "")
+                return {"needs_realtime": needs, "reason": reason}
+            except Exception:
+                return {"needs_realtime": False, "reason": "分类解析失败"}
+
+        except Exception:
+            return {"needs_realtime": False, "reason": "分类异常"}
 
     def assess_overall_confidence(self, thoughts: List[Dict[str, Any]]) -> str:
         """

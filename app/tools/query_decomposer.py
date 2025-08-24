@@ -30,7 +30,6 @@ class QueryDecomposer:
 2. 每个子问题应该是独立且完整的，避免重复或冗余
 3. 识别问题的关键信息点和可能需要外部信息验证的部分
 4. 评估每个子问题的复杂程度和重要性
-5. 自动识别比较类问题并标记相应实体
 
 请返回以下JSON格式:
 {{
@@ -65,9 +64,15 @@ class QueryDecomposer:
             包含拆解结果的字典
         """
         try:
-            # 先分析问题复杂度
-            complexity = self.analyze_query_complexity(query)
-            
+            # 优先使用 LLM 判断复杂度，失败则回退到启发式
+            try:
+                judged = await self._judge_complexity_with_llm(query, context)
+                complexity = judged.get("complexity", "中等")
+                if complexity not in ("简单", "中等", "复杂"):
+                    complexity = self.analyze_query_complexity(query)
+            except Exception:
+                complexity = self.analyze_query_complexity(query)
+
             # 如果是简单问题，直接返回简化的结果，不进行分解
             if complexity == "简单":
                 return {
@@ -80,7 +85,7 @@ class QueryDecomposer:
                             "question": query,
                             "importance": "高",
                             "requires_external_info": True,
-                            "reasoning": "简单直接查询，需要获取最新信息"
+                            "reasoning": "简单直接查询，模型建议走快速路径"
                         }
                     ],
                     "key_entities": self.extract_key_entities(query),
@@ -205,6 +210,71 @@ class QueryDecomposer:
         
         # 只有简单问题才使用快速路由
         return complexity == "简单"
+
+    async def should_use_fast_route_async(self, query: str, context: Optional[ToolExecutionContext] = None) -> bool:
+        """
+        使用 LLM 判断是否应该使用快速路由（跳过复杂分解）。
+        失败时回退到启发式规则。
+        """
+        try:
+            result = await self._judge_complexity_with_llm(query, context)
+            if isinstance(result, dict):
+                # 优先使用 fast_route 字段；若不存在则根据 complexity 判定
+                if "fast_route" in result:
+                    return bool(result.get("fast_route", False))
+                complexity = result.get("complexity", "中等")
+                return complexity == "简单"
+            return self.should_use_fast_route(query)
+        except Exception:
+            return self.should_use_fast_route(query)
+
+    async def _judge_complexity_with_llm(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
+        """
+        使用 LLM 判断问题复杂度与是否走快速路由。
+        返回形如 {"complexity": "简单|中等|复杂", "fast_route": bool, "reason": str}。
+        """
+        system_prompt = (
+            "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
+            "请判断用户问题的复杂度（简单/中等/复杂），并判断是否可走快速路由：\n"
+            "快速路由适用于单一、直接、可立即检索的信息类问题（如实时信息、简单事实）。\n"
+            '输出格式：{"complexity": "简单|中等|复杂", "fast_route": true/false, "reason": "不超过50字"}。\n'
+            "无法确定时，将 fast_route 设为 false，complexity 设为 中等。"
+        )
+        user_prompt = (
+            f"问题：{query}\n"
+            "只输出JSON。"
+        )
+        model_name = (context.run_config.model if context else "qwen2.5:7b")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.llm_service_url}/chat/completions",
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 128
+                },
+                timeout=LLM_DEFAULT_TIMEOUT
+            )
+        if resp.status_code != 200:
+            return {"complexity": "中等", "fast_route": False, "reason": "分类请求失败"}
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        try:
+            cleaned = self._clean_json_content(content)
+            parsed = json.loads(cleaned)
+            complexity = parsed.get("complexity", "中等")
+            fast_route = bool(parsed.get("fast_route", False))
+            reason = parsed.get("reason", "")
+            # 兜底校验
+            if complexity not in ("简单", "中等", "复杂"):
+                complexity = "中等"
+            return {"complexity": complexity, "fast_route": fast_route, "reason": reason}
+        except Exception:
+            return {"complexity": "中等", "fast_route": False, "reason": "分类解析失败"}
 
     def extract_key_entities(self, query: str) -> List[str]:
         """

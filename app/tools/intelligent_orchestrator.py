@@ -12,23 +12,6 @@ from .search_planner import SearchPlanner
 from .formatters import OutputFormatter
 from ..config import LLM_SERVICE_URL
 from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
-from ..llm_client import chat_complete, chat_complete_stream
-import httpx
-"""
-智能编排器 - 实现"问题拆解-思考-工具调用"流程
-"""
-import json
-from typing import List, Dict, Any, Optional, AsyncGenerator
-from .models import ToolExecutionContext, RunConfig, ToolMode
-from .query_decomposer import QueryDecomposer
-from .reasoning_engine import ReasoningEngine
-from .orchestrator import ToolOrchestrator
-from .selector import StrategySelector
-from .search_planner import SearchPlanner
-from .formatters import OutputFormatter
-from ..config import LLM_SERVICE_URL
-from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
-from ..llm_client import chat_complete, chat_complete_stream
 import httpx
 
 
@@ -70,8 +53,8 @@ class IntelligentOrchestrator:
         )
         
         try:
-            # 智能路由：检查是否是简单问题，可以直接调用工具
-            if self.decomposer.should_use_fast_route(query):
+            # 智能路由：检查是否是简单问题，可以直接调用工具（由LLM判定）
+            if await self.decomposer.should_use_fast_route_async(query, execution_context):
                 print("[IntelligentOrchestrator] 检测到简单问题，使用快速路由...")
                 return await self._handle_simple_query_directly(query, contexts, run_config)
             
@@ -142,11 +125,11 @@ class IntelligentOrchestrator:
         )
         
         try:
-            # 智能路由：检查是否是简单问题，可以直接调用工具
-            if self.decomposer.should_use_fast_route(query):
+            # 智能路由：检查是否是简单问题，可以直接调用工具（由LLM判定）
+            if await self.decomposer.should_use_fast_route_async(query, execution_context):
                 yield {
                     "type": "reasoning",
-                    "content": "检测到简单查询，直接获取信息..."
+                    "content": "分类为简单查询，直接获取信息..."
                 }
                 async for event in self._handle_simple_query_directly_stream(query, contexts, run_config):
                     yield event
@@ -593,7 +576,8 @@ class IntelligentOrchestrator:
                 context=context_str
             )
             
-            # 使用通用LLM客户端生成最终答案
+            # 使用通用LLM客户端生成最终答案（延迟导入避免循环导入）
+            from ..llm_client import chat_complete
             return await chat_complete(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
@@ -629,7 +613,8 @@ class IntelligentOrchestrator:
                 context=context_str
             )
             
-            # 使用通用LLM客户端进行流式调用
+            # 使用通用LLM客户端进行流式调用（延迟导入避免循环导入）
+            from ..llm_client import chat_complete_stream
             async for event in chat_complete_stream(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,

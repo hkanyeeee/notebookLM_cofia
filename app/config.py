@@ -85,14 +85,14 @@ RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
 RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 
 # LLM 调用相关配置
-LLM_DEFAULT_TEMPERATURE = float(get_config_value("LLM_DEFAULT_TEMPERATURE", "0.1"))
-LLM_DEFAULT_MAX_TOKENS = int(get_config_value("LLM_DEFAULT_MAX_TOKENS", "2000"))
-LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "45.0"))
+LLM_DEFAULT_TEMPERATURE = float(get_config_value("LLM_DEFAULT_TEMPERATURE", "0.8"))
+LLM_DEFAULT_MAX_TOKENS = int(get_config_value("LLM_DEFAULT_MAX_TOKENS", "32000"))
+LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "300.0"))
 
 # 思考引擎LLM配置
-REASONING_TEMPERATURE = float(get_config_value("REASONING_TEMPERATURE", "0.2"))
-REASONING_MAX_TOKENS = int(get_config_value("REASONING_MAX_TOKENS", "2000"))
-REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "30.0"))
+REASONING_TEMPERATURE = float(get_config_value("REASONING_TEMPERATURE", "0.8"))
+REASONING_MAX_TOKENS = int(get_config_value("REASONING_MAX_TOKENS", "32000"))
+REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "300.0"))
 
 # Web搜索关键词生成LLM配置
 WEB_SEARCH_LLM_TIMEOUT = float(get_config_value("WEB_SEARCH_LLM_TIMEOUT", "120.0"))

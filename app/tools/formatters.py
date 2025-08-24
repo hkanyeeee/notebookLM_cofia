@@ -56,8 +56,7 @@ class OutputFormatter:
         # 优先使用完整答案
         answer = tool_results.get("answer", "")
         if answer and len(answer.strip()) > 10:  # 确保答案有实际内容
-            # 清理答案中的提示性词语
-            return f"获取的信息: {cleaned_answer}"
+            return f"获取的信息: {answer}"
         
         # 其次使用步骤中的内容信息
         steps = tool_results.get("steps", [])
@@ -69,9 +68,7 @@ class OutputFormatter:
             
             # 优先收集包含实际信息的步骤
             if step_type == "content" and content and len(content.strip()) > 10:
-                content_steps.append(cleaned_content)
-            elif "天气" in content or "温度" in content or "降水" in content:  # 天气相关内容
-                content_steps.append(cleaned_content)
+                content_steps.append(content)
         
         if content_steps:
             return "获取的具体信息:\n" + "\n".join(content_steps)
@@ -83,7 +80,7 @@ class OutputFormatter:
                 step_type = step.get("type", "unknown")
                 content = step.get("content", "")
                 if content and len(content.strip()) > 5:
-                    step_summaries.append(f"{step_type}: {cleaned_content}")
+                    step_summaries.append(f"{step_type}: {content}")
             
             if step_summaries:
                 return "工具执行过程:\n" + "\n".join(step_summaries[:3])  # 限制显示前3个
@@ -124,11 +121,11 @@ class OutputFormatter:
                 source_title = content_item.get("source_title", "")
                 source_url = content_item.get("source_url", "")
                 
-                # 限制内容长度并清理
+                # 限制内容长度
                 if len(content) > 300:
                     content = content[:300] + "..."
                 
-                all_content.append(cleaned_content)
+                all_content.append(content)
                 
                 # 收集来源信息（可选显示）
                 if source_title and source_url:
@@ -175,8 +172,7 @@ class OutputFormatter:
                 if len(content_text) > 300:
                     content_text = content_text[:300] + "..."
                 
-                # 清理提示性词语
-                content_parts.append(cleaned_text)
+                content_parts.append(content_text)
         
         if content_parts:
             return "\n\n".join(content_parts)
