@@ -42,7 +42,7 @@ WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
 # 知识缺口和关键词限制
 MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "5"))  # 用于网络搜索的知识缺口最多5个
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
-GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "5"))  # 每个知识缺口召回top 5
+GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "6"))  # 每个知识缺口召回top 6
 
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
