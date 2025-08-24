@@ -538,13 +538,8 @@ function handleRemoveFailedUrl(url: string) {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .sidebar {
-    width: 100%;
-    transform: translateX(-100%);
-  }
-
-  .sidebar.collapsed {
-    transform: translateX(0);
-    width: 100%;
+    /* 在移动端完全隐藏侧边栏 */
+    display: none;
   }
 }
 </style>

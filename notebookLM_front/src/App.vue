@@ -57,8 +57,17 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .app-container {
+    /* Safari移动端适配 */
+    height: 100dvh;
+  }
+
   .main-content {
     margin-left: 0;
+    /* 确保在移动端占满整个容器 */
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   .main-content.sidebar-collapsed {

@@ -14,6 +14,8 @@ body {
 
 #app {
   height: 100vh;
+  /* Safari移动端适配 */
+  height: 100dvh;
 }
 
 /* 滚动条样式 */
@@ -197,6 +199,24 @@ body {
 
   .desktop-only {
     display: none;
+  }
+
+  /* Safari移动端特殊处理 */
+  html, body {
+    /* 防止橡皮筋效果 */
+    overscroll-behavior: none;
+    /* 防止Safari地址栏影响 */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+
+  #app {
+    /* 覆盖固定定位 */
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
   }
 }
 

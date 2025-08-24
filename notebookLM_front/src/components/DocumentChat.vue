@@ -292,7 +292,7 @@ function isQueryDisabled() {
 .welcome-message {
   text-align: center;
   max-width: 600px;
-  margin: 60px auto;
+  margin: 40px auto;
   color: #374151;
 }
 
@@ -323,8 +323,8 @@ function isQueryDisabled() {
 .candidates {
   margin-top: 24px;
   text-align: left;
-  width: 1000px;
-  margin-left: -200px;
+  width: 100%;
+  max-width: 800px;
 }
 
 .candidate-grid {
@@ -342,18 +342,19 @@ function isQueryDisabled() {
   text-align: left;
   height: auto;
   padding: 12px;
-  width: 320px;
+  width: 100%;
+  min-width: 260px;
 }
 
 .candidate-item-content {
-  width: 320px;
+  width: 100%;
 }
 
 .candidate-title {
   font-weight: 600;
   margin-bottom: 4px;
   color: #111827;
-  width: 300px;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -363,7 +364,7 @@ function isQueryDisabled() {
   font-size: 12px;
   color: #6b7280;
   word-break: break-all;
-  width: 300px;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -593,6 +594,13 @@ function isQueryDisabled() {
 @media (max-width: 768px) {
   .messages-container {
     padding: 16px;
+    /* 确保有足够的滚动空间 */
+    min-height: 0;
+  }
+
+  .welcome-message {
+    margin: 20px auto;
+    padding: 0 8px;
   }
 
   .message-content {
@@ -602,11 +610,18 @@ function isQueryDisabled() {
   .welcome-features {
     grid-template-columns: 1fr;
     gap: 16px;
+    margin-top: 24px;
   }
 
   .candidates {
     width: 100%;
     margin-left: 0;
+    margin-top: 16px;
+  }
+
+  .candidate-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .candidate-item {
@@ -619,6 +634,15 @@ function isQueryDisabled() {
 
   .candidate-title,
   .candidate-url {
+    width: 100%;
+  }
+
+  .topic-input {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .topic-send-btn {
     width: 100%;
   }
 

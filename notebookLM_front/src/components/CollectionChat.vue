@@ -345,7 +345,7 @@ function getInputPlaceholder() {
 .welcome-message {
   text-align: center;
   max-width: 600px;
-  margin: 60px auto;
+  margin: 40px auto;
   color: #374151;
 }
 
@@ -725,6 +725,13 @@ function getInputPlaceholder() {
 @media (max-width: 768px) {
   .messages-container {
     padding: 16px;
+    /* 确保有足够的滚动空间 */
+    min-height: 0;
+  }
+
+  .welcome-message {
+    margin: 20px auto;
+    padding: 0 8px;
   }
 
   .message-content {
@@ -734,6 +741,7 @@ function getInputPlaceholder() {
   .welcome-features {
     grid-template-columns: 1fr;
     gap: 16px;
+    margin-top: 24px;
   }
 
   .agentic-controls {
@@ -752,6 +760,17 @@ function getInputPlaceholder() {
 
   .input-area {
     padding: 16px;
+  }
+
+  .collection-results {
+    margin: 16px 0;
+    padding: 16px;
+  }
+
+  .collection-results-actions {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
   }
 }
 </style>

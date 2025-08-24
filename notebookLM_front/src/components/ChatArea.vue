@@ -335,25 +335,75 @@ watch(() => store.queryType, (newType) => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .chat-area {
+    height: 100vh;
+    /* Safari移动端适配 */
+    height: 100dvh;
+  }
+
   .chat-header {
-    padding: 16px;
+    padding: 12px 16px;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     align-items: stretch;
+    /* 确保header不会超出视窗 */
+    flex-shrink: 0;
   }
 
   .header-left {
-    flex-direction: column;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
     gap: 16px;
-    align-items: stretch;
+  }
+
+  .chat-header h1 {
+    font-size: 18px;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .model-selector {
+    margin-left: 0;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .model-select {
+    width: 100%;
+    min-width: 120px;
+  }
+
+  .query-type-selector-wrapper {
+    width: 100%;
+  }
+
+  .query-type-selector {
+    width: 100%;
   }
 
   .header-actions {
-    align-self: center;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .header-actions .el-button {
+    flex: 1;
+    max-width: 120px;
+  }
+
+  .chat-content {
+    /* 确保内容区域能正确滚动 */
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .query-type-selector-container {
-    padding: 16px;
+    padding: 12px 16px;
+    flex-shrink: 0;
   }
 }
 </style>
