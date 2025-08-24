@@ -133,7 +133,7 @@ function isStatusMessage(content: string) {
           <!-- Reasoning Chain (for assistant messages) -->
           <div v-if="message.type === 'assistant' && message.reasoning" class="reasoning-section">
             <ElCollapse v-model="activeNames">
-              <ElCollapseItem :title="`思维链（${message.reasoning.length} 字）`" name="reasoning">
+              <ElCollapseItem :title="`分析过程`" name="reasoning">
                 <div class="reasoning-content" v-html="marked(message.reasoning)"></div>
               </ElCollapseItem>
             </ElCollapse>
