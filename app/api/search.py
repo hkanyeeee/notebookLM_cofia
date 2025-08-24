@@ -65,10 +65,7 @@ async def generate_search_queries(
                 queries = [str(q).strip() for q in queries if str(q).strip()][:WEB_SEARCH_MAX_QUERIES]
                 if not queries:
                     raise ValueError("Empty queries")
-                # 填满到配置的数量
-                while len(queries) < WEB_SEARCH_MAX_QUERIES:
-                    queries.append(topic)
-                return {"queries": queries[:WEB_SEARCH_MAX_QUERIES]}
+                return {"queries": queries}
             except Exception:
                 # 宽松处理：把单引号换成双引号再试一次
                 try:

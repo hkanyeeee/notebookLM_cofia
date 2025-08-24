@@ -17,7 +17,8 @@ from ..config import (
     WEB_LOADER_ENGINE, PLAYWRIGHT_TIMEOUT,
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K,
-    WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE
+    WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE,
+    LLM_DEFAULT_TEMPERATURE, WEB_SEARCH_LLM_TIMEOUT
 )
 # 移除模块级别的导入，避免循环导入
 # from ..llm_client import DEFAULT_CHAT_MODEL
@@ -88,8 +89,7 @@ class WebSearchTool:
             return 0.0
 
     def _clean_and_validate_queries(self, queries: List[str], original_topic: str) -> List[str]:
-        """清理和验证生成的搜索查询"""
-        MAX_WORDS_PER_QUERY = 5
+        """清理和验证生成的搜索查询 - 简化版本"""
         cleaned_queries = []
         seen_queries = set()
         
@@ -99,41 +99,13 @@ class WebSearchTool:
                 
             query = query.strip()
             
-            # 检查长度：最多5个词
-            word_count = len(query.split())
-            if word_count > MAX_WORDS_PER_QUERY:
-                # 尝试截取前5个词
-                truncated = " ".join(query.split()[:MAX_WORDS_PER_QUERY])
-                print(f"[WebSearch] 查询过长，截取: '{query}' -> '{truncated}'")
-                query = truncated
-            
-            # 去重
+            # 简单去重
             query_normalized = query.lower()
             if query_normalized in seen_queries:
                 continue
             seen_queries.add(query_normalized)
             
-            # 避免纯中文查询（搜索结果较少）
-            if len(query) > 0 and all(ord(c) > 127 and not c.isspace() for c in query if c.isalpha()):
-                # 如果是纯中文，尝试生成英文替代
-                if "vs" not in query.lower() and "对比" in original_topic:
-                    continue  # 跳过纯中文对比查询
-            
             cleaned_queries.append(query)
-        
-        # 如果清理后没有足够的查询，生成一些基础查询
-        if len(cleaned_queries) < 2:
-            # 从原始话题提取关键英文词汇
-            topic_words = original_topic.replace("苹果", "Apple").replace("的", "").replace("？", "").replace("，", " ")
-            # 简化：只保留英文和数字
-            import re
-            topic_clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', topic_words)
-            key_words = [w for w in topic_clean.split() if len(w) > 2][:3]
-            
-            if key_words:
-                basic_query = " ".join(key_words)
-                if basic_query not in seen_queries and basic_query not in cleaned_queries:
-                    cleaned_queries.append(basic_query)
         
         print(f"[WebSearch] 查询清理结果: {len(queries)} -> {len(cleaned_queries)} 个查询")
         for i, q in enumerate(cleaned_queries):
@@ -221,11 +193,11 @@ class WebSearchTool:
                 {"role": "system", "content": prompt_system},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.3,
+            "temperature": LLM_DEFAULT_TEMPERATURE,
         }
         
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=WEB_SEARCH_LLM_TIMEOUT) as client:
                 resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
@@ -250,24 +222,12 @@ class WebSearchTool:
                         # 清理和验证查询
                         cleaned_queries = self._clean_and_validate_queries([str(q).strip() for q in queries if str(q).strip()], topic)
                         if cleaned_queries:
-                            # 填满到配置数量
-                            while len(cleaned_queries) < WEB_SEARCH_MAX_QUERIES:
-                                cleaned_queries.append(topic)
-                            return cleaned_queries[:WEB_SEARCH_MAX_QUERIES]
+                            return cleaned_queries
                 except Exception:
                     pass
                 
-                # 兜底策略：生成更有效的默认查询
-                fallback_queries = [
-                    topic,
-                    f"{topic} review",
-                    f"{topic} comparison", 
-                    f"{topic} benchmark"
-                ]
-                cleaned_fallback = self._clean_and_validate_queries(fallback_queries, topic)
-                if cleaned_fallback:
-                    return cleaned_fallback[:WEB_SEARCH_MAX_QUERIES]
-                return [topic]  # 最终兜底
+                # 兜底策略：简化的默认查询
+                return [topic]
                 
         except Exception as e:
             print(f"生成搜索关键词失败: {e}")

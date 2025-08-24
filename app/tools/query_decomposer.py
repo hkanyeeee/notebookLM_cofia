@@ -5,7 +5,7 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import LLM_SERVICE_URL
+from ..config import LLM_SERVICE_URL, LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_TIMEOUT
 
 
 class QueryDecomposer:
@@ -23,8 +23,9 @@ class QueryDecomposer:
 
 拆解要求:
 1. 根据问题复杂度确定子问题数量：
-   - 中等复杂度：分解为2-3个核心子问题
-   - 复杂问题：分解为3-5个核心子问题
+   - 中等复杂度：分解为最多3个核心子问题
+   - 复杂问题：分解为最多5个核心子问题
+   - 请大模型自行判断实际需要的子问题数量，不必达到上限
 2. 每个子问题应该是独立且完整的，避免重复或冗余
 3. 识别问题的关键信息点和可能需要外部信息验证的部分
 4. 评估每个子问题的复杂程度和重要性
@@ -100,10 +101,10 @@ class QueryDecomposer:
                             },
                             {"role": "user", "content": prompt}
                         ],
-                        "temperature": 0.1,
-                        "max_tokens": 1500
+                        "temperature": LLM_DEFAULT_TEMPERATURE,
+                        "max_tokens": LLM_DEFAULT_MAX_TOKENS
                     },
-                    timeout=30.0
+                    timeout=LLM_DEFAULT_TIMEOUT
                 )
                 
                 if response.status_code != 200:
@@ -180,17 +181,27 @@ class QueryDecomposer:
         question_marks = query.count('?')
         
         # 简单查询关键词（这些通常是可以直接回答的）
+        # 合并了原有的简单模式和快速路由模式
         simple_patterns = [
-            r'(今天|现在|当前|目前).*(天气|气温|温度)',  # 天气查询
-            r'.*(天气|气温|温度).*(如何|怎么样|怎样)',  # 天气状况
-            r'^天气.*如何.*$',  # 简单天气询问
-            r'.*天气.*$',      # 以天气结尾的简单询问 
-            r'.*价格.*多少',   # 价格查询
-            r'.*在哪里',       # 位置查询
-            r'.*是什么',       # 定义查询
-            r'.*时间.*什么时候', # 时间查询
-            r'.*会.*下雨.*吗',  # 降雨询问
-            r'.*(今天|明天|现在).*(天气|下雨|晴天|阴天)'  # 具体日期的天气
+            # 天气相关
+            r'(今天|现在|当前|目前).*(天气|气温|温度|下雨|晴天)',
+            r'.*(天气|气温|温度).*(如何|怎么样|怎样)',
+            r'^天气.*如何.*$',
+            r'.*天气.*$',
+            r'.*会.*下雨.*吗',
+            r'.*(今天|明天|现在).*(天气|下雨|晴天|阴天)',
+            # 价格和财经
+            r'.*价格.*多少',
+            r'.*股价.*多少',
+            r'.*汇率.*多少',
+            # 位置和时间
+            r'.*在哪里',
+            r'.*时间.*什么时候',
+            r'.*(时间|几点).*现在',
+            # 定义查询
+            r'.*是什么',
+            # 新闻查询
+            r'.*新闻.*今天'
         ]
         
         # 复杂查询关键词（但要排除天气相关的"如何"）
@@ -218,6 +229,23 @@ class QueryDecomposer:
             return "复杂"
         else:
             return "中等"
+
+    def should_use_fast_route(self, query: str) -> bool:
+        """
+        判断是否应该使用快速路由（跳过复杂分解）
+        统一的快速路由判断逻辑，代替原 IntelligentOrchestrator._should_use_fast_route
+        
+        Args:
+            query: 用户问题
+            
+        Returns:
+            是否使用快速路由
+        """
+        # 使用统一的复杂度分析
+        complexity = self.analyze_query_complexity(query)
+        
+        # 只有简单问题才使用快速路由
+        return complexity == "简单"
 
     def extract_key_entities(self, query: str) -> List[str]:
         """

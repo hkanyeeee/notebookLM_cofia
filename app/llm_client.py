@@ -1,7 +1,12 @@
 import httpx
 import json
-from typing import AsyncGenerator, List, Dict, Any
-from app.config import LLM_SERVICE_URL
+from typing import AsyncGenerator, List, Dict, Any, Optional
+from app.config import (
+    LLM_SERVICE_URL, 
+    LLM_DEFAULT_TEMPERATURE, 
+    LLM_DEFAULT_MAX_TOKENS,
+    LLM_DEFAULT_TIMEOUT
+)
 from .tools.models import RunConfig, ToolMode
 from .tools.orchestrator import get_orchestrator
 from .tools.selector import StrategySelector
@@ -229,3 +234,115 @@ async def stream_answer_with_tools(
     # 流式执行工具编排
     async for event in orchestrator.execute_stream(question, contexts, run_config):
         yield event
+
+
+async def chat_complete(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = DEFAULT_CHAT_MODEL,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    timeout: Optional[float] = None,
+    stream: bool = False
+) -> str:
+    """
+    通用LLM聊天完成函数（非流式）
+    
+    Args:
+        system_prompt: 系统提示
+        user_prompt: 用户提示
+        model: 使用的模型名称
+        temperature: 温度参数
+        max_tokens: 最大token数
+        timeout: 超时时间
+        stream: 是否使用流式（本函数始终非流式）
+        
+    Returns:
+        LLM的回复内容
+    """
+    url = f"{LLM_SERVICE_URL}/chat/completions"
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE,
+        "max_tokens": max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_TOKENS
+    }
+    
+    timeout_value = timeout if timeout is not None else LLM_DEFAULT_TIMEOUT
+    
+    async with httpx.AsyncClient(timeout=timeout_value) as client:
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        # 优先使用 reasoning_content，其次 content
+        message = (data.get("choices") or [{}])[0].get("message", {})
+        return message.get("reasoning_content") or message.get("content") or ""
+
+
+async def chat_complete_stream(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = DEFAULT_CHAT_MODEL,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    timeout: Optional[float] = None
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    通用LLM聊天完成函数（流式）
+    
+    Args:
+        system_prompt: 系统提示
+        user_prompt: 用户提示
+        model: 使用的模型名称
+        temperature: 温度参数
+        max_tokens: 最大token数
+        timeout: 超时时间
+        
+    Yields:
+        流式响应事件，格式: {"type": "reasoning|content", "content": "..."}
+    """
+    url = f"{LLM_SERVICE_URL}/chat/completions"
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE,
+        "max_tokens": max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_TOKENS,
+        "stream": True
+    }
+    
+    timeout_value = timeout if timeout is not None else LLM_DEFAULT_TIMEOUT
+    
+    async with httpx.AsyncClient(timeout=timeout_value) as client:
+        async with client.stream("POST", url, json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                    
+                if line.startswith("data: "):
+                    data_str = line[6:]  # 移除"data: "前缀
+                    if data_str == "[DONE]":
+                        break
+                    
+                    try:
+                        chunk = json.loads(data_str)
+                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                            delta = chunk["choices"][0].get("delta", {})
+                            reasoning_content = delta.get("reasoning_content")
+                            content = delta.get("content")
+                            
+                            if reasoning_content:
+                                yield {"type": "reasoning", "content": reasoning_content}
+                            if content:
+                                yield {"type": "content", "content": content}
+                    except json.JSONDecodeError:
+                        continue

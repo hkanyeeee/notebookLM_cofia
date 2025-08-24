@@ -32,12 +32,17 @@ WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/
 DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
 MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 
-# Web 搜索相关配置
-WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "5"))
-WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "6"))
-WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "24"))
+# Web 搜索相关配置 - 简化后的限制
+WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2"))  # 每个搜索关键词的结果控制在2个
+WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "6"))  # 总搜索查询数量上限
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "24"))  # 总结果数量上限（保持原来的限制）
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "5"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
+
+# 知识缺口和关键词限制
+MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "3"))  # 用于网络搜索的知识缺口最多3个
+MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
+GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "5"))  # 每个知识缺口召回top 5
 
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
@@ -47,13 +52,14 @@ PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "30.0"))
 ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
 QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
     "QUERY_GENERATION_PROMPT_TEMPLATE", 
-    """你是搜索查询优化专家。基于给定课题，生成4个简洁高效的搜索查询。
+    """你是搜索查询优化专家。基于给定课题，生成适当数量的简洁搜索查询。
 
 **要求：**
-- 每个查询最多5个词，绝对不能超过
+- 生成最多4个搜索查询，根据实际需要判断具体数量
 - 优先使用英文关键词（搜索结果更多）
 - 包含具体的产品型号、品牌名称
 - 每个查询聚焦一个特定方面
+- 保持查询简洁有效
 
 **查询类型：**
 1. **产品对比**：型号 vs 型号 + 特征（如"M4 Pro vs M2 Max"）
@@ -61,16 +67,7 @@ QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
 3. **技术规格**：产品 + specs/cores（如"M4 Pro specs"）
 4. **应用场景**：产品 + 应用领域（如"Apple silicon ML"）
 
-**好的示例：**
-- "M4 Pro benchmark" ✅
-- "RTX 4090 specs" ✅
-- "iPhone 15 vs 14" ✅
-
-**坏的示例：**
-- "M2 Max LLM inference benchmark M4 Pro performance" ❌（太长）
-- "苹果的M4 Pro在机器学习推理方面的性能表现" ❌（太长且中文）
-
-返回JSON：{"queries": ["查询1", "查询2", "查询3", "查询4"]}"""
+返回JSON：{"queries": ["查询1", "查询2", ...]}"""
 )
 
 # 网页内容缓存配置
@@ -86,6 +83,19 @@ CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "50"))
 # RAG 相关配置
 RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
 RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
+
+# LLM 调用相关配置
+LLM_DEFAULT_TEMPERATURE = float(get_config_value("LLM_DEFAULT_TEMPERATURE", "0.1"))
+LLM_DEFAULT_MAX_TOKENS = int(get_config_value("LLM_DEFAULT_MAX_TOKENS", "2000"))
+LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "45.0"))
+
+# 思考引擎LLM配置
+REASONING_TEMPERATURE = float(get_config_value("REASONING_TEMPERATURE", "0.2"))
+REASONING_MAX_TOKENS = int(get_config_value("REASONING_MAX_TOKENS", "2000"))
+REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "30.0"))
+
+# Web搜索关键词生成LLM配置
+WEB_SEARCH_LLM_TIMEOUT = float(get_config_value("WEB_SEARCH_LLM_TIMEOUT", "120.0"))
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")
@@ -121,6 +131,10 @@ print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
 # Web 搜索相关配置
 print(f"WEB_SEARCH_RESULT_COUNT: {WEB_SEARCH_RESULT_COUNT}")
 print(f"WEB_SEARCH_MAX_QUERIES: {WEB_SEARCH_MAX_QUERIES}")
+print(f"WEB_SEARCH_MAX_RESULTS: {WEB_SEARCH_MAX_RESULTS}")
+print(f"MAX_KNOWLEDGE_GAPS: {MAX_KNOWLEDGE_GAPS}")
+print(f"MAX_KEYWORDS_PER_GAP: {MAX_KEYWORDS_PER_GAP}")
+print(f"GAP_RECALL_TOP_K: {GAP_RECALL_TOP_K}")
 print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
 print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
 print(f"CHUNK_SIZE: {CHUNK_SIZE}")
