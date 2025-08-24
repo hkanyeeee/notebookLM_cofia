@@ -37,7 +37,7 @@ WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2")) 
 WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "9"))  # 总搜索查询数量上限
 WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "24"))  # 总结果数量上限（保持原来的限制）
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "5"))
-WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "30.0"))
+WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "3600.0"))
 
 # 知识缺口和关键词限制
 MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "5"))  # 用于网络搜索的知识缺口最多5个
@@ -46,7 +46,7 @@ GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "6"))  # 每个知�
 
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
-PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "30.0"))
+PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "3600.0"))
 
 # 关键词生成配置
 ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
@@ -87,12 +87,12 @@ RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 # LLM 调用相关配置
 LLM_DEFAULT_TEMPERATURE = float(get_config_value("LLM_DEFAULT_TEMPERATURE", "0.8"))
 LLM_DEFAULT_MAX_TOKENS = int(get_config_value("LLM_DEFAULT_MAX_TOKENS", "32000"))
-LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "300.0"))
+LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "3600.0"))
 
 # 思考引擎LLM配置
 REASONING_TEMPERATURE = float(get_config_value("REASONING_TEMPERATURE", "0.8"))
 REASONING_MAX_TOKENS = int(get_config_value("REASONING_MAX_TOKENS", "32000"))
-REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "300.0"))
+REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "3600.0"))
 
 # Web搜索关键词生成LLM配置
 WEB_SEARCH_LLM_TIMEOUT = float(get_config_value("WEB_SEARCH_LLM_TIMEOUT", "120.0"))

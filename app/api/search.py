@@ -33,7 +33,7 @@ async def generate_search_queries(
             {"role": "system", "content": prompt_system},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.3,
+        "temperature": 0.6,
     }
 
     try:

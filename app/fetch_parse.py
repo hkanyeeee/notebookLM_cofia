@@ -53,7 +53,7 @@ async def fetch_html(url: str, timeout: float = 30.0) -> str:
 async def fetch_rendered_text(
     url: str,
     selector: str | None = "article",
-    timeout: float = 30.0,
+    timeout: float = 3600.0,
     min_chars: int = 200,
     max_nodes_check: int = 20,
 ) -> str:
@@ -244,7 +244,7 @@ def extract_text(html: str, selector: str = "article") -> str:
 # =========================
 # 4) 封装：先静态抓 + 解析，失败再用方案 A
 # =========================
-async def fetch_then_extract(url: str, selector: str = "article", timeout: float = 300.0) -> str:
+async def fetch_then_extract(url: str, selector: str = "article", timeout: float = 3600.0) -> str:
     """
     调用顺序：
       1) httpx 抓原始 HTML + extract_text 解析
