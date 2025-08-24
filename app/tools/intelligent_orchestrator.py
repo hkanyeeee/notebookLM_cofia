@@ -12,6 +12,7 @@ from .search_planner import SearchPlanner
 from .formatters import OutputFormatter
 from ..config import LLM_SERVICE_URL
 from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
+from ..llm_client import chat_complete, chat_complete_stream
 import httpx
 
 
@@ -577,7 +578,6 @@ class IntelligentOrchestrator:
             )
             
             # 使用通用LLM客户端生成最终答案
-            from ..llm_client import chat_complete
             return await chat_complete(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
@@ -614,7 +614,6 @@ class IntelligentOrchestrator:
             )
             
             # 使用通用LLM客户端进行流式调用
-            from ..llm_client import chat_complete_stream
             async for event in chat_complete_stream(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
