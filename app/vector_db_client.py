@@ -154,6 +154,20 @@ async def query_embeddings(
     return hits
 
 
+def escape_fts5_query(query: str) -> str:
+    """
+    转义 FTS5 查询中的特殊字符，避免语法错误。
+    FTS5 特殊字符包括: " * : ( ) / \ [ ] 等
+    """
+    # 对于包含特殊字符的查询，使用双引号包围进行精确匹配
+    # 这样可以避免特殊字符被误解为 FTS5 操作符
+    if any(char in query for char in ['/', '*', ':', '(', ')', '\\', '[', ']', '"']):
+        # 转义查询中的双引号，然后用双引号包围整个查询
+        escaped_query = query.replace('"', '""')
+        return f'"{escaped_query}"'
+    return query
+
+
 async def query_bm25(
     query_text: str,
     top_k: int,
@@ -165,14 +179,17 @@ async def query_bm25(
     使用 SQLite FTS5 对 chunks.content 进行 BM25 检索，返回 (Chunk, score)。
     仅检索指定 session_id，且可选按 source_ids 过滤。
     """
+    # 转义查询文本中的 FTS5 特殊字符
+    escaped_query = escape_fts5_query(query_text)
+    
     # 基于 FTS 的匹配先取一批候选，再关联原表限定 session/source
-    # 注意：bm25(chunks_fts) 分数越小越好（更相关），此处取负数作为统一的“越大越好”分值
+    # 注意：bm25(chunks_fts) 分数越小越好（更相关），此处取负数作为统一的"越大越好"分值
     base_sql = (
         "SELECT c.id, c.content, c.source_id, c.session_id, c.chunk_id, -bm25(chunks_fts) AS score "
         "FROM chunks_fts JOIN chunks c ON chunks_fts.rowid = c.id "
         "WHERE chunks_fts MATCH :q AND c.session_id = :sid"
     )
-    params: Dict[str, object] = {"q": query_text, "sid": session_id}
+    params: Dict[str, object] = {"q": escaped_query, "sid": session_id}
     if source_ids:
         # 构造 IN 子句
         placeholders = ",".join([str(int(x)) for x in source_ids])
