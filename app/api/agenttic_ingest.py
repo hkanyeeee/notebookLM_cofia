@@ -646,8 +646,8 @@ async def agenttic_ingest(
             "recursive_depth": recursive_depth,  # 添加递归深度参数
         }
 
-        # 8. 发送webhook（仅在递归深度大于0且非递归调用时）
-        if recursive_depth > 0 and not is_recursive:
+        # 8. 发送webhook（仅在递归深度大于0调用时）
+        if recursive_depth > 0:
             print("正在发送webhook进行子文档识别...")
             
             # 创建工作流执行记录

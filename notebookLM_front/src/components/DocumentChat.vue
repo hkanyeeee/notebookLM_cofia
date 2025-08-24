@@ -192,7 +192,7 @@ function isQueryDisabled() {
           </div>
         </div>
 
-        <div class="welcome-features">
+        <div v-if="messages.length === 0 && candidateUrls.length === 0" class="welcome-features">
           <div class="feature-item">
             <strong>💡 智能问答</strong>
             <p>基于您添加的文档内容回答问题</p>
@@ -341,6 +341,8 @@ function isQueryDisabled() {
   display: block;
   text-align: left;
   height: auto;
+  overflow: hidden;
+  white-space: nowrap;
   padding: 12px;
   width: 100%;
   min-width: 260px;
