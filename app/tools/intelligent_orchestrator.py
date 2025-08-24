@@ -265,8 +265,6 @@ class IntelligentOrchestrator:
             print(f"[IntelligentOrchestrator] 开始一次性web搜索，查询: {final_queries}")
             search_result = await web_search_tool.execute(
                 query=original_query,
-                language="zh-CN",
-                categories="",
                 filter_list=None,
                 model=run_config.model,
                 predefined_queries=final_queries,

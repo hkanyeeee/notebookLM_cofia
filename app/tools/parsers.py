@@ -186,9 +186,13 @@ class HarmonyParser:
                         topn_value = arguments.pop("topn")
                         print(f"[HarmonyParser] 移除不支持的topn参数: {topn_value}")
                     if "source" in arguments:
-                        # source映射到categories
-                        arguments["categories"] = arguments.pop("source", "")
-                        print(f"[HarmonyParser] 映射source到categories: {arguments['categories']}")
+                        # 移除source参数，不再映射到categories
+                        source_value = arguments.pop("source", "")
+                        print(f"[HarmonyParser] 移除source参数: {source_value}，由外部SearxNG控制")
+                    if "categories" in arguments:
+                        # 移除categories参数
+                        categories_value = arguments.pop("categories", "")
+                        print(f"[HarmonyParser] 移除categories参数: {categories_value}，由外部SearxNG控制")
                     
                     # 移除明显无效的参数
                     invalid_params = {"id", "cursor", "index", "page"}

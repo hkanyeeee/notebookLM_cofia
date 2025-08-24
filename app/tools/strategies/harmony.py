@@ -117,19 +117,17 @@ class HarmonyStrategy(BaseStrategy):
 
     def _fingerprint_web_search(self, arguments: Dict[str, Any]) -> str:
         """根据 web_search 的入参生成指纹。仅当参数本质相同才认为重复。
-        参与指纹的字段：query、language、categories、filter_list、model
+        参与指纹的字段：query、filter_list、model
         其中 query 做温和归一化；filter_list 排序并归一化大小写。
         """
         query = self._normalize_query(str(arguments.get("query", "")))
-        language = str(arguments.get("language", "")).strip().lower()
-        categories = str(arguments.get("categories", "")).strip().lower()
         model = str(arguments.get("model", "")).strip()
         filters = arguments.get("filter_list") or []
         if isinstance(filters, list):
             filters_norm = ",".join(sorted([str(x).strip().lower() for x in filters]))
         else:
             filters_norm = str(filters).strip().lower()
-        return f"web_search|q={query}|lang={language}|cat={categories}|filters={filters_norm}|model={model}"
+        return f"web_search|q={query}|filters={filters_norm}|model={model}"
     
     async def execute_step(self, context: ToolExecutionContext) -> Optional[Step]:
         """执行单个步骤"""

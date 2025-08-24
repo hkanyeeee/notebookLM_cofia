@@ -253,16 +253,6 @@ def register_web_search_tool():
                     "type": "string",
                     "description": "搜索查询内容，可以是问题、关键词或主题"
                 },
-                "language": {
-                    "type": "string",
-                    "description": "语言过滤器，用于指定搜索结果的语言。默认为 'en-US'",
-                    "default": "en-US"
-                },
-                "categories": {
-                    "type": "string",
-                    "description": "搜索类别列表，用于限制搜索范围到特定类别。默认为空字符串（所有类别）",
-                    "default": ""
-                },
                 "filter_list": {
                     "type": "array",
                     "items": {"type": "string"},

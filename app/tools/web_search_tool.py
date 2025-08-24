@@ -63,11 +63,10 @@ class WebSearchTool:
         s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\\[\\\]{}]", "", s)
         return s
 
-    def _generate_search_fingerprint(self, queries: List[str], language: str = "en-US", categories: str = "") -> str:
+    def _generate_search_fingerprint(self, queries: List[str]) -> str:
         """生成搜索查询的fingerprint，用于去重和缓存"""
         normalized_queries = sorted([self._normalize_query(q) for q in queries if q.strip()])
-        params_str = f"lang:{language}|cat:{categories}"
-        fingerprint = f"queries:{'|'.join(normalized_queries)}|{params_str}"
+        fingerprint = f"queries:{'|'.join(normalized_queries)}"
         return fingerprint
     
     def _similarity_check(self, fp1: str, fp2: str) -> float:
@@ -234,9 +233,7 @@ class WebSearchTool:
     
     async def search_searxng(
         self, 
-        query: str, 
-        language: str = "en-US",
-        categories: str = ""
+        query: str
     ) -> List[Dict[str, str]]:
         """使用 SearxNG 搜索"""
         params = {
@@ -244,9 +241,7 @@ class WebSearchTool:
             "format": "json",
             "pageno": 1,
             "safesearch": "1",
-            "language": language,
             "time_range": "",
-            "categories": categories,
             "theme": "simple",
             "image_proxy": 0,
         }
@@ -507,8 +502,6 @@ class WebSearchTool:
     async def execute(
         self, 
         query: str,
-        language: str = "en-US",
-        categories: str = "",
         filter_list: Optional[List[str]] = None,
         model: str = None,
         predefined_queries: Optional[List[str]] = None,
@@ -518,8 +511,6 @@ class WebSearchTool:
         
         Args:
             query: 搜索查询
-            language: 语言过滤器，默认为 "en-US"
-            categories: 搜索类别列表，默认为 ""
             filter_list: 域名过滤列表，用于过滤搜索结果
             model: 用于关键词生成的LLM模型名称，默认使用系统配置
             predefined_queries: 预定义的搜索关键词列表，如果提供则跳过关键词生成
@@ -564,7 +555,7 @@ class WebSearchTool:
                 print(f"[WebSearch] 生成的搜索关键词: {queries}")
             
             # 2. 生成搜索fingerprint并检查缓存和去重
-            fingerprint = self._generate_search_fingerprint(queries, language, categories)
+            fingerprint = self._generate_search_fingerprint(queries)
             print(f"[WebSearch] 搜索fingerprint: {fingerprint}")
             
             # 检查完全匹配的缓存
@@ -592,7 +583,7 @@ class WebSearchTool:
             # 3. 并发搜索
             print(f"[WebSearch] 开始并发搜索...")
             t1 = time.perf_counter()
-            search_tasks = [self.search_searxng(q, language, categories) for q in queries]
+            search_tasks = [self.search_searxng(q) for q in queries]
             search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
             search_time = (time.perf_counter() - t1) * 1000.0
             result["metrics"]["step_durations_ms"]["searxng_search"] = search_time
@@ -738,8 +729,6 @@ web_search_tool = WebSearchTool()
 # 工具函数（供注册表使用）
 async def web_search(
     query: str,
-    language: str = "en-US",
-    categories: str = "",
     filter_list: Optional[List[str]] = None,
     model: str = None,
     predefined_queries: Optional[List[str]] = None,
@@ -750,8 +739,6 @@ async def web_search(
     
     Args:
         query: 搜索查询内容
-        language: 语言过滤器，默认为 "en-US"
-        categories: 搜索类别列表，默认为 ""
         filter_list: 域名过滤列表，用于过滤搜索结果
         model: 用于关键词生成的LLM模型名称，默认使用系统配置
         predefined_queries: 预定义的搜索关键词列表，如果提供则跳过关键词生成
@@ -761,18 +748,20 @@ async def web_search(
     Returns:
         搜索和召回结果的 JSON 字符串
     """
-    print(f"[WebSearch] 工具函数被调用，参数: query={query}, language={language}, categories={categories}, filter_list={filter_list}, model={model}, kwargs={kwargs}")
+    print(f"[WebSearch] 工具函数被调用，参数: query={query}, filter_list={filter_list}, model={model}, kwargs={kwargs}")
     
-    # 处理向后兼容的参数名映射
-    if "source" in kwargs and not categories:
-        categories = kwargs["source"]
-        print(f"[WebSearch] 映射source参数到categories: {categories}")
-    
+    # 处理向后兼容的参数名映射 - 移除了对source/categories的处理
     if "topn" in kwargs:
         # topn参数目前没有直接映射，可以记录日志或忽略
         print(f"[WebSearch] 注意：topn参数 ({kwargs['topn']}) 当前未使用")
     
-    result = await web_search_tool.execute(query, language, categories, filter_list, model, predefined_queries, session_id)
+    # 如果有不再支持的参数，记录但不处理
+    deprecated_params = ["source", "categories", "language"]
+    for param in deprecated_params:
+        if param in kwargs:
+            print(f"[WebSearch] 注意：{param} 参数已移除，将由外部 SearxNG 控制")
+    
+    result = await web_search_tool.execute(query, filter_list, model, predefined_queries, session_id)
     
     # 构建返回的摘要信息
     if result["success"]:

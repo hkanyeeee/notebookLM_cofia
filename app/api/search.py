@@ -119,10 +119,7 @@ async def search_searxng_api(data: dict = Body(...)):
         "format": "json",
         "pageno": 1,
         "safesearch": "1",
-        "language": "en-US",
         "time_range": "",
-        "categories": "",
-        "theme": "simple",
         "image_proxy": 0,
     }
 
