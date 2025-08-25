@@ -24,16 +24,7 @@ const isNormalQueryMode = computed(() => store.queryType === QueryType.NORMAL)
 const showAddDialog = ref(false)
 const newUrl = ref('')
 
-// 导出对话历史
-async function handleExportConversation() {
-  try {
-    await store.exportConversation()
-    ElMessage.success('导出成功')
-  } catch (error) {
-    console.error('导出失败:', error)
-    ElMessage.error('导出失败，请重试')
-  }
-}
+
 
 // 添加文档
 async function handleAddDocument() {
@@ -220,18 +211,7 @@ function handleRemoveFailedUrl(url: string) {
       </template>
     </ElDialog>
 
-    <!-- 导出按钮 -->
-    <div class="text-center" v-if="!collapsed">
-      <ElButton
-        type="success"
-        @click="handleExportConversation"
-        :disabled="store.documents.length === 0 || store.messages.length === 0 || store.loading.querying"
-        :loading="store.loading.exporting"
-        class="w-[90%] h-10 my-2.5"
-      >
-        导出对话历史
-      </ElButton>
-    </div>
+
   </aside>
 </template>
 

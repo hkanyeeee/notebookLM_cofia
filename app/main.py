@@ -51,7 +51,7 @@ from .api.collections import router as collections_router
 from .api.search import router as search_router
 from .api.documents import router as documents_router
 from .api.query import router as query_router
-from .api.export import router as export_router
+
 from .api.models import router as models_router
 
 from .api.webhook import router as webhook_router
@@ -63,7 +63,7 @@ app.include_router(collections_router)
 app.include_router(search_router)
 app.include_router(documents_router)
 app.include_router(query_router)
-app.include_router(export_router)
+
 app.include_router(models_router)
 
 app.include_router(webhook_router)

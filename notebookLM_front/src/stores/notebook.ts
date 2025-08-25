@@ -34,7 +34,6 @@ export const useNotebookStore = defineStore('notebook', () => {
   const loading = computed(() => ({
     querying: false, // 这个状态会在sendQuery中动态管理
     addingDocument: false,
-    exporting: false,
     triggeringAgenticIngest: collectionStore.loading.triggeringAgenticIngest,
     loadingCollections: collectionStore.loading.loadingCollections,
     queryingCollection: collectionStore.loading.queryingCollection,
@@ -139,7 +138,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 消息方法
     sendQuery,
     clearMessages: messageStore.clearMessages,
-    exportConversation: messageStore.exportConversation,
     
     // Collection方法
     triggerAgenticIngest: collectionStore.triggerAgenticIngest,

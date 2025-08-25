@@ -236,45 +236,7 @@ export function useMessageStore() {
     messages.value = []
   }
 
-  async function exportConversation() {
-    const sessionId = sessionStore.getSessionId()
-    if (!sessionId) {
-      throw new Error('No session ID found')
-    }
-    
-    try {
-      // 将当前对话历史发送到后端
-      const response = await fetch(`${notebookApi.getBaseUrl()}/export/conversation/${sessionId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': sessionId,
-        },
-        body: JSON.stringify({
-          messages: messages.value
-        }),
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `conversation_export_${sessionId}.zip`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      
-      return { success: true }
-    } catch (error) {
-      console.error('Export failed:', error)
-      throw error
-    }
-  }
+
 
   return {
     // 状态
@@ -283,6 +245,5 @@ export function useMessageStore() {
     // 方法
     sendQuery,
     clearMessages,
-    exportConversation,
   }
 }
