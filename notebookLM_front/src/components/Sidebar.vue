@@ -88,7 +88,7 @@ function handleRemoveFailedUrl(url: string) {
 </script>
 
 <template>
-  <aside class="w-96 bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300" :class="{ 'w-20': collapsed }">
+  <aside class="bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300 overflow-hidden" :class="{ 'w-20': collapsed, 'w-96': !collapsed }">
     <!-- 头部 -->
     <div class="p-5 border-b border-gray-200 flex items-center justify-between min-h-[70px]">
       <div v-if="!collapsed" class="flex-1">
@@ -117,7 +117,7 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- Ingestion Progress Section -->
-    <div class="px-5 pb-5 border-b border-gray-200" v-if="store.ingestionStatus.size > 0">
+    <div class="px-5 pb-5 border-gray-200" v-if="!collapsed && store.ingestionStatus.size > 0">
       <h3 class="my-3 text-gray-700 text-base font-medium">正在处理</h3>
       <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="mb-4">
         <div class="flex justify-between items-center mb-1.5 gap-2">

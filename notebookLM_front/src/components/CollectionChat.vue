@@ -259,7 +259,7 @@ function getInputPlaceholder() {
     <!-- 输入区域 -->
     <div class="p-6 border-t border-gray-200 bg-white">
       <!-- Collection与Agentic Ingest 控制区 -->
-      <div class="flex items-center mb-5 gap-3 max-w-4xl mx-auto">
+      <div class="flex items-center mb-5 gap-3 max-w-3xl mx-auto">
         <!-- Collection选择下拉框 -->
         <el-select
           :model-value="selectedCollection"
@@ -301,7 +301,7 @@ function getInputPlaceholder() {
         </el-button>
       </div>
       
-      <div class="flex gap-3 max-w-4xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
+      <div class="flex gap-3 max-w-3xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
         <el-input
           v-model="queryInput"
           :placeholder="getInputPlaceholder()"

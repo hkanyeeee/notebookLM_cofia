@@ -102,7 +102,7 @@ function isStatusMessage(content: string) {
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="text-center max-w-md mx-auto text-gray-700">
+      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">普通问答</h2>
         <p class="mb-10 text-base leading-relaxed">我会使用网络搜索为您提供最新的信息和答案，直接在下方输入您的问题即可开始对话。</p>
         
@@ -168,8 +168,8 @@ function isStatusMessage(content: string) {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-6 border-gray-200 bg-white">
-      <div class="flex gap-3 items-center max-w-2xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
+    <div class="p-6 border-t border-gray-200 bg-white">
+      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."

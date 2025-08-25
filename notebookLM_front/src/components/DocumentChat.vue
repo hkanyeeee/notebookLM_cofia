@@ -142,7 +142,7 @@ function isQueryDisabled() {
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="text-center max-w-md mx-auto text-gray-700">
+      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">文档问答</h2>
         <p class="mb-10 text-base leading-relaxed">您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
         
@@ -165,7 +165,7 @@ function isQueryDisabled() {
         </div>
 
         <!-- 候选URL按钮区 -->
-        <div v-if="candidateUrls.length > 0" class="mt-6 text-left w-full max-w-3xl">
+        <div v-if="candidateUrls.length > 0" class="mt-6 text-left w-full max-w-2xl">
           <h3 class="text-lg font-medium mb-3">候选网址</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <ElTooltip
@@ -193,7 +193,7 @@ function isQueryDisabled() {
           </div>
         </div>
 
-        <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+        <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
             <strong class="block mb-2 text-gray-900 text-sm">💡 智能问答</strong>
             <p class="text-xs text-gray-500 leading-relaxed">基于您添加的文档内容回答问题</p>
