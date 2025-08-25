@@ -160,17 +160,6 @@ class SearchPlanner:
                     seen_queries.add(truncated_normalized)
                     optimized_queries.append(truncated)
         
-        # 确保至少有一个查询
-        if not optimized_queries:
-            # 从原始查询中提取简短版本
-            # 提取产品名或关键技术词汇
-            tech_terms = re.findall(r'[A-Za-z0-9]+(?:\s*[Pp]ro|[Mm]ax|[Aa]ir)?|性能|推理|对比', original_query)
-            if tech_terms:
-                simple_query = " ".join(tech_terms[:3])  # 最多3个词
-                optimized_queries.append(simple_query)
-            else:
-                optimized_queries.append(original_query)
-        
         return optimized_queries
     
     def _clean_and_validate_queries(self, queries: List[str], original_topic: str) -> List[str]:

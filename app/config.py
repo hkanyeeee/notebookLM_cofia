@@ -40,7 +40,7 @@ WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQ
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "20.0"))
 
 # 知识缺口和关键词限制
-MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "5"))  # 用于网络搜索的知识缺口最多5个
+MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "15"))  # 用于网络搜索的知识缺口最多15个
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
 GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "6"))  # 每个知识缺口召回top 6
 
@@ -57,15 +57,8 @@ QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
 **要求：**
 - 生成最多4个搜索查询，根据实际需要判断具体数量
 - 优先使用英文关键词（搜索结果更多）
-- 包含具体的产品型号、品牌名称
 - 每个查询聚焦一个特定方面
 - 保持查询简洁有效
-
-**查询类型：**
-1. **产品对比**：型号 vs 型号 + 特征（如"M4 Pro vs M2 Max"）
-2. **性能评测**：产品 + benchmark/review（如"M4 Pro benchmark"）
-3. **技术规格**：产品 + specs/cores（如"M4 Pro specs"）
-4. **应用场景**：产品 + 应用领域（如"Apple silicon ML"）
 
 返回JSON：{"queries": ["查询1", "查询2", ...]}"""
 )
@@ -77,7 +70,7 @@ WEB_CACHE_TTL_SECONDS = int(get_config_value("WEB_CACHE_TTL_SECONDS", "3600"))  
 WEB_CACHE_MAX_CONTENT_SIZE = int(get_config_value("WEB_CACHE_MAX_CONTENT_SIZE", "1048576"))  # 1MB
 
 # 文档处理配置
-CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "500"))
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "700"))
 CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "50"))
 
 # RAG 相关配置
