@@ -3,7 +3,7 @@ import json
 import re
 from fastapi import APIRouter, Body, HTTPException
 
-from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL
+from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
 
 
 router = APIRouter()
@@ -62,7 +62,6 @@ async def generate_search_queries(
                 queries = parsed.get("queries") or parsed.get("Queries")
                 if not isinstance(queries, list):
                     raise ValueError("Invalid schema: queries not list")
-                from ..config import WEB_SEARCH_MAX_QUERIES
                 # 确保WEB_SEARCH_MAX_QUERIES是整数类型
                 max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
                 queries = [str(q).strip() for q in queries if str(q).strip()][:max_queries]

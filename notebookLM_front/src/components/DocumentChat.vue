@@ -165,31 +165,52 @@ function isQueryDisabled() {
         </div>
 
         <!-- 候选URL按钮区 -->
-        <div v-if="candidateUrls.length > 0" class="mt-6 text-left w-full max-w-2xl">
-          <h3 class="text-lg font-medium mb-3">候选网址</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            <ElTooltip
-              v-for="item in candidateUrls"
+        <div v-if="candidateUrls.length > 0" class="mt-8 text-left w-full max-w-4xl">
+          <div class="flex items-center gap-2 mb-4">
+            <div class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
+              <svg class="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">候选网址</h3>
+            <div class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs font-medium rounded-full">
+              {{ candidateUrls.length }}
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <div
+              v-for="(item, index) in candidateUrls"
               :key="item.url"
-              placement="top"
-              effect="dark"
+              class="candidate-item group flex items-center p-3 bg-white border border-gray-200 rounded-lg cursor-pointer transition-all duration-200 hover:border-indigo-300 hover:shadow-sm hover:bg-gray-50"
+              @click="handleAddCandidate(item.url)"
             >
-              <template #content>
-                <div>
-                  <div>{{ item.title }}</div>
-                  <div>{{ item.url }}</div>
+              <!-- 序号 -->
+              <div class="w-6 h-6 bg-indigo-100 text-indigo-600 text-xs font-semibold rounded-full flex items-center justify-center flex-shrink-0 mr-3">
+                {{ index + 1 }}
+              </div>
+              
+              <!-- 内容区域 -->
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-gray-900 text-sm truncate mb-1 group-hover:text-indigo-700">
+                  {{ item.title || '无标题' }}
                 </div>
-              </template>
-              <ElButton
-                class="w-full h-auto overflow-hidden whitespace-nowrap p-3 text-left"
-                @click="handleAddCandidate(item.url)"
-              >
-                <div class="w-full">
-                  <div class="font-semibold mb-1 text-gray-900 truncate">{{ item.title }}</div>
-                  <div class="text-xs text-gray-500 break-all truncate">{{ item.url }}</div>
+                <div class="text-xs text-gray-500 truncate">
+                  {{ item.url }}
                 </div>
-              </ElButton>
-            </ElTooltip>
+              </div>
+              
+              <!-- 添加图标 -->
+              <div class="opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex-shrink-0">
+                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-4 text-center text-sm text-gray-500">
+            点击任意网址卡片将其添加到文档列表
           </div>
         </div>
 
@@ -341,6 +362,19 @@ function isQueryDisabled() {
   }
 }
 
+/* 候选网址列表样式 */
+.candidate-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.candidate-item:hover {
+  transform: translateX(2px);
+}
+
+.candidate-item:active {
+  transform: scale(0.98);
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .messages-container {
@@ -364,29 +398,7 @@ function isQueryDisabled() {
     margin-top: 24px;
   }
 
-  .candidates {
-    width: 100%;
-    margin-left: 0;
-    margin-top: 16px;
-  }
 
-  .candidate-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .candidate-item {
-    width: 100%;
-  }
-
-  .candidate-item-content {
-    width: 100%;
-  }
-
-  .candidate-title,
-  .candidate-url {
-    width: 100%;
-  }
 
   .topic-input {
     flex-direction: column;
