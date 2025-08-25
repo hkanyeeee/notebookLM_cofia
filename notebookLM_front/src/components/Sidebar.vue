@@ -88,13 +88,13 @@ function handleRemoveFailedUrl(url: string) {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ collapsed }">
+  <aside class="w-96 bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300" :class="{ 'w-20': collapsed }">
     <!-- 头部 -->
-    <div class="sidebar-header">
-      <div v-if="!collapsed" class="logo">
-        <h2>文档</h2>
+    <div class="p-5 border-b border-gray-200 flex items-center justify-between min-h-[70px]">
+      <div v-if="!collapsed" class="flex-1">
+        <h2 class="m-0 text-gray-800 text-xl font-semibold">文档</h2>
       </div>
-      <ElButton text @click="$emit('toggle')" class="toggle-btn">
+      <ElButton text @click="$emit('toggle')" class="p-2 rounded-md">
         <ElIcon>
           <Fold v-if="!collapsed" />
           <Expand v-else />
@@ -103,34 +103,33 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 添加文档按钮 -->
-    <div class="add-section">
+    <div class="p-5 border-b border-gray-200">
       <ElButton
         type="primary"
         :icon="Plus"
         @click="showAddDialog = true"
         :disabled="store.loading.addingDocument || store.loading.querying"
         :loading="store.loading.addingDocument || store.loading.querying"
-        class="add-btn"
-        :class="{ 'collapsed-btn': collapsed }"
+        :class="collapsed ? 'w-10 mx-auto block' : 'w-full h-10'"
       >
         <span v-if="!collapsed">添加网址</span>
       </ElButton>
     </div>
 
     <!-- Ingestion Progress Section -->
-    <div class="ingestion-progress-section" v-if="store.ingestionStatus.size > 0">
-      <h3>正在处理</h3>
-      <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="progress-item">
-        <div class="progress-info">
-          <span class="progress-url">{{ url }}</span>
-          <span class="progress-message">{{ status.message }}</span>
+    <div class="px-5 pb-5 border-b border-gray-200" v-if="store.ingestionStatus.size > 0">
+      <h3 class="my-3 text-gray-700 text-base font-medium">正在处理</h3>
+      <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="mb-4">
+        <div class="flex justify-between items-center mb-1.5 gap-2">
+          <span class="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px]">{{ url }}</span>
+          <span class="text-xs text-gray-500">{{ status.message }}</span>
           <!-- 进行中或失败时均支持删除/取消，以优化体验 -->
           <ElButton 
             text 
             type="danger" 
             size="small"
             @click="status.inProgress ? store.cancelIngestion(url) : handleRemoveFailedUrl(url)"
-            class="remove-failed-btn"
+            class="ml-2 opacity-80 hover:opacity-100 transition-opacity"
           >
             <ElIcon>
               <Delete />
@@ -145,10 +144,10 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 文档列表 -->
-    <div class="documents-section" v-if="!collapsed" :class="{ 'collection-mode': store.isCollectionQueryMode, 'normal-mode': isNormalQueryMode }">
-      <div class="documents-section-content">
-        <h3>文档列表</h3>
-        <div class="documents-list">
+    <div class="flex-1 p-5 overflow-y-auto relative" v-if="!collapsed">
+      <div class="transition-opacity duration-300" :class="{ 'opacity-30': store.isCollectionQueryMode || isNormalQueryMode }">
+        <h3 class="m-0 mb-4 text-gray-700 text-base font-medium">文档列表</h3>
+        <div class="flex flex-col gap-3">
           <ElTooltip
             v-for="doc in store.documents"
             :key="doc.id"
@@ -161,15 +160,15 @@ function handleRemoveFailedUrl(url: string) {
                 <div>{{ doc.url }}</div>
               </div>
             </template>
-            <div class="document-item">
-              <ElIcon class="doc-icon">
+            <div class="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200 transition-all duration-200 hover:bg-gray-100 hover:border-gray-300 group">
+              <ElIcon class="mr-3 text-gray-500">
                 <Document />
               </ElIcon>
-              <div class="doc-info">
-                <div class="doc-title">{{ doc.title }}</div>
-                <div class="doc-url">{{ doc.url }}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-gray-900 text-sm mb-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.title }}</div>
+                <div class="text-gray-500 text-xs overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.url }}</div>
               </div>
-              <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="delete-btn">
+              <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="opacity-0 group-hover:opacity-100 transition-opacity">
                 <ElIcon>
                   <Delete />
                 </ElIcon>
@@ -177,28 +176,28 @@ function handleRemoveFailedUrl(url: string) {
             </div>
           </ElTooltip>
 
-          <div v-if="store.documents.length === 0" class="empty-state">
-            <p>还没有添加任何文档</p>
-            <p class="empty-hint">可在右侧输入课题，或点击上方按钮添加网址</p>
+          <div v-if="store.documents.length === 0" class="text-center text-gray-500 mt-10">
+            <p class="my-2">还没有添加任何文档</p>
+            <p class="my-2 text-xs text-gray-400">可在右侧输入课题，或点击上方按钮添加网址</p>
           </div>
         </div>
       </div>
 
       <!-- Collection查询模式蒙版 -->
-      <div v-if="store.isCollectionQueryMode" class="collection-overlay">
-        <div class="collection-overlay-content">
-          <h4>Collection查询模式</h4>
-          <p>当前正在使用Collection进行查询</p>
-          <p class="collection-name">{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
+      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 bg-gray-500/10 backdrop-blur-sm flex items-center justify-center z-10">
+        <div class="bg-white rounded-xl p-6 text-center shadow-lg border border-gray-200 max-w-[280px]">
+          <h4 class="m-0 mb-3 text-gray-900 text-base font-semibold">Collection查询模式</h4>
+          <p class="my-2 text-gray-500 text-sm leading-relaxed">当前正在使用Collection进行查询</p>
+          <p class="text-indigo-600 font-medium bg-blue-50 py-2 px-3 rounded-md mt-4 text-xs">{{ store.collections.find(c => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
 
       <!-- 普通问答模式蒙版 -->
-      <div v-if="isNormalQueryMode" class="normal-overlay">
-        <div class="normal-overlay-content">
-          <h4>普通问答模式</h4>
-          <p>当前正在使用网络搜索进行问答</p>
-          <p class="normal-description">该模式将自动使用工具为您提供最新的信息和答案</p>
+      <div v-if="isNormalQueryMode" class="absolute inset-0 bg-gray-500/10 backdrop-blur-sm flex items-center justify-center z-10">
+        <div class="bg-white rounded-xl p-6 text-center shadow-lg border border-gray-200 max-w-[280px]">
+          <h4 class="m-0 mb-3 text-gray-900 text-base font-semibold">普通问答模式</h4>
+          <p class="my-2 text-gray-500 text-sm leading-relaxed">当前正在使用网络搜索进行问答</p>
+          <p class="text-indigo-600 font-medium bg-blue-50 py-2 px-3 rounded-md mt-4 text-xs">该模式将自动使用工具为您提供最新的信息和答案</p>
         </div>
       </div>
     </div>
@@ -222,14 +221,13 @@ function handleRemoveFailedUrl(url: string) {
     </ElDialog>
 
     <!-- 导出按钮 -->
-    <div class="export-section" style="text-align: center;" v-if="!collapsed">
+    <div class="text-center" v-if="!collapsed">
       <ElButton
         type="success"
         @click="handleExportConversation"
         :disabled="store.documents.length === 0 || store.messages.length === 0 || store.loading.querying"
         :loading="store.loading.exporting"
-        class="export-btn"
-        style="width: 90%; height: 40px; margin: 10px 0px;"
+        class="w-[90%] h-10 my-2.5"
       >
         导出对话历史
       </ElButton>
@@ -237,308 +235,10 @@ function handleRemoveFailedUrl(url: string) {
   </aside>
 </template>
 
+<!-- 响应式设计：在移动端隐藏侧边栏 -->
 <style scoped>
-.sidebar {
-  width: 400px;
-  background: white;
-  border-right: 1px solid #e5e7eb;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  z-index: 1000;
-  transition: width 0.3s ease;
-}
-
-.sidebar.collapsed {
-  width: 80px;
-}
-
-.sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 70px;
-}
-
-.logo h2 {
-  margin: 0;
-  color: #1f2937;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.toggle-btn {
-  padding: 8px;
-  border-radius: 6px;
-}
-
-.add-section {
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.add-btn {
-  width: 100%;
-  height: 40px;
-}
-
-.add-btn.collapsed-btn {
-  width: 40px;
-  margin: 0 auto;
-  display: block;
-}
-
-.ingestion-progress-section {
-  padding: 0 20px 20px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.ingestion-progress-section h3 {
-  margin: 12px 0 12px 0;
-  color: #374151;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.progress-item {
-  margin-bottom: 16px;
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  gap: 8px;
-}
-
-.progress-url {
-  font-size: 13px;
-  font-weight: 500;
-  color: #374151;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 180px;
-}
-
-.progress-message {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.remove-failed-btn {
-  margin-left: 8px;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.remove-failed-btn:hover {
-  opacity: 1;
-}
-
-
-.documents-section {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  position: relative;
-}
-
-.documents-section-content {
-  transition: opacity 0.3s ease;
-}
-
-.documents-section.collection-mode .documents-section-content,
-.documents-section.normal-mode .documents-section-content {
-  opacity: 0.3;
-}
-
-.collection-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(107, 114, 128, 0.1);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.collection-overlay-content {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  max-width: 280px;
-}
-
-.collection-overlay-content h4 {
-  margin: 0 0 12px 0;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.collection-overlay-content p {
-  margin: 8px 0;
-  color: #6b7280;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.collection-overlay-content .collection-name {
-  color: #4f46e5;
-  font-weight: 500;
-  background: #f0f9ff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin-top: 16px;
-  font-size: 13px;
-}
-
-.normal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(107, 114, 128, 0.1);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.normal-overlay-content {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  max-width: 280px;
-}
-
-.normal-overlay-content h4 {
-  margin: 0 0 12px 0;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.normal-overlay-content p {
-  margin: 8px 0;
-  color: #6b7280;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.normal-overlay-content .normal-description {
-  color: #4f46e5;
-  font-weight: 500;
-  background: #f0f9ff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin-top: 16px;
-  font-size: 13px;
-}
-
-.documents-section h3 {
-  margin: 0 0 16px 0;
-  color: #374151;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.documents-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.document-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s;
-}
-
-.document-item:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-}
-
-.doc-icon {
-  margin-right: 12px;
-  color: #6b7280;
-}
-
-.doc-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.doc-title {
-  font-weight: 500;
-  color: #111827;
-  font-size: 14px;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-url {
-  color: #6b7280;
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.delete-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.document-item:hover .delete-btn {
-  opacity: 1;
-}
-
-.empty-state {
-  text-align: center;
-  color: #6b7280;
-  margin-top: 40px;
-}
-
-.empty-state p {
-  margin: 8px 0;
-}
-
-.empty-hint {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
-  .sidebar {
-    /* 在移动端完全隐藏侧边栏 */
+  aside {
     display: none;
   }
 }
