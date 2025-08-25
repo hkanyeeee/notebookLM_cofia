@@ -151,64 +151,64 @@ function getInputPlaceholder() {
 </script>
 
 <template>
-  <div class="collection-chat">
+  <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="messages-container">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- Collection查询结果区域 -->
-      <div v-if="collectionQueryResults.length > 0 && messages.length === 0" class="collection-results">
-        <div class="collection-results-header">
-          <h3>Collection搜索结果 ({{ collectionQueryResults.length }} 个相关文档片段)</h3>
-          <div class="collection-results-actions">
-            <ElButton text @click="showDetailedResults = !showDetailedResults" class="toggle-results-btn">
+      <div v-if="collectionQueryResults.length > 0 && messages.length === 0" class="mb-6 p-5 bg-gray-50 rounded-lg border border-gray-200">
+        <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Collection搜索结果 ({{ collectionQueryResults.length }} 个相关文档片段)</h3>
+          <div class="flex gap-2 items-center">
+            <button @click="showDetailedResults = !showDetailedResults" class="text-sm text-gray-600 hover:text-gray-900">
               {{ showDetailedResults ? '隐藏详细结果' : '查看详细结果' }}
-            </ElButton>
-            <ElButton text @click="handleClearCollectionResults()" class="clear-results-btn">
+            </button>
+            <button @click="handleClearCollectionResults()" class="text-sm text-gray-600 hover:text-gray-900">
               清空结果
-            </ElButton>
+            </button>
           </div>
         </div>
-        <div v-if="showDetailedResults" class="collection-results-list">
+        <div v-if="showDetailedResults" class="max-h-96 overflow-y-auto">
           <div 
             v-for="(result, index) in collectionQueryResults" 
             :key="index" 
-            class="collection-result-item"
+            class="mb-3 p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all duration-200"
           >
-            <div class="result-header">
-              <div class="result-score">相关度: {{ result.score.toFixed(4) }}</div>
-              <a :href="result.source_url" target="_blank" class="result-url">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">相关度: {{ result.score.toFixed(4) }}</span>
+              <a :href="result.source_url" target="_blank" class="text-sm font-medium text-indigo-600 hover:text-indigo-800 truncate max-w-[400px]">
                 {{ result.source_title }}
               </a>
             </div>
-            <div class="result-content">{{ result.content }}</div>
+            <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{{ result.content }}</p>
           </div>
         </div>
-        <div v-else class="collection-results-summary">
-          <p class="summary-text">
+        <div v-else class="p-4 bg-white rounded-lg border border-gray-200 text-center">
+          <p class="text-sm text-gray-700 mb-2">
             📄 找到 {{ collectionQueryResults.length }} 个相关文档片段，
-            <ElButton type="primary" size="small" @click="handleSendQuery()">
+            <button @click="handleSendQuery()" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
               点击生成智能回答
-            </ElButton>
+            </button>
           </p>
         </div>
       </div>
       
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0 && collectionQueryResults.length === 0" class="welcome-message">
-        <h2>Collection问答</h2>
-        <p>选择一个Collection进行基于知识库的问答，同时可以结合网络搜索获取最新信息。</p>
+      <div v-if="messages.length === 0 && collectionQueryResults.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
+        <h2 class="text-2xl font-semibold text-gray-900 mb-4">Collection问答</h2>
+        <p class="mb-10 text-base leading-relaxed">选择一个Collection进行基于知识库的问答，同时可以结合网络搜索获取最新信息。</p>
         
-        <div class="welcome-features">
-          <div class="feature-item">
-            <strong>📚 知识库问答</strong>
-            <p>基于Collection中的文档回答</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-sm font-medium text-gray-900">📚 知识库问答</strong>
+            <p class="text-xs text-gray-600 leading-relaxed">基于Collection中的文档回答</p>
           </div>
-          <div class="feature-item">
-            <strong>🔍 混合搜索</strong>
-            <p>结合知识库和网络搜索</p>
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-sm font-medium text-gray-900">🔍 混合搜索</strong>
+            <p class="text-xs text-gray-600 leading-relaxed">结合知识库和网络搜索</p>
           </div>
-          <div class="feature-item">
-            <strong>📊 精准匹配</strong>
-            <p>智能检索相关文档片段</p>
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-sm font-medium text-gray-900">📊 精准匹配</strong>
+            <p class="text-xs text-gray-600 leading-relaxed">智能检索相关文档片段</p>
           </div>
         </div>
       </div>
@@ -217,106 +217,111 @@ function getInputPlaceholder() {
       <div
         v-for="message in messages"
         :key="message.id"
-        class="message"
-        :class="message.type"
+        class="mb-6 flex"
+        :class="message.type === 'user' ? 'justify-end' : 'justify-start'"
       >
-        <div class="message-content">
+        <div 
+          class="max-w-[70%] p-4 rounded-2xl relative"
+          :class="message.type === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'"
+        >
           <!-- Reasoning Chain (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.reasoning" class="reasoning-section">
-            <ElCollapse v-model="activeNames">
-              <ElCollapseItem :title="`思维链（${message.reasoning.length} 字）`" name="reasoning">
-                <div class="reasoning-content" v-html="marked(message.reasoning)"></div>
-              </ElCollapseItem>
-            </ElCollapse>
+          <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3 pb-3">
+            <el-collapse v-model="activeNames">
+              <el-collapse-item title="思维链（" :name="'reasoning'">
+                <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200" v-html="marked(message.reasoning)"></div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
-          <div class="message-text" v-if="message.content" v-html="marked(message.content)" :class="{ 'status-message': isStatusMessage(message.content) }"></div>
-          <div class="message-text" v-else>思考中...</div>
-          <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+          <div v-if="message.content" class="whitespace-pre-wrap" :class="{ 'text-gray-600': isStatusMessage(message.content) }" v-html="marked(message.content)"></div>
+          <div v-else>思考中...</div>
+          <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">{{ formatTime(message.timestamp) }}</div>
 
           <!-- Sources (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="sources-section">
-            <ElCollapse>
-              <ElCollapseItem title="参考来源" name="sources">
-                <div v-for="(source, index) in message.sources" :key="index" class="source-item">
-                  <div class="source-header">
-                    <a :href="source.url" target="_blank" class="source-url">{{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}</a>
-                    <span class="source-score">分数: {{ source.score.toFixed(4) }}</span>
+          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="mt-4 border-t border-gray-200 pt-3">
+            <el-collapse>
+              <el-collapse-item title="参考来源" name="sources">
+                <div v-for="(source, index) in message.sources" :key="index" class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div class="flex justify-between items-center mb-2">
+                    <a :href="source.url" target="_blank" class="text-sm font-medium text-indigo-600 hover:text-indigo-800 truncate">
+                      {{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}
+                    </a>
+                    <span class="text-xs text-gray-500 font-mono">分数: {{ source.score.toFixed(4) }}</span>
                   </div>
-                  <pre class="source-content">{{ source.content }}</pre>
+                  <pre class="text-xs text-gray-700 leading-relaxed m-0 whitespace-pre-wrap">{{ source.content }}</pre>
                 </div>
-              </ElCollapseItem>
-            </ElCollapse>
+              </el-collapse-item>
+            </el-collapse>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 输入区域 -->
-    <div class="input-area">
+    <div class="p-6 border-t border-gray-200 bg-white">
       <!-- Collection与Agentic Ingest 控制区 -->
-      <div class="agentic-controls">
+      <div class="flex items-center mb-5 gap-3 max-w-4xl mx-auto">
         <!-- Collection选择下拉框 -->
-        <ElSelect
+        <el-select
           :model-value="selectedCollection"
           @update:model-value="handleCollectionChange"
           placeholder="选择Collection"
-          class="collection-selector"
+          class="w-48"
           :loading="loadingCollections"
           clearable
         >
-          <ElOption
+          <el-option
             v-for="collection in collections"
             :key="collection.collection_id"
             :label="collection.document_title"
             :value="collection.collection_id"
           />
-        </ElSelect>
+        </el-select>
         
         <!-- URL输入框 -->
-        <ElInput
+        <el-input
           :model-value="agenticIngestUrl"
           @update:model-value="handleAgenticIngestUrlUpdate"
           placeholder="输入URL进行Agentic Ingest"
-          class="url-input"
+          class="flex-1 min-w-[200px]"
           clearable
         />
         
         <!-- 提交按钮 -->
-        <ElButton
+        <el-button
           type="primary"
           @click="handleTriggerAgenticIngest"
           :loading="triggeringAgenticIngest"
           :disabled="!agenticIngestUrl.trim() || triggeringAgenticIngest"
-          class="trigger-btn"
+          class="whitespace-nowrap"
         >
-          <ElIcon>
-            <Plus />
-          </ElIcon>
+          <el-icon>
+            <plus />
+          </el-icon>
           处理
-        </ElButton>
+        </el-button>
       </div>
       
-      <div class="input-container" @keydown.ctrl.enter="handleSendQuery">
-        <ElInput
+      <div class="flex gap-3 max-w-4xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
+        <el-input
           v-model="queryInput"
           :placeholder="getInputPlaceholder()"
-          class="query-input"
+          class="flex-1"
           type="textarea"
           :rows="2"
         />
-        <ElButton
+        <el-button
           type="primary"
           @click="handleSendQuery"
           :disabled="isQueryDisabled()"
           :loading="loading"
-          class="send-btn"
+          class="h-10 w-10 p-0 rounded-lg"
         >
-          <ElIcon>
-            <Promotion />
-          </ElIcon>
-        </ElButton>
+          <el-icon>
+            <promotion />
+          </el-icon>
+        </el-button>
       </div>
-      <div class="input-hint">
+      <div class="text-center mt-3 text-xs text-gray-600">
         <span>
           Collection问答模式：
           {{ selectedCollection 
@@ -329,537 +334,9 @@ function getInputPlaceholder() {
 </template>
 
 <style scoped>
-.collection-chat {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  scroll-behavior: smooth;
-}
-
-.welcome-message {
-  text-align: center;
-  max-width: 600px;
-  margin: 40px auto;
-  color: #374151;
-}
-
-.welcome-message h2 {
-  color: #111827;
-  margin-bottom: 16px;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.welcome-message > p {
-  margin-bottom: 40px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-.welcome-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 24px;
-  margin-top: 40px;
-}
-
-.feature-item {
-  text-align: left;
-  padding: 20px;
-  background: #f9fafb;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.feature-item strong {
-  display: block;
-  margin-bottom: 8px;
-  color: #111827;
-  font-size: 14px;
-}
-
-.feature-item p {
-  margin: 0;
-  font-size: 13px;
-  color: #6b7280;
-  line-height: 1.5;
-}
-
-/* Collection查询结果样式 */
-.collection-results {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: #f9fafb;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.collection-results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.collection-results-header h3 {
-  margin: 0;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.collection-results-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.clear-results-btn,
-.toggle-results-btn {
-  font-size: 12px;
-}
-
-.collection-results-summary {
-  padding: 16px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  text-align: center;
-}
-
-.summary-text {
-  margin: 0;
-  color: #374151;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.collection-results-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.collection-result-item {
-  margin-bottom: 12px;
-  padding: 16px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-}
-
-.collection-result-item:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-.collection-result-item:last-child {
-  margin-bottom: 0;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.result-score {
-  font-size: 12px;
-  color: #6b7280;
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
-  background: #f3f4f6;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.result-url {
-  font-size: 13px;
-  font-weight: 500;
-  color: #4f46e5;
-  text-decoration: none;
-  max-width: 400px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-url:hover {
-  text-decoration: underline;
-}
-
-.result-content {
-  font-size: 14px;
-  color: #374151;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.message {
-  margin-bottom: 24px;
-  display: flex;
-}
-
-.message.user {
-  justify-content: flex-end;
-}
-
-.message.assistant {
-  justify-content: flex-start;
-}
-
-.message-content {
-  max-width: 70%;
-  padding: 16px 20px;
-  border-radius: 18px;
-  position: relative;
-}
-
-.message.user .message-content {
-  background: #4f46e5;
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-
-.message.assistant .message-content {
-  background: #f3f4f6;
-  color: #111827;
-  border-bottom-left-radius: 4px;
-}
-
-.message-text {
-  word-wrap: break-word;
-}
-
-.message-time {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-top: 8px;
-  text-align: right;
-}
-
-.message.assistant .message-time {
-  text-align: left;
-}
-
-.reasoning-section {
-  margin-bottom: 16px;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-.reasoning-content {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-  background-color: #f9fafb;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.sources-section {
-  margin-top: 16px;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-}
-
-.source-item {
-  margin-bottom: 12px;
-  padding: 12px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.source-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.source-url {
-  font-size: 13px;
-  font-weight: 500;
-  color: #4f46e5;
-  text-decoration: none;
-}
-
-.source-url:hover {
-  text-decoration: underline;
-}
-
-.source-score {
-  font-size: 12px;
-  color: #6b7280;
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
-}
-
-.source-content {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-:deep(.el-collapse-item__header) {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-:deep(.el-collapse-item__content) {
-  padding-bottom: 0;
-}
-
-/* 状态消息样式 */
-.status-message {
-  border-radius: 8px !important;
-  padding: 12px 16px !important;
-  margin: 8px 0 !important;
-  color: #6b7280 !important;
-  font-weight: 400 !important;
-  position: relative !important;
-  overflow: hidden !important;
-}
-
-.status-message::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.8) 50%,
-    transparent 100%
-  );
-  animation: highlightSweep 1.5s ease-in-out infinite;
-}
-
-@keyframes highlightSweep {
-  0% {
-    left: -100%;
-  }
-  50% {
-    left: 100%;
-  }
-  100% {
-    left: 100%;
-  }
-}
-
-.input-area {
-  padding: 24px;
-  border-top: 1px solid #e5e7eb;
-  background: white;
-}
-
-.agentic-controls {
-  display: flex;
-  align-items: center;
-  margin: auto;
-  margin-bottom: 20px;
-  gap: 12px;
-  flex: 1;
-  max-width: 800px;
-}
-
-.collection-selector {
-  width: 200px;
-}
-
-.url-input {
-  flex: 1;
-  min-width: 200px;
-}
-
-.trigger-btn {
-  white-space: nowrap;
-}
-
-.input-container {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.query-input {
-  flex: 1;
-}
-
-.send-btn {
-  height: 40px;
-  width: 40px;
-  padding: 0;
-  border-radius: 8px;
-}
-
-.input-hint {
-  text-align: center;
-  margin-top: 12px;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .messages-container {
-    padding: 16px;
-    /* 确保有足够的滚动空间 */
-    min-height: 0;
-  }
-
-  .welcome-message {
-    margin: 20px auto;
-    padding: 0 8px;
-  }
-
-  .message-content {
-    max-width: 85%;
-  }
-
-  .welcome-features {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-top: 24px;
-  }
-
-  .agentic-controls {
-    flex-direction: column;
-    gap: 12px;
-    max-width: none;
-  }
-
-  .collection-selector {
-    width: 100%;
-  }
-
-  .url-input {
-    min-width: auto;
-  }
-
-  .input-area {
-    padding: 16px;
-  }
-
-  .collection-results {
-    margin: 16px 0;
-    padding: 16px;
-  }
-
-  .collection-results-actions {
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
-  }
-}
+/* 移除所有scoped样式，因为已转换为Tailwind类 */
 </style>
 
 <style>
-/* Markdown 内容的全局样式 */
-.collection-chat .message-text p {
-  margin-top: 0;
-  margin-bottom: 1em;
-}
-.collection-chat .message-text h1,
-.collection-chat .message-text h2,
-.collection-chat .message-text h3,
-.collection-chat .message-text h4,
-.collection-chat .message-text h5,
-.collection-chat .message-text h6 {
-  margin-top: 1.5em;
-  margin-bottom: 1em;
-  font-weight: 600;
-}
-.collection-chat .message-text h1 {
-  font-size: 1.75em;
-}
-.collection-chat .message-text h2 {
-  font-size: 1.5em;
-}
-.collection-chat .message-text h3 {
-  font-size: 1.25em;
-}
-.collection-chat .message-text ul,
-.collection-chat .message-text ol {
-  padding-left: 2em;
-  margin-top: 1em;
-  margin-bottom: 1em;
-}
-.collection-chat .message-text li {
-  margin-bottom: 0.5em;
-}
-.collection-chat .message-text blockquote {
-  padding: 0.5em 1em;
-  margin: 1em 0;
-  color: #6b7280;
-  border-left: 0.25em solid #e5e7eb;
-  background: #f9fafb;
-}
-.collection-chat .message-text pre {
-  background: #f3f4f6;
-  padding: 1em;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 1em 0;
-}
-.collection-chat .message-text code {
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
-  font-size: 0.9em;
-  background-color: rgba(27, 31, 35, 0.05);
-  padding: 0.2em 0.4em;
-  border-radius: 6px;
-}
-.collection-chat .message-text pre > code {
-  padding: 0;
-  margin: 0;
-  font-size: inherit;
-  background-color: transparent;
-  border-radius: 0;
-}
-
-/* 表格样式（GFM） */
-.collection-chat .message-text table {
-  width: 100%;
-  border-collapse: collapse;
-  border-spacing: 0;
-  margin: 1em 0;
-}
-.collection-chat .message-text thead th {
-  background: #f3f4f6;
-}
-.collection-chat .message-text th,
-.collection-chat .message-text td {
-  border: 1px solid #e5e7eb;
-  padding: 8px 12px;
-  text-align: left;
-  vertical-align: top;
-  word-break: break-word;
-}
-.collection-chat .message-text tr:nth-child(even) td {
-  background: #fafafa;
-}
-.collection-chat .message-text {
-  overflow-x: auto;
-}
+/* 移除所有全局样式，因为已转换为Tailwind类 */
 </style>

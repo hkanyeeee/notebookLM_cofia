@@ -138,35 +138,36 @@ function isQueryDisabled() {
 </script>
 
 <template>
-  <div class="document-chat">
+  <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="messages-container">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="welcome-message">
-        <h2>文档问答</h2>
-        <p>您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
+      <div v-if="messages.length === 0" class="text-center max-w-md mx-auto text-gray-700">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">文档问答</h2>
+        <p class="mb-10 text-base leading-relaxed">您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
         
         <!-- 课题输入 -->
-        <div class="topic-input">
+        <div class="flex gap-3 items-center mb-6">
           <ElInput
             :model-value="topicInput"
             @update:model-value="handleTopicInputUpdate"
             placeholder="请输入课题，例如：Sora 2025 能力与限制"
             :disabled="generating"
+            class="flex-1"
           />
           <ElButton
             type="primary"
             @click="handleGenerateCandidates"
             :loading="generating"
             :disabled="!topicInput.trim() || generating"
-            class="topic-send-btn"
+            class="whitespace-nowrap"
           >生成搜索</ElButton>
         </div>
 
         <!-- 候选URL按钮区 -->
-        <div v-if="candidateUrls.length > 0" class="candidates">
-          <h3>候选网址</h3>
-          <div class="candidate-grid">
+        <div v-if="candidateUrls.length > 0" class="mt-6 text-left w-full max-w-3xl">
+          <h3 class="text-lg font-medium mb-3">候选网址</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <ElTooltip
               v-for="item in candidateUrls"
               :key="item.url"
@@ -180,30 +181,30 @@ function isQueryDisabled() {
                 </div>
               </template>
               <ElButton
-                class="candidate-item"
+                class="w-full h-auto overflow-hidden whitespace-nowrap p-3 text-left"
                 @click="handleAddCandidate(item.url)"
               >
-                <div class="candidate-item-content">
-                  <div class="candidate-title">{{ item.title }}</div>
-                  <div class="candidate-url">{{ item.url }}</div>
+                <div class="w-full">
+                  <div class="font-semibold mb-1 text-gray-900 truncate">{{ item.title }}</div>
+                  <div class="text-xs text-gray-500 break-all truncate">{{ item.url }}</div>
                 </div>
               </ElButton>
             </ElTooltip>
           </div>
         </div>
 
-        <div v-if="messages.length === 0 && candidateUrls.length === 0" class="welcome-features">
-          <div class="feature-item">
-            <strong>💡 智能问答</strong>
-            <p>基于您添加的文档内容回答问题</p>
+        <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-gray-900 text-sm">💡 智能问答</strong>
+            <p class="text-xs text-gray-500 leading-relaxed">基于您添加的文档内容回答问题</p>
           </div>
-          <div class="feature-item">
-            <strong>📚 文档总结</strong>
-            <p>快速获取文档的核心要点</p>
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-gray-900 text-sm">📚 文档总结</strong>
+            <p class="text-xs text-gray-500 leading-relaxed">快速获取文档的核心要点</p>
           </div>
-          <div class="feature-item">
-            <strong>🔍 深度分析</strong>
-            <p>深入分析文档中的关键信息</p>
+          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
+            <strong class="block mb-2 text-gray-900 text-sm">🔍 深度分析</strong>
+            <p class="text-xs text-gray-500 leading-relaxed">深入分析文档中的关键信息</p>
           </div>
         </div>
       </div>
@@ -212,32 +213,57 @@ function isQueryDisabled() {
       <div
         v-for="message in messages"
         :key="message.id"
-        class="message"
-        :class="message.type"
+        class="mb-6 flex"
+        :class="message.type === 'user' ? 'justify-end' : 'justify-start'"
       >
-        <div class="message-content">
+        <div 
+          class="max-w-[70%] p-4 rounded-2xl relative"
+          :class="message.type === 'user' 
+            ? 'bg-indigo-600 text-white rounded-br-none' 
+            : 'bg-gray-100 text-gray-900 rounded-bl-none'"
+        >
           <!-- Reasoning Chain (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.reasoning" class="reasoning-section">
+          <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3 pb-3">
             <ElCollapse v-model="activeNames">
-              <ElCollapseItem :title="`思维链（${message.reasoning.length} 字）`" name="reasoning">
-                <div class="reasoning-content" v-html="marked(message.reasoning)"></div>
+              <ElCollapseItem 
+                :title="`思维链（${message.reasoning.length} 字）`" 
+                name="reasoning"
+                class="text-sm font-medium text-gray-700"
+              >
+                <div 
+                  class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200"
+                  v-html="marked(message.reasoning)"
+                ></div>
               </ElCollapseItem>
             </ElCollapse>
           </div>
-          <div class="message-text" v-if="message.content" v-html="marked(message.content)" :class="{ 'status-message': isStatusMessage(message.content) }"></div>
-          <div class="message-text" v-else>思考中...</div>
-          <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+          <div 
+            class="word-wrap break-words"
+            v-if="message.content" 
+            v-html="marked(message.content)" 
+            :class="{ 'status-message': isStatusMessage(message.content) }"
+          ></div>
+          <div v-else>思考中...</div>
+          <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">
+            {{ formatTime(message.timestamp) }}
+          </div>
 
           <!-- Sources (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="sources-section">
+          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="mt-4 border-t border-gray-200 pt-3">
             <ElCollapse>
               <ElCollapseItem title="参考来源" name="sources">
-                <div v-for="(source, index) in message.sources" :key="index" class="source-item">
-                  <div class="source-header">
-                    <a :href="source.url" target="_blank" class="source-url">{{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}</a>
-                    <span class="source-score">分数: {{ source.score.toFixed(4) }}</span>
+                <div v-for="(source, index) in message.sources" :key="index" class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div class="flex justify-between items-center mb-2">
+                    <a 
+                      :href="source.url" 
+                      target="_blank" 
+                      class="text-sm font-medium text-indigo-600 hover:underline"
+                    >
+                      {{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}
+                    </a>
+                    <span class="text-xs text-gray-500 font-mono">分数: {{ source.score.toFixed(4) }}</span>
                   </div>
-                  <pre class="source-content">{{ source.content }}</pre>
+                  <pre class="text-xs text-gray-700 leading-relaxed m-0 whitespace-pre-wrap">{{ source.content }}</pre>
                 </div>
               </ElCollapseItem>
             </ElCollapse>
@@ -247,12 +273,12 @@ function isQueryDisabled() {
     </div>
 
     <!-- 输入区域 -->
-    <div class="input-area">
-      <div class="input-container" @keydown.ctrl.enter="handleSendQuery">
+    <div class="p-6 border-t border-gray-200 bg-white">
+      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.ctrl.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入关于文档的问题..."
-          class="query-input"
+          class="flex-1 query-input"
           type="textarea"
           :rows="2"
         />
@@ -261,266 +287,21 @@ function isQueryDisabled() {
           @click="handleSendQuery"
           :disabled="isQueryDisabled()"
           :loading="loading || ingestionStatus.size > 0"
-          class="send-btn"
+          class="h-10 w-10 p-0 rounded-lg"
         >
           <ElIcon>
             <Promotion />
           </ElIcon>
         </ElButton>
       </div>
-      <div class="input-hint">
-        <span>文档问答模式：{{ documents.length }} 个文档已添加</span>
+      <div class="text-center mt-3 text-xs text-gray-500">
+        文档问答模式：{{ documents.length }} 个文档已添加
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.document-chat {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  scroll-behavior: smooth;
-}
-
-.welcome-message {
-  text-align: center;
-  max-width: 600px;
-  margin: 40px auto;
-  color: #374151;
-}
-
-.welcome-message h2 {
-  color: #111827;
-  margin-bottom: 16px;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.welcome-message > p {
-  margin-bottom: 40px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-.topic-input {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.topic-send-btn {
-  white-space: nowrap;
-}
-
-.candidates {
-  margin-top: 24px;
-  text-align: left;
-  width: 100%;
-  max-width: 800px;
-}
-
-.candidate-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.candidate-grid .candidate-item:first-child {
-  margin-left: 12px;
-}
-
-.candidate-item {
-  display: block;
-  text-align: left;
-  height: auto;
-  overflow: hidden;
-  white-space: nowrap;
-  padding: 12px;
-  width: 100%;
-  min-width: 260px;
-}
-
-.candidate-item-content {
-  width: 100%;
-}
-
-.candidate-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #111827;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.candidate-url {
-  font-size: 12px;
-  color: #6b7280;
-  word-break: break-all;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.welcome-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 24px;
-  margin-top: 40px;
-}
-
-.feature-item {
-  text-align: left;
-  padding: 20px;
-  background: #f9fafb;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.feature-item strong {
-  display: block;
-  margin-bottom: 8px;
-  color: #111827;
-  font-size: 14px;
-}
-
-.feature-item p {
-  margin: 0;
-  font-size: 13px;
-  color: #6b7280;
-  line-height: 1.5;
-}
-
-.message {
-  margin-bottom: 24px;
-  display: flex;
-}
-
-.message.user {
-  justify-content: flex-end;
-}
-
-.message.assistant {
-  justify-content: flex-start;
-}
-
-.message-content {
-  max-width: 70%;
-  padding: 16px 20px;
-  border-radius: 18px;
-  position: relative;
-}
-
-.message.user .message-content {
-  background: #4f46e5;
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-
-.message.assistant .message-content {
-  background: #f3f4f6;
-  color: #111827;
-  border-bottom-left-radius: 4px;
-}
-
-.message-text {
-  word-wrap: break-word;
-}
-
-.message-time {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-top: 8px;
-  text-align: right;
-}
-
-.message.assistant .message-time {
-  text-align: left;
-}
-
-.reasoning-section {
-  margin-bottom: 16px;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-.reasoning-content {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-  background-color: #f9fafb;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.sources-section {
-  margin-top: 16px;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-}
-
-.source-item {
-  margin-bottom: 12px;
-  padding: 12px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.source-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.source-url {
-  font-size: 13px;
-  font-weight: 500;
-  color: #4f46e5;
-  text-decoration: none;
-}
-
-.source-url:hover {
-  text-decoration: underline;
-}
-
-.source-score {
-  font-size: 12px;
-  color: #6b7280;
-  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
-}
-
-.source-content {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-:deep(.el-collapse-item__header) {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-:deep(.el-collapse-item__content) {
-  padding-bottom: 0;
-}
-
 /* 状态消息样式 */
 .status-message {
   border-radius: 8px !important;
@@ -558,38 +339,6 @@ function isQueryDisabled() {
   100% {
     left: 100%;
   }
-}
-
-.input-area {
-  padding: 24px;
-  border-top: 1px solid #e5e7eb;
-  background: white;
-}
-
-.input-container {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.query-input {
-  flex: 1;
-}
-
-.send-btn {
-  height: 40px;
-  width: 40px;
-  padding: 0;
-  border-radius: 8px;
-}
-
-.input-hint {
-  text-align: center;
-  margin-top: 12px;
-  color: #6b7280;
-  font-size: 12px;
 }
 
 /* 响应式设计 */
