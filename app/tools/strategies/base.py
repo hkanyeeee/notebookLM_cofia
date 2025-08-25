@@ -39,7 +39,7 @@ class BaseStrategy(ABC):
             "你拿到的参考资料是经过排序的数组，数组中排序在前的资料与问题更相关；"
             "回答中不要带有可能、大概、也许这些不确定的词，不要带有根据参考资料、"
             "根据获得文本、根据获得信息等字眼，你的回答不应该是照本宣科。"
-            "必须使用中文进行回答。\n\n"
+            "\n\n**重要要求：必须完全使用中文进行回答。**\n\n"
         )
     
     def build_user_content(self, context: ToolExecutionContext) -> str:
