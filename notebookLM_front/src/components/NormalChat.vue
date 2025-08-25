@@ -162,7 +162,7 @@ function isStatusMessage(content: string) {
 
     <!-- 输入区域 -->
     <div class="input-area">
-      <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">        
+      <div class="input-container" @keydown.ctrl.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."

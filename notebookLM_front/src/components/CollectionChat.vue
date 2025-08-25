@@ -296,7 +296,7 @@ function getInputPlaceholder() {
         </ElButton>
       </div>
       
-      <div class="input-container" @keydown.enter.shift.prevent="handleSendQuery">        
+      <div class="input-container" @keydown.ctrl.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
           :placeholder="getInputPlaceholder()"

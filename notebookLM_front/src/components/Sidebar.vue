@@ -211,7 +211,7 @@ function handleRemoveFailedUrl(url: string) {
         :rows="5"
         placeholder="用逗号分隔多个网址，例如：https://example.com, https://another-example.com"
         @keyup.enter.native.stop
-        @keydown.enter.shift.prevent="handleAddDocument"
+        @keydown.ctrl.enter="handleAddDocument"
       />
       <template #footer>
         <ElButton @click="showAddDialog = false">取消</ElButton>
