@@ -20,16 +20,22 @@ class QueryDecomposer:
 
 用户问题: {query}
 问题复杂度: {complexity}
+聊天历史上下文: {conversation_context}
 
 拆解要求:
-1. 智能判断问题复杂度和子问题数量：
+1. 充分考虑聊天历史上下文：
+   - 如果聊天历史为空或"无历史记录"，仅基于当前问题进行分解
+   - 如果有聊天历史，分析用户的意图是否与之前的对话相关
+   - 识别是否是对之前回答的追问、延续或新的独立问题
+   - 考虑历史中已讨论过的概念，避免重复分解已知信息
+2. 智能判断问题复杂度和子问题数量：
    - 简单事实类问题（如天气查询、价格查询、定义问答等）：保持为单个问题，无需分解
    - 中等复杂度问题（包含多个概念或需要推理）：分解为最少2个、最多4个核心子问题
    - 复杂问题（涉及多个维度、需要深入分析）子问题数量无上限
    - 实时信息查询（涉及当前时间、天气、价格、新闻等）：优先标记为需要外部信息
-2. 每个子问题应该是独立且完整的，避免重复或冗余
-3. 识别问题的关键信息点和可能需要外部信息验证的部分
-4. 评估每个子问题的复杂程度和重要性
+3. 每个子问题应该是独立且完整的，避免重复或冗余
+4. 识别问题的关键信息点和可能需要外部信息验证的部分
+5. 评估每个子问题的复杂程度和重要性
 
 请返回以下JSON格式:
 {{
@@ -52,7 +58,7 @@ class QueryDecomposer:
 请确保返回的是有效的JSON格式。
 """
 
-    async def decompose(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
+    async def decompose(self, query: str, context: Optional[ToolExecutionContext] = None, conversation_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """
         将复杂问题拆解为子问题
         
@@ -92,8 +98,15 @@ class QueryDecomposer:
                     "verification_points": []
                 }
             
+            # 准备聊天历史上下文
+            conversation_context = self._format_conversation_history(conversation_history)
+            
             # 构建针对复杂问题的提示
-            prompt = self.decomposition_prompt.format(query=query, complexity=complexity)
+            prompt = self.decomposition_prompt.format(
+                query=query, 
+                complexity=complexity,
+                conversation_context=conversation_context
+            )
             
             # 调用LLM进行问题拆解
             async with httpx.AsyncClient() as client:
@@ -273,6 +286,42 @@ class QueryDecomposer:
             return {"complexity": complexity, "fast_route": fast_route, "reason": reason}
         except Exception:
             return {"complexity": "中等", "fast_route": False, "reason": "分类解析失败"}
+
+    def _format_conversation_history(self, conversation_history: Optional[List[Dict[str, str]]]) -> str:
+        """
+        格式化聊天历史为可读的上下文字符串
+        
+        Args:
+            conversation_history: 聊天历史列表
+            
+        Returns:
+            格式化后的聊天历史字符串
+        """
+        if not conversation_history:
+            return "无历史记录"
+        
+        # 限制历史记录长度，避免提示过长
+        max_history = 6  # 最多显示最近6轮对话
+        recent_history = conversation_history[-max_history:] if len(conversation_history) > max_history else conversation_history
+        
+        formatted_lines = []
+        for msg in recent_history:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            
+            # 限制单条消息长度
+            if len(content) > 200:
+                content = content[:200] + "..."
+            
+            if role == "user":
+                formatted_lines.append(f"用户: {content}")
+            elif role == "assistant":
+                formatted_lines.append(f"助手: {content}")
+        
+        if len(conversation_history) > max_history:
+            formatted_lines.insert(0, f"[显示最近{max_history}轮对话，共{len(conversation_history)}轮]")
+        
+        return "\n".join(formatted_lines) if formatted_lines else "无历史记录"
 
     def extract_key_entities(self, query: str) -> List[str]:
         """

@@ -33,7 +33,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         智能处理用户查询：问题拆解-思考-工具调用
@@ -60,7 +61,7 @@ class IntelligentOrchestrator:
             
             # 第一步：问题拆解
             print("[IntelligentOrchestrator] 开始问题拆解...")
-            decomposition = await self.decomposer.decompose(query, execution_context)
+            decomposition = await self.decomposer.decompose(query, execution_context, conversation_history)
             
             # 第二步：独立思考
             print("[IntelligentOrchestrator] 开始独立思考...")
@@ -105,7 +106,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式智能处理用户查询
@@ -141,7 +143,7 @@ class IntelligentOrchestrator:
                 "content": "正在分析和拆解您的问题..."
             }
             
-            decomposition = await self.decomposer.decompose(query, execution_context)
+            decomposition = await self.decomposer.decompose(query, execution_context, conversation_history)
             
             # 显示子问题的具体内容
             sub_queries = decomposition.get('sub_queries', [])

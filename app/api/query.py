@@ -225,8 +225,10 @@ async def query(
         if not stream:
             # 非流式响应
             if use_tools:
+                # 只有普通问答模式才传入消息历史
+                history = conversation_history if query_type == "normal" else None
                 result = await generate_answer_with_tools(
-                    q, contexts, run_config, use_intelligent_orchestrator
+                    q, contexts, run_config, use_intelligent_orchestrator, history
                 )
                 sources = [
                     {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
@@ -255,8 +257,10 @@ async def query(
                 try:
                     if use_tools:
                         # 使用工具流式问答
+                        # 只有普通问答模式才传入消息历史
+                        history = conversation_history if query_type == "normal" else None
                         async for event in stream_answer_with_tools(
-                            q, contexts, run_config, use_intelligent_orchestrator
+                            q, contexts, run_config, use_intelligent_orchestrator, history
                         ):
                             et = event.get("type")
                             if et == "reasoning":

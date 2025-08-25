@@ -118,7 +118,8 @@ async def generate_answer_with_tools(
     question: str, 
     contexts: List[str], 
     run_config: RunConfig,
-    use_intelligent_orchestrator: bool = True
+    use_intelligent_orchestrator: bool = True,
+    conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """使用工具进行非流式问答
     
@@ -162,7 +163,7 @@ async def generate_answer_with_tools(
         try:
             intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
             result = await intelligent_orchestrator.process_query_intelligently(
-                question, contexts, run_config
+                question, contexts, run_config, conversation_history
             )
             await intelligent_orchestrator.close()
             return result
@@ -180,7 +181,8 @@ async def stream_answer_with_tools(
     question: str,
     contexts: List[str],
     run_config: RunConfig,
-    use_intelligent_orchestrator: bool = True
+    use_intelligent_orchestrator: bool = True,
+    conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """使用工具进行流式问答
     
@@ -216,7 +218,7 @@ async def stream_answer_with_tools(
         try:
             intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
             async for event in intelligent_orchestrator.process_query_intelligently_stream(
-                question, contexts, run_config
+                question, contexts, run_config, conversation_history
             ):
                 yield event
             await intelligent_orchestrator.close()
