@@ -143,7 +143,6 @@ function isQueryDisabled() {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">文档问答</h2>
         <p class="mb-10 text-base leading-relaxed">您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
         
         <!-- 课题输入 -->
@@ -314,9 +313,6 @@ function isQueryDisabled() {
             <Promotion />
           </ElIcon>
         </ElButton>
-      </div>
-      <div class="text-center mt-3 text-xs text-gray-500">
-        文档问答模式：{{ documents.length }} 个文档已添加
       </div>
     </div>
   </div>

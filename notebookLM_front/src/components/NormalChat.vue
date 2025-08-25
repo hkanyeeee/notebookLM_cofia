@@ -103,7 +103,6 @@ function isStatusMessage(content: string) {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">普通问答</h2>
         <p class="mb-10 text-base leading-relaxed">我会使用网络搜索为您提供最新的信息和答案，直接在下方输入您的问题即可开始对话。</p>
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
@@ -188,9 +187,6 @@ function isStatusMessage(content: string) {
             <Promotion />
           </ElIcon>
         </ElButton>
-      </div>
-      <div class="text-center mt-3 text-xs text-gray-600">
-        <span>普通问答模式</span>
       </div>
     </div>
   </div>

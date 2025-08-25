@@ -321,14 +321,6 @@ function getInputPlaceholder() {
           </el-icon>
         </el-button>
       </div>
-      <div class="text-center mt-3 text-xs text-gray-600">
-        <span>
-          Collection问答模式：
-          {{ selectedCollection 
-            ? collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知Collection' 
-            : '请选择Collection' }}
-        </span>
-      </div>
     </div>
   </div>
 </template>

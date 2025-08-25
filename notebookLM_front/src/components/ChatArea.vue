@@ -3,7 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
 import { ElSelect, ElOption, ElButton, ElIcon, ElMessage } from 'element-plus'
-import { Refresh, Bell } from '@element-plus/icons-vue'
+import { Refresh, Bell, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import NormalChat from './NormalChat.vue'
 import DocumentChat from './DocumentChat.vue'
 import CollectionChat from './CollectionChat.vue'
@@ -14,6 +14,9 @@ const sessionStore = useSessionStore()
 
 // 工作流对话框状态
 const workflowDialogVisible = ref(false)
+
+// 移动端顶栏折叠状态
+const headerCollapsed = ref(false)
 
 // 发送查询 - 统一处理所有子组件的查询
 async function handleSendQuery(query: string) {
@@ -95,14 +98,41 @@ watch(() => store.queryType, (newType) => {
 <template>
   <div class="flex flex-col h-screen bg-white">
     <!-- 头部 -->
-    <header class="p-5 border-b border-gray-200 flex items-center justify-between bg-white z-10">
-      <div class="flex items-center gap-6">
-        <h1 class="m-0 text-gray-900 text-lg font-semibold whitespace-nowrap">对话</h1>
-        <div class="ml-6">
+    <header class="header-container" :class="{ 'header-collapsed': headerCollapsed }">
+      <!-- 第一行：标题和按钮 -->
+      <div class="header-row">
+        <h1 class="header-title">对话</h1>
+        <div class="header-actions">
+          <!-- 移动端折叠按钮 -->
+          <ElButton text @click="headerCollapsed = !headerCollapsed" class="action-btn collapse-btn">
+            <ElIcon>
+              <ArrowUp v-if="!headerCollapsed" />
+              <ArrowDown v-else />
+            </ElIcon>
+          </ElButton>
+          <ElButton text @click="handleShowWorkflows" class="action-btn" >
+            <ElIcon>
+              <Bell />
+            </ElIcon>
+            <span class="action-text">工作流状态</span>
+          </ElButton>
+          <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0" class="action-btn">
+            <ElIcon>
+              <Refresh />
+            </ElIcon>
+            <span class="action-text">清空</span>
+          </ElButton>
+        </div>
+      </div>
+      
+      <!-- 第二行：选择器 -->
+      <div class="header-controls">
+        <!-- 模型选择器容器 -->
+        <div class="model-selector-container" :class="{ 'hidden-when-collapsed': headerCollapsed }">
           <ElSelect
             v-model="store.selectedModel"
             placeholder="选择模型"
-            class="w-50"
+            class="model-select"
             :loading="store.loading.loadingModels"
             :disabled="store.queryType === QueryType.NORMAL"
             clearable
@@ -115,59 +145,48 @@ watch(() => store.queryType, (newType) => {
               :value="model.id"
             />
           </ElSelect>
-          
-          <!-- 普通问答模式提示 -->
-          <div 
-            v-if="store.queryType === QueryType.NORMAL" 
-            class="text-xs text-gray-500 mt-1 leading-1.4"
+        </div>
+
+        <!-- 问答类型选择器 -->
+        <div class="query-type-container" :class="{ 'expanded-when-collapsed': headerCollapsed }">
+          <ElSelect
+            v-model="store.queryType"
+            placeholder="选择问答类型"
+            class="query-type-select"
           >
-            普通问答模式使用 {{ store.NORMAL_CHAT_MODEL }}
-          </div>
-          
-          <!-- 模型错误提示 -->
-          <div 
-            v-if="store.normalChatModelError" 
-            class="text-xs text-red-600 mt-1 leading-1.4 bg-red-50 p-2 rounded border border-red-200"
-          >
-            {{ store.normalChatModelError }}
-          </div>
+            <ElOption
+              label="普通问答"
+              :value="QueryType.NORMAL"
+            />
+            <ElOption
+              label="文档问答"
+              :value="QueryType.DOCUMENT"
+            />
+            <ElOption
+              label="Collection问答"
+              :value="QueryType.COLLECTION"
+            />
+          </ElSelect>
         </div>
       </div>
 
-      <div class="flex gap-3 w-50">
-        <ElSelect
-          v-model="store.queryType"
-          placeholder="选择问答类型"
-          class="w-50"
+      <!-- 提示信息 -->
+      <div v-if="store.queryType === QueryType.NORMAL && !headerCollapsed" class="header-hints">
+        <!-- 普通问答模式提示 -->
+        <div 
+          v-if="store.queryType === QueryType.NORMAL" 
+          class="hint-text"
         >
-          <ElOption
-            label="普通问答"
-            :value="QueryType.NORMAL"
-          />
-          <ElOption
-            label="文档问答"
-            :value="QueryType.DOCUMENT"
-          />
-          <ElOption
-            label="Collection问答"
-            :value="QueryType.COLLECTION"
-          />
-        </ElSelect>
-      </div>
-      
-      <div class="flex gap-3">
-        <ElButton text @click="handleShowWorkflows">
-          <ElIcon>
-            <Bell />
-          </ElIcon>
-          <span>工作流状态</span>
-        </ElButton>
-        <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0">
-          <ElIcon>
-            <Refresh />
-          </ElIcon>
-          清空对话
-        </ElButton>
+          普通问答模式使用 {{ store.NORMAL_CHAT_MODEL }}
+        </div>
+        
+        <!-- 模型错误提示 -->
+        <div 
+          v-if="store.normalChatModelError" 
+          class="error-hint"
+        >
+          {{ store.normalChatModelError }}
+        </div>
       </div>
     </header>
 
@@ -248,3 +267,185 @@ watch(() => store.queryType, (newType) => {
     />
   </div>
 </template>
+
+<style scoped>
+/* 头部容器 */
+.header-container {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: white;
+  z-index: 10;
+}
+
+/* 第一行：标题和按钮 */
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.header-title {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  min-height: 32px;
+}
+
+.action-text {
+  margin-left: 4px;
+}
+
+/* 第二行：选择器 */
+.header-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.model-selector-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.query-type-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-select,
+.query-type-select {
+  width: 100%;
+}
+
+/* 提示信息 */
+.header-hints {
+  min-height: 20px;
+}
+
+.hint-text {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.error-hint {
+  font-size: 0.75rem;
+  color: #dc2626;
+  background-color: #fef2f2;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
+  line-height: 1.4;
+}
+
+/* 桌面端隐藏折叠按钮 */
+@media (min-width: 769px) {
+  .collapse-btn {
+    display: none !important;
+  }
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .header-container {
+    padding: 12px 16px;
+    transition: all 0.3s ease;
+  }
+
+  .header-container.header-collapsed {
+    padding-bottom: 8px;
+  }
+
+  .header-row {
+    margin-bottom: 16px;
+  }
+
+  .header-title {
+    font-size: 1rem;
+  }
+
+  .action-btn {
+    padding: 6px 8px;
+    min-height: 36px;
+    transition: opacity 0.3s ease;
+  }
+
+  /* 折叠按钮样式 */
+  .collapse-btn {
+    display: block !important;
+  }
+
+  /* 移动端隐藏按钮文字，只显示图标 */
+  .action-text {
+    display: none;
+  }
+
+  /* 折叠时隐藏的元素 */
+  .hidden-when-collapsed {
+    opacity: 0;
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .header-controls {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+  }
+
+  .header-container.header-collapsed .header-controls {
+    margin-bottom: 8px;
+  }
+
+  .model-selector-container,
+  .query-type-container {
+    width: 100%;
+    transition: all 0.3s ease;
+  }
+
+  /* 折叠时问答类型选择器占满宽度 */
+  .query-type-container.expanded-when-collapsed {
+    width: 100% !important;
+  }
+}
+
+/* 更小的移动设备适配 */
+@media (max-width: 480px) {
+  .header-container {
+    padding: 10px 12px;
+  }
+
+  .header-row {
+    margin-bottom: 12px;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .action-btn {
+    padding: 4px 6px;
+    min-height: 32px;
+  }
+
+  .header-controls {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+}
+</style>
