@@ -239,6 +239,44 @@ body {
   }
 }
 
+/* 聊天消息字体设置 */
+.chat-message-content {
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+.chat-message-content p,
+.chat-message-content div,
+.chat-message-content span,
+.chat-message-content li,
+.chat-message-content td,
+.chat-message-content th,
+.chat-message-content blockquote,
+.chat-message-content pre,
+.chat-message-content code {
+  font-size: 14px !important;
+}
+
+/* 保持标题的相对大小比例，但基于14px */
+.chat-message-content h1 {
+  font-size: 20px !important; /* 14px * 1.43 */
+}
+
+.chat-message-content h2 {
+  font-size: 18px !important; /* 14px * 1.29 */
+}
+
+.chat-message-content h3 {
+  font-size: 16px !important; /* 14px * 1.14 */
+}
+
+.chat-message-content h4,
+.chat-message-content h5,
+.chat-message-content h6 {
+  font-size: 14px !important;
+  font-weight: 600;
+}
+
 /* 文本省略 */
 .text-ellipsis {
   overflow: hidden;

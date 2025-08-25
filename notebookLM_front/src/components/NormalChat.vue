@@ -171,7 +171,7 @@ function canEditMessage(message: Message) {
           <!-- Reasoning Chain (for assistant messages) -->
           <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3">
             <div class="text-sm font-medium text-gray-800 mb-2">分析过程</div>
-            <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg" >{{ message.reasoning }}</div>
+            <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg chat-message-content" >{{ message.reasoning }}</div>
           </div>
 
           <!-- 用户消息：编辑模式或普通显示 -->
@@ -207,7 +207,7 @@ function canEditMessage(message: Message) {
             </div>
             <!-- 普通显示模式 -->
             <div v-else>
-              <div v-html="marked(message.content)"></div>
+              <div class="chat-message-content" v-html="marked(message.content)"></div>
               <div class="text-xs opacity-70 mt-2 text-right">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -217,6 +217,7 @@ function canEditMessage(message: Message) {
             <div 
               v-if="message.content" 
               v-html="marked(message.content)"
+              class="chat-message-content"
               :class="{ 'status-message': isStatusMessage(message.content) }">
             </div>
             <div class="status-message" v-else>思考中...</div>

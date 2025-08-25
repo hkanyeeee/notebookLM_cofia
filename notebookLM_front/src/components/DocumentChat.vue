@@ -251,14 +251,14 @@ function isQueryDisabled() {
                 class="text-sm font-medium text-gray-700"
               >
                 <div 
-                  class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200"
+                  class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200 chat-message-content"
                   v-html="marked(message.reasoning)"
                 ></div>
               </ElCollapseItem>
             </ElCollapse>
           </div>
           <div 
-            class="word-wrap break-words"
+            class="word-wrap break-words chat-message-content"
             v-if="message.content" 
             v-html="marked(message.content)" 
             :class="{ 'status-message': isStatusMessage(message.content) }"

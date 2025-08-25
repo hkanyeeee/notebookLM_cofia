@@ -228,11 +228,11 @@ function getInputPlaceholder() {
           <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3 pb-3">
             <el-collapse v-model="activeNames">
               <el-collapse-item title="思维链（" :name="'reasoning'">
-                <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200" v-html="marked(message.reasoning)"></div>
+                <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200 chat-message-content" v-html="marked(message.reasoning)"></div>
               </el-collapse-item>
             </el-collapse>
           </div>
-          <div v-if="message.content" class="whitespace-pre-wrap" :class="{ 'text-gray-600': isStatusMessage(message.content) }" v-html="marked(message.content)"></div>
+          <div v-if="message.content" class="whitespace-pre-wrap chat-message-content" :class="{ 'text-gray-600': isStatusMessage(message.content) }" v-html="marked(message.content)"></div>
           <div v-else>思考中...</div>
           <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">{{ formatTime(message.timestamp) }}</div>
 
