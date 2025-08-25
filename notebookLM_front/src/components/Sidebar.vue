@@ -143,7 +143,7 @@ function handleRemoveFailedUrl(url: string) {
             v-for="doc in store.documents"
             :key="doc.id"
             placement="right"
-            effect="dark"
+            effect="light"
           >
             <template #content>
               <div>

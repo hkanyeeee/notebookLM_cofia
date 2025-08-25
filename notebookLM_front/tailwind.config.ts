@@ -66,5 +66,4 @@ export default {
   plugins: [
     // 添加Tailwind CSS插件
   ],
-  darkMode: 'class',
 } satisfies Config
