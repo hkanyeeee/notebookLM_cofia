@@ -20,8 +20,6 @@ from ..config import (
     WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE,
     WEB_SEARCH_LLM_TIMEOUT
 )
-# 移除模块级别的导入，避免循环导入
-# from ..llm_client import DEFAULT_CHAT_MODEL
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
@@ -176,11 +174,6 @@ class WebSearchTool:
         """生成搜索关键词"""
         if not ENABLE_QUERY_GENERATION or not topic.strip():
             return [topic]
-        
-        # 使用传入的模型或默认模型（在函数内部导入，避免循环导入）
-        if model is None:
-            from ..llm_client import DEFAULT_CHAT_MODEL
-            model = DEFAULT_CHAT_MODEL
         
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE
         user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...', '...']}}"

@@ -2,7 +2,8 @@ import httpx
 import json
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from app.config import (
-    LLM_SERVICE_URL, 
+    LLM_SERVICE_URL,
+    DEFAULT_SEARCH_MODEL,
     LLM_DEFAULT_TIMEOUT
 )
 from .tools.models import RunConfig, ToolMode
@@ -10,12 +11,7 @@ from .tools.orchestrator import get_orchestrator
 from .tools.selector import StrategySelector
 from .tools.intelligent_orchestrator import IntelligentOrchestrator
 
-
-# DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
-DEFAULT_CHAT_MODEL = "qwen3-30b-a3b-thinking-2507-mlx"
-# DEFAULT_CHAT_MODEL = "qwen3_8b_awq"
-
-async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_CHAT_MODEL, conversation_history: List[Dict] = None) -> str:
+async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_SEARCH_MODEL, conversation_history: List[Dict] = None) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
     url = f"{LLM_SERVICE_URL}/chat/completions"
 
@@ -53,7 +49,7 @@ async def generate_answer(question: str, contexts: List[str], model: str = DEFAU
 async def stream_answer(
     question: str,
     contexts: List[str],
-    model: str = DEFAULT_CHAT_MODEL,
+    model: str = DEFAULT_SEARCH_MODEL,
     conversation_history: List[Dict] = None,
 ) -> AsyncGenerator[dict, None]:
     """以 OpenAI 流式接口风格，逐块产出内容增量。
@@ -135,9 +131,9 @@ async def generate_answer_with_tools(
         包含答案和执行步骤的结果
     """
     # 检查是否应该使用工具
-    if not StrategySelector.should_use_tools(run_config, run_config.model or DEFAULT_CHAT_MODEL):
+    if not StrategySelector.should_use_tools(run_config, run_config.model or DEFAULT_SEARCH_MODEL):
         # 退化为普通问答
-        answer = await generate_answer(question, contexts, run_config.model or DEFAULT_CHAT_MODEL)
+        answer = await generate_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL)
         return {
             "answer": answer,
             "steps": [],
@@ -149,7 +145,7 @@ async def generate_answer_with_tools(
     orchestrator = get_orchestrator()
     if not orchestrator:
         # 编排器未初始化，退化为普通问答
-        answer = await generate_answer(question, contexts, run_config.model or DEFAULT_CHAT_MODEL)
+        answer = await generate_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL)
         return {
             "answer": answer,
             "steps": [],
@@ -159,7 +155,7 @@ async def generate_answer_with_tools(
     
     # 设置模型
     if not run_config.model:
-        run_config.model = DEFAULT_CHAT_MODEL
+        run_config.model = DEFAULT_SEARCH_MODEL
     
     # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
     if use_intelligent_orchestrator:
@@ -197,9 +193,9 @@ async def stream_answer_with_tools(
         流式事件数据
     """
     # 检查是否应该使用工具
-    if not StrategySelector.should_use_tools(run_config, run_config.model or DEFAULT_CHAT_MODEL):
+    if not StrategySelector.should_use_tools(run_config, run_config.model or DEFAULT_SEARCH_MODEL):
         # 退化为普通流式问答
-        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_CHAT_MODEL):
+        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL):
             yield delta
         return
     
@@ -207,13 +203,13 @@ async def stream_answer_with_tools(
     orchestrator = get_orchestrator()
     if not orchestrator:
         # 编排器未初始化，退化为普通流式问答
-        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_CHAT_MODEL):
+        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL):
             yield delta
         return
     
     # 设置模型
     if not run_config.model:
-        run_config.model = DEFAULT_CHAT_MODEL
+        run_config.model = DEFAULT_SEARCH_MODEL
     
     # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
     if use_intelligent_orchestrator:
@@ -237,7 +233,7 @@ async def stream_answer_with_tools(
 async def chat_complete(
     system_prompt: str,
     user_prompt: str,
-    model: str = DEFAULT_CHAT_MODEL,
+    model: str = DEFAULT_SEARCH_MODEL,
     timeout: Optional[float] = None,
     stream: bool = False
 ) -> str:
@@ -279,7 +275,7 @@ async def chat_complete(
 async def chat_complete_stream(
     system_prompt: str,
     user_prompt: str,
-    model: str = DEFAULT_CHAT_MODEL,
+    model: str = DEFAULT_SEARCH_MODEL,
     timeout: Optional[float] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """

@@ -11,10 +11,11 @@ from ..config import (
     RERANKER_SERVICE_URL,
     RERANKER_MAX_TOKENS,
     RERANK_CLIENT_MAX_CONCURRENCY,
+    DEFAULT_SEARCH_MODEL
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import (
-    generate_answer, stream_answer, DEFAULT_CHAT_MODEL,
+    generate_answer, stream_answer, DEFAULT_SEARCH_MODEL,
     generate_answer_with_tools, stream_answer_with_tools
 )
 from ..tools.models import RunConfig, ToolMode, ToolSchema
@@ -42,7 +43,7 @@ async def query(
     document_ids = data.get("document_ids", [])  # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
     stream = bool(data.get("stream", False))
-    llm_model = data.get("model", DEFAULT_CHAT_MODEL)  # 添加模型参数支持
+    llm_model = data.get("model", DEFAULT_SEARCH_MODEL)  # 添加模型参数支持
     
     # 新增工具相关参数
     tool_mode = data.get("tool_mode", "auto")  # "off" | "auto" | "json" | "react" | "harmony"
