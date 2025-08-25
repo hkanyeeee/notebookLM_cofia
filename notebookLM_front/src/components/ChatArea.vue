@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
 import { ElSelect, ElOption, ElButton, ElIcon, ElMessage } from 'element-plus'
@@ -17,6 +17,24 @@ const workflowDialogVisible = ref(false)
 
 // 移动端顶栏折叠状态
 const headerCollapsed = ref(false)
+
+// 判断是否为移动端
+const isMobile = ref(false)
+
+// 检测屏幕尺寸
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
+// 监听窗口大小变化
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 发送查询 - 统一处理所有子组件的查询
 async function handleSendQuery(query: string) {
@@ -128,7 +146,7 @@ watch(() => store.queryType, (newType) => {
       <!-- 第二行：选择器 -->
       <div class="header-controls">
         <!-- 模型选择器容器 -->
-        <div class="model-selector-container" :class="{ 'hidden-when-collapsed': headerCollapsed }">
+        <div class="model-selector-container" :class="{ 'hidden-when-collapsed': isMobile && headerCollapsed }">
           <ElSelect
             v-model="store.selectedModel"
             placeholder="选择模型"
@@ -148,7 +166,7 @@ watch(() => store.queryType, (newType) => {
         </div>
 
         <!-- 问答类型选择器 -->
-        <div class="query-type-container" :class="{ 'expanded-when-collapsed': headerCollapsed }">
+        <div class="query-type-container" :class="{ 'expanded-when-collapsed': isMobile && headerCollapsed }">
           <ElSelect
             v-model="store.queryType"
             placeholder="选择问答类型"
@@ -171,7 +189,7 @@ watch(() => store.queryType, (newType) => {
       </div>
 
       <!-- 提示信息 -->
-      <div v-if="store.queryType === QueryType.NORMAL && !headerCollapsed" class="header-hints">
+      <div v-if="store.queryType === QueryType.NORMAL && (!isMobile || !headerCollapsed)" class="header-hints">
         <!-- 普通问答模式提示 -->
         <div 
           v-if="store.queryType === QueryType.NORMAL" 
@@ -354,6 +372,53 @@ watch(() => store.queryType, (newType) => {
 @media (min-width: 769px) {
   .collapse-btn {
     display: none !important;
+  }
+}
+
+/* 大屏幕适配 (1440px以上) */
+@media (min-width: 1440px) {
+  .header-container {
+    padding: 16px 32px;
+  }
+  
+  /* 大屏幕下限制选择器宽度，避免过度拉伸 */
+  .header-controls {
+    max-width: 800px;
+    margin: 0 auto 8px auto;
+  }
+  
+  .model-selector-container,
+  .query-type-container {
+    max-width: 380px;
+  }
+}
+
+/* 超大屏幕适配 (2200px以上) */
+@media (min-width: 2200px) {
+  .header-container {
+    padding: 20px 40px;
+  }
+  
+  /* 超大屏幕下进一步限制宽度并居中 */
+  .header-controls {
+    max-width: 1000px;
+  }
+  
+  .model-selector-container,
+  .query-type-container {
+    max-width: 480px;
+  }
+  
+  /* 标题和按钮区域也限制最大宽度 */
+  .header-row {
+    max-width: 1200px;
+    margin: 0 auto 12px auto;
+  }
+  
+  /* 提示信息也居中 */
+  .header-hints {
+    max-width: 1000px;
+    margin: 0 auto;
   }
 }
 
