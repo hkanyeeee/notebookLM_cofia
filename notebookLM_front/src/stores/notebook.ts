@@ -146,7 +146,19 @@ export const useNotebookStore = defineStore('notebook', () => {
       queryType.value,
       modelStore.selectedModel.value,
       documentStore.documents.value.map(doc => doc.id),
-      queryType.value === QueryType.COLLECTION ? collectionStore.performCollectionQuery : undefined
+      queryType.value === QueryType.COLLECTION ? 
+        ((query: string) => collectionStore.performCollectionQuery(
+          query,
+          queryType.value,
+          false,
+          messageStore.messages.value,
+          (messageIndex: number, messageUpdate: any) => {
+            messageStore.messages.value[messageIndex] = {
+              ...messageStore.messages.value[messageIndex],
+              ...messageUpdate
+            }
+          }
+        )) : undefined
     ),
     
     // Collection方法
