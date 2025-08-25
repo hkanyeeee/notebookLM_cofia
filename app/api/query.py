@@ -155,7 +155,7 @@ async def query(
                         return float(score)
                     except (ValueError, TypeError):
                         # If conversion fails, return a large number to push it to the end
-                        logger.warning(f"Invalid score type {type(score)}: {score}, treating as 0")
+                        print(f"Invalid score type {type(score)}: {score}, treating as 0")
                         return 0.0
                 
                 all_reranked_hits.sort(key=safe_sort_key, reverse=True)  # Sort by score, descending

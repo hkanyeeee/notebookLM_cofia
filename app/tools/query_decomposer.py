@@ -222,34 +222,77 @@ class QueryDecomposer:
         # 只有简单问题才使用快速路由
         return complexity == "简单"
 
-    async def should_use_fast_route_async(self, query: str, context: Optional[ToolExecutionContext] = None) -> bool:
+    async def should_use_fast_route_async(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
         """
-        使用 LLM 判断是否应该使用快速路由（跳过复杂分解）。
+        使用 LLM 判断问题的处理路由，返回详细的路由决策信息。
         失败时回退到启发式规则。
+        
+        Returns:
+            包含路由决策信息的字典:
+            {
+                "use_fast_route": bool,  # 是否使用快速路由
+                "needs_tools": bool,     # 是否需要调用外部工具
+                "complexity": str,       # 复杂度: "简单|中等|复杂"
+                "reason": str           # 判断原因
+            }
         """
         try:
             result = await self._judge_complexity_with_llm(query, context)
             if isinstance(result, dict):
-                # 优先使用 fast_route 字段；若不存在则根据 complexity 判定
-                if "fast_route" in result:
-                    return bool(result.get("fast_route", False))
                 complexity = result.get("complexity", "中等")
-                return complexity == "简单"
-            return self.should_use_fast_route(query)
-        except Exception:
-            return self.should_use_fast_route(query)
+                needs_tools = result.get("needs_tools", True)
+                use_fast_route = result.get("fast_route", False)
+                reason = result.get("reason", "")
+                
+                return {
+                    "use_fast_route": use_fast_route,
+                    "needs_tools": needs_tools,
+                    "complexity": complexity,
+                    "reason": reason
+                }
+            
+            # 回退到启发式规则
+            complexity = self.analyze_query_complexity(query)
+            use_fast_route = complexity == "简单"
+            
+            return {
+                "use_fast_route": use_fast_route,
+                "needs_tools": True,  # 启发式规则下默认需要工具
+                "complexity": complexity,
+                "reason": "使用启发式规则判断"
+            }
+            
+        except Exception as e:
+            print(f"路由判断失败: {e}")
+            # 保守策略：默认不使用快速路由，需要工具
+            complexity = self.analyze_query_complexity(query)
+            return {
+                "use_fast_route": False,
+                "needs_tools": True,
+                "complexity": complexity,
+                "reason": f"判断失败，使用保守策略: {str(e)}"
+            }
 
     async def _judge_complexity_with_llm(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
         """
-        使用 LLM 判断问题复杂度与是否走快速路由。
-        返回形如 {"complexity": "简单|中等|复杂", "fast_route": bool, "reason": str}。
+        使用 LLM 判断问题复杂度、是否走快速路由以及是否需要外部工具。
+        返回形如 {"complexity": "简单|中等|复杂", "fast_route": bool, "needs_tools": bool, "reason": str}。
         """
         system_prompt = (
             "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
-            "请判断用户问题的复杂度（简单/中等/复杂），并判断是否可走快速路由：\n"
-            "快速路由适用于单一、直接、可立即检索的信息类问题（如实时信息、简单事实）。\n"
-            '输出格式：{"complexity": "简单|中等|复杂", "fast_route": true/false, "reason": "不超过50字"}。\n'
-            "无法确定时，将 fast_route 设为 false，complexity 设为 中等。"
+            "请判断用户问题的三个维度：\n"
+            "1. complexity（复杂度）：简单/中等/复杂\n"
+            "2. fast_route（快速路由）：是否可跳过复杂的问题拆解流程\n"
+            "3. needs_tools（需要工具）：是否需要调用外部工具（搜索、API等）获取信息\n\n"
+            
+            "判断标准：\n"
+            "- needs_tools=false：纯概念解释、定义、常识问答，基于已有知识即可回答\n"
+            "- needs_tools=true：需要实时信息、具体数据、最新资讯的查询\n"
+            "- fast_route=true：单一直接的问题，无需复杂推理\n"
+            "- fast_route=false：需要多步推理、多维度分析的复杂问题\n\n"
+            
+            '输出格式：{"complexity": "简单|中等|复杂", "fast_route": true/false, "needs_tools": true/false, "reason": "不超过50字"}。\n'
+            "无法确定时，将 fast_route 和 needs_tools 都设为 true，complexity 设为 中等。"
         )
         user_prompt = (
             f"问题：{query}\n"
@@ -266,26 +309,35 @@ class QueryDecomposer:
                         {"role": "user", "content": user_prompt}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 128
+                    "max_tokens": 150
                 },
                 timeout=LLM_DEFAULT_TIMEOUT
             )
         if resp.status_code != 200:
-            return {"complexity": "中等", "fast_route": False, "reason": "分类请求失败"}
+            return {"complexity": "中等", "fast_route": True, "needs_tools": True, "reason": "分类请求失败"}
         data = resp.json()
         content = data["choices"][0]["message"]["content"]
         try:
             cleaned = self._clean_json_content(content)
             parsed = json.loads(cleaned)
             complexity = parsed.get("complexity", "中等")
-            fast_route = bool(parsed.get("fast_route", False))
+            fast_route = bool(parsed.get("fast_route", True))
+            needs_tools = bool(parsed.get("needs_tools", True))
             reason = parsed.get("reason", "")
+            
             # 兜底校验
             if complexity not in ("简单", "中等", "复杂"):
                 complexity = "中等"
-            return {"complexity": complexity, "fast_route": fast_route, "reason": reason}
-        except Exception:
-            return {"complexity": "中等", "fast_route": False, "reason": "分类解析失败"}
+            
+            return {
+                "complexity": complexity, 
+                "fast_route": fast_route, 
+                "needs_tools": needs_tools, 
+                "reason": reason
+            }
+        except Exception as e:
+            print(f"分类解析失败: {e}")
+            return {"complexity": "中等", "fast_route": True, "needs_tools": True, "reason": "分类解析失败"}
 
     def _format_conversation_history(self, conversation_history: Optional[List[Dict[str, str]]]) -> str:
         """

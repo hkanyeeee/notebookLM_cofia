@@ -54,10 +54,19 @@ class IntelligentOrchestrator:
         )
         
         try:
-            # 智能路由：检查是否是简单问题，可以直接调用工具（由LLM判定）
-            if await self.decomposer.should_use_fast_route_async(query, execution_context):
-                print("[IntelligentOrchestrator] 检测到简单问题，使用快速路由...")
-                return await self._handle_simple_query_directly(query, contexts, run_config)
+            # 智能路由：检查问题的处理方式（由LLM判定）
+            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context)
+            use_fast_route = route_decision.get("use_fast_route", False)
+            needs_tools = route_decision.get("needs_tools", True)
+            reason = route_decision.get("reason", "")
+            
+            if use_fast_route:
+                if needs_tools:
+                    print(f"[IntelligentOrchestrator] 检测到简单问题，需要工具调用，使用快速路由: {reason}")
+                    return await self._handle_simple_query_directly(query, contexts, run_config)
+                else:
+                    print(f"[IntelligentOrchestrator] 检测到简单问题，无需工具，直接基于知识回答: {reason}")
+                    return await self._handle_context_only_query(query, contexts, run_config)
             
             # 第一步：问题拆解
             print("[IntelligentOrchestrator] 开始问题拆解...")
@@ -127,15 +136,29 @@ class IntelligentOrchestrator:
         )
         
         try:
-            # 智能路由：检查是否是简单问题，可以直接调用工具（由LLM判定）
-            if await self.decomposer.should_use_fast_route_async(query, execution_context):
-                yield {
-                    "type": "reasoning",
-                    "content": "分类为简单查询，直接获取信息..."
-                }
-                async for event in self._handle_simple_query_directly_stream(query, contexts, run_config):
-                    yield event
-                return
+            # 智能路由：检查问题的处理方式（由LLM判定）
+            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context)
+            use_fast_route = route_decision.get("use_fast_route", False)
+            needs_tools = route_decision.get("needs_tools", True)
+            reason = route_decision.get("reason", "")
+            
+            if use_fast_route:
+                if needs_tools:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"分类为简单查询，需要外部工具，直接获取信息... ({reason})"
+                    }
+                    async for event in self._handle_simple_query_directly_stream(query, contexts, run_config):
+                        yield event
+                    return
+                else:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"分类为简单问题，基于已有知识回答... ({reason})"
+                    }
+                    async for event in self._handle_context_only_query_stream(query, contexts, run_config):
+                        yield event
+                    return
             
             # 第一步：问题拆解
             yield {
@@ -705,6 +728,117 @@ class IntelligentOrchestrator:
             yield {
                 "type": "error",
                 "message": f"快速路由流式处理失败: {str(e)}"
+            }
+
+    async def _handle_context_only_query(
+        self, 
+        query: str, 
+        contexts: List[str], 
+        run_config: RunConfig
+    ) -> Dict[str, Any]:
+        """
+        处理完全不需要外部工具的简单问题，直接基于提供的上下文生成答案
+        
+        Args:
+            query: 用户问题
+            contexts: 相关上下文
+            run_config: 运行配置
+            
+        Returns:
+            处理结果
+        """
+        try:
+            # 准备基于上下文的提示
+            context_str = "\n".join(contexts) if contexts else "无特定上下文"
+            
+            system_prompt = (
+                "你是一个知识渊博的助手。请仅基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                "不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
+                "如果上下文中有相关信息，请优先使用；如果没有，则基于你的常识知识回答。"
+            )
+            
+            user_prompt = (
+                f"上下文信息：\n{context_str}\n\n"
+                f"用户问题：{query}\n\n"
+                "请直接回答用户的问题。"
+            )
+            
+            # 使用通用LLM客户端生成答案（延迟导入避免循环导入）
+            from ..llm_client import chat_complete
+            answer = await chat_complete(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=run_config.model
+            )
+            
+            return {
+                "answer": answer,
+                "decomposition": {
+                    "original_query": query,
+                    "complexity_level": "简单",
+                    "sub_queries": [{"question": query}]
+                },
+                "reasoning": [{"question": query, "confidence_level": "高", "needs_tools": False}],
+                "tool_results": {},
+                "used_tools": False,
+                "success": True,
+                "context_only": True  # 标记仅基于上下文回答
+            }
+            
+        except Exception as e:
+            print(f"基于上下文的问题处理失败: {e}")
+            return {
+                "answer": f"处理问题时遇到错误: {str(e)}",
+                "success": False,
+                "context_only": True
+            }
+
+    async def _handle_context_only_query_stream(
+        self, 
+        query: str, 
+        contexts: List[str], 
+        run_config: RunConfig
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        流式处理完全不需要外部工具的简单问题，直接基于提供的上下文生成答案
+        
+        Args:
+            query: 用户问题
+            contexts: 相关上下文
+            run_config: 运行配置
+            
+        Yields:
+            流式处理事件
+        """
+        try:
+            # 准备基于上下文的提示
+            context_str = "\n".join(contexts) if contexts else "无特定上下文"
+            
+            system_prompt = (
+                "你是一个知识渊博的助手。请仅基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                "不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
+                "如果上下文中有相关信息，请优先使用；如果没有，则基于你的常识知识回答。"
+            )
+            
+            user_prompt = (
+                f"上下文信息：\n{context_str}\n\n"
+                f"用户问题：{query}\n\n"
+                "请直接回答用户的问题。"
+            )
+            
+            # 使用通用LLM客户端进行流式调用（延迟导入避免循环导入）
+            from ..llm_client import chat_complete_stream
+            async for event in chat_complete_stream(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=run_config.model
+            ):
+                yield event
+                            
+        except Exception as e:
+            yield {
+                "type": "error", 
+                "message": f"基于上下文的流式问题处理失败: {str(e)}"
             }
 
     async def close(self):
