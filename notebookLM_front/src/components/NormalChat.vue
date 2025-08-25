@@ -165,7 +165,7 @@ function canEditMessage(message: Message) {
         :class="message.type === 'user' ? 'justify-end' : 'justify-start'"
       >
         <div 
-          class="max-w-[90%] p-4 rounded-2xl relative"
+          class="max-w-[98%] p-4 rounded-2xl relative"
           :class="message.type === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'"
         >
           <!-- Reasoning Chain (for assistant messages) -->
