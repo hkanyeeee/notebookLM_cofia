@@ -83,6 +83,16 @@ async function handleTriggerAgenticIngest() {
   }
 }
 
+// 处理编辑消息重新发送
+async function handleResendEditedMessage(messageId: string) {
+  try {
+    await store.resendEditedMessage(messageId)
+    ElMessage.success('消息已重新发送')
+  } catch (error: any) {
+    ElMessage.error(error.message || '重新发送失败，请重试')
+  }
+}
+
 // 组件挂载时加载collection列表和模型列表
 onMounted(async () => {
   try {
@@ -215,7 +225,13 @@ watch(() => store.queryType, (newType) => {
         v-if="store.queryType === QueryType.NORMAL"
         :messages="store.messages"
         :loading="store.loading.querying"
+        :query-type="store.queryType"
+        :selected-model="store.selectedModel"
         @send-query="handleSendQuery"
+        @start-edit-message="store.startEditMessage"
+        @cancel-edit-message="store.cancelEditMessage"
+        @update-editing-message="store.updateEditingMessage"
+        @resend-edited-message="handleResendEditedMessage"
       />
 
       <!-- 文档问答模式 -->

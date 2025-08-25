@@ -28,6 +28,8 @@ export interface Message {
   timestamp: Date
   sources?: Source[] // Optional sources for assistant messages
   reasoning?: string // Optional reasoning chain for assistant messages
+  isEditing?: boolean // Optional flag to indicate if message is being edited
+  originalContent?: string // Optional field to store original content during editing
 }
 
 // Ingestion status interface for a single URL

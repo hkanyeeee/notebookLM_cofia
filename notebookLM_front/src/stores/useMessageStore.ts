@@ -236,7 +236,59 @@ export function useMessageStore() {
     messages.value = []
   }
 
+  // 开始编辑消息
+  function startEditMessage(messageId: string) {
+    const message = messages.value.find(m => m.id === messageId)
+    if (message && message.type === 'user') {
+      message.isEditing = true
+      message.originalContent = message.content
+    }
+  }
 
+  // 取消编辑消息
+  function cancelEditMessage(messageId: string) {
+    const message = messages.value.find(m => m.id === messageId)
+    if (message && message.isEditing) {
+      message.content = message.originalContent || message.content
+      message.isEditing = false
+      message.originalContent = undefined
+    }
+  }
+
+  // 更新正在编辑的消息内容
+  function updateEditingMessage(messageId: string, newContent: string) {
+    const message = messages.value.find(m => m.id === messageId)
+    if (message && message.isEditing) {
+      message.content = newContent
+    }
+  }
+
+  // 重新发送编辑后的消息并删除后续历史
+  async function resendEditedMessage(
+    messageId: string, 
+    queryType: QueryType, 
+    selectedModel: string,
+    documentIds?: string[],
+    performCollectionQuery?: (query: string) => Promise<any>
+  ) {
+    const messageIndex = messages.value.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const message = messages.value[messageIndex]
+    if (!message || !message.isEditing) return
+
+    const queryContent = message.content
+
+    // 结束编辑状态
+    message.isEditing = false
+    message.originalContent = undefined
+
+    // 删除该消息及其后的所有消息（因为sendQuery会重新添加用户消息）
+    messages.value = messages.value.slice(0, messageIndex)
+
+    // 重新发送查询
+    await sendQuery(queryContent, queryType, selectedModel, documentIds, performCollectionQuery)
+  }
 
   return {
     // 状态
@@ -245,5 +297,9 @@ export function useMessageStore() {
     // 方法
     sendQuery,
     clearMessages,
+    startEditMessage,
+    cancelEditMessage,
+    updateEditingMessage,
+    resendEditedMessage,
   }
 }

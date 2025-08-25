@@ -138,6 +138,16 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 消息方法
     sendQuery,
     clearMessages: messageStore.clearMessages,
+    startEditMessage: messageStore.startEditMessage,
+    cancelEditMessage: messageStore.cancelEditMessage,
+    updateEditingMessage: messageStore.updateEditingMessage,
+    resendEditedMessage: (messageId: string) => messageStore.resendEditedMessage(
+      messageId,
+      queryType.value,
+      modelStore.selectedModel.value,
+      documentStore.documents.value.map(doc => doc.id),
+      queryType.value === QueryType.COLLECTION ? collectionStore.performCollectionQuery : undefined
+    ),
     
     // Collection方法
     triggerAgenticIngest: collectionStore.triggerAgenticIngest,

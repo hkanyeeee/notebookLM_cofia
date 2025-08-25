@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
-import { Promotion } from '@element-plus/icons-vue'
+import { ElInput, ElButton, ElMessage, ElIcon } from 'element-plus'
+import { Promotion, Edit, Check, Close } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
+import { QueryType } from '../stores/types'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.setOptions({
@@ -15,6 +16,8 @@ marked.setOptions({
 interface Props {
   messages: Message[]
   loading: boolean
+  queryType: QueryType
+  selectedModel: string
 }
 
 const props = defineProps<Props>()
@@ -22,13 +25,15 @@ const props = defineProps<Props>()
 // Emits
 const emit = defineEmits<{
   (e: 'sendQuery', query: string): void
+  (e: 'startEditMessage', messageId: string): void
+  (e: 'cancelEditMessage', messageId: string): void
+  (e: 'updateEditingMessage', messageId: string, content: string): void
+  (e: 'resendEditedMessage', messageId: string): void
 }>()
 
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
-// 控制思维链和参考来源的展开状态，默认展开思维链
-const activeNames = ref(['reasoning'])
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -95,6 +100,37 @@ function isStatusMessage(content: string) {
   ]
   return statusPatterns.some(pattern => pattern.test(content))
 }
+
+// 开始编辑消息
+function handleStartEdit(messageId: string) {
+  emit('startEditMessage', messageId)
+}
+
+// 取消编辑消息
+function handleCancelEdit(messageId: string) {
+  emit('cancelEditMessage', messageId)
+}
+
+// 更新编辑中的消息内容
+function handleUpdateEditingMessage(messageId: string, content: string) {
+  emit('updateEditingMessage', messageId, content)
+}
+
+// 重新发送编辑后的消息
+function handleResendMessage(messageId: string) {
+  const message = props.messages.find(m => m.id === messageId)
+  if (!message || !message.content.trim()) {
+    ElMessage.warning('消息内容不能为空')
+    return
+  }
+  emit('resendEditedMessage', messageId)
+}
+
+// 检查是否可以编辑消息（只有用户消息才能编辑）
+function canEditMessage(message: Message) {
+  return message.type === 'user'
+}
+
 </script>
 
 <template>
@@ -125,7 +161,7 @@ function isStatusMessage(content: string) {
       <div
         v-for="message in messages"
         :key="message.id"
-        class="mb-6 flex"
+        class="mb-6 flex relative group"
         :class="message.type === 'user' ? 'justify-end' : 'justify-start'"
       >
         <div 
@@ -133,35 +169,93 @@ function isStatusMessage(content: string) {
           :class="message.type === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'"
         >
           <!-- Reasoning Chain (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-gray-200 pt-3 pb-3">
-            <ElCollapse v-model="activeNames">
-              <ElCollapseItem title="分析过程" name="reasoning">
-                <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200" v-html="marked(message.reasoning)"></div>
-              </ElCollapseItem>
-            </ElCollapse>
+          <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3">
+            <div class="text-sm font-medium text-gray-800 mb-2">分析过程</div>
+            <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg" >{{ message.reasoning }}</div>
           </div>
-          <div 
-            v-if="message.content" 
-            v-html="marked(message.content)" 
-            :class="{ 'bg-gray-50 p-3 rounded-lg border border-gray-200': isStatusMessage(message.content) }"
-          ></div>
-          <div v-else>思考中...</div>
-          <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">{{ formatTime(message.timestamp) }}</div>
+
+          <!-- 用户消息：编辑模式或普通显示 -->
+          <div v-if="message.type === 'user'">
+            <!-- 编辑模式 -->
+            <div v-if="message.isEditing" class="space-y-3">
+              <ElInput
+                :model-value="message.content"
+                @input="(value: string) => handleUpdateEditingMessage(message.id, value)"
+                type="textarea"
+                :rows="3"
+                placeholder="编辑您的消息..."
+                class="w-full"
+              />
+              <div class="flex gap-2 justify-end">
+                <ElButton
+                  size="small"
+                  @click="handleCancelEdit(message.id)"
+                >
+                  <ElIcon><Close /></ElIcon>
+                  取消
+                </ElButton>
+                <ElButton
+                  type="primary"
+                  size="small"
+                  @click="handleResendMessage(message.id)"
+                  :disabled="!message.content.trim()"
+                >
+                  <ElIcon><Check /></ElIcon>
+                  重新发送
+                </ElButton>
+              </div>
+            </div>
+            <!-- 普通显示模式 -->
+            <div v-else>
+              <div v-html="marked(message.content)"></div>
+              <div class="text-xs opacity-70 mt-2 text-right">{{ formatTime(message.timestamp) }}</div>
+            </div>
+          </div>
+
+          <!-- 助手消息：普通显示 -->
+          <div v-else>
+            <div 
+              v-if="message.content" 
+              v-html="marked(message.content)"
+              :class="{ 'status-message': isStatusMessage(message.content) }">
+            </div>
+            <div class="status-message" v-else>思考中...</div>
+            <div class="text-xs opacity-70 mt-2 text-left">{{ formatTime(message.timestamp) }}</div>
+          </div>
 
           <!-- Sources (for assistant messages) -->
-          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="mt-4  border-gray-200 pt-3">
-            <ElCollapse>
-              <ElCollapseItem title="参考来源" name="sources">
-                <div v-for="(source, index) in message.sources" :key="index" class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <div v-if="message.type === 'assistant' && message.sources && message.sources.length > 0" class="mt-4 border-t border-gray-200 pt-3">
+            <details class="group">
+              <summary class="text-sm font-medium text-gray-800 cursor-pointer hover:text-indigo-600 list-none flex items-center">
+                <span class="inline-block w-0 h-0 border-l-4 border-l-gray-400 border-t-2 border-b-2 border-t-transparent border-b-transparent mr-2 transition-transform group-open:rotate-90"></span>
+                参考来源 ({{ message.sources.length }})
+              </summary>
+              <div class="mt-2 space-y-3">
+                <div v-for="(source, index) in message.sources" :key="index" class="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div class="flex justify-between items-center mb-2">
                     <a :href="source.url" target="_blank" class="text-xs font-medium text-indigo-600 hover:underline">{{ source.url.split('/').slice(0, 3).join('/') }}/.../{{ source.url.split('/').pop() }}</a>
                     <span class="text-xs text-gray-600 font-mono">分数: {{ source.score.toFixed(4) }}</span>
                   </div>
                   <pre class="text-xs text-gray-700 leading-relaxed m-0">{{ source.content }}</pre>
                 </div>
-              </ElCollapseItem>
-            </ElCollapse>
+              </div>
+            </details>
           </div>
+        </div>
+        
+        <!-- 编辑按钮（消息外边右下角） -->
+        <div 
+          v-if="message.type === 'user' && !message.isEditing"
+          class="absolute -bottom-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        >
+          <ElButton
+            text
+            size="small"
+            @click="handleStartEdit(message.id)"
+            class="p-1 min-h-6 w-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full shadow-sm border border-gray-200 bg-white"
+          >
+            <ElIcon size="12"><Edit /></ElIcon>
+          </ElButton>
         </div>
       </div>
     </div>
@@ -193,7 +287,32 @@ function isStatusMessage(content: string) {
 </template>
 
 <style scoped>
-/* 移除所有scoped样式 */
+/* 状态消息样式 */
+.status-message {
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  margin: 8px 0 !important;
+  color: #6b7280 !important;
+  font-weight: 400 !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.status-message::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    transparent 100%
+  );
+  animation: highlightSweep 1.5s ease-in-out infinite;
+}
 </style>
 
 <style>
