@@ -93,16 +93,16 @@ watch(() => store.queryType, (newType) => {
 </script>
 
 <template>
-  <div class="chat-area">
+  <div class="flex flex-col h-screen bg-white">
     <!-- 头部 -->
-    <header class="chat-header">
-      <div class="header-left">
-        <h1>对话</h1>
-        <div class="model-selector">
+    <header class="p-5 border-b border-gray-200 flex items-center justify-between bg-white z-10">
+      <div class="flex items-center gap-6">
+        <h1 class="m-0 text-gray-900 text-lg font-semibold whitespace-nowrap">对话</h1>
+        <div class="ml-6">
           <ElSelect
             v-model="store.selectedModel"
             placeholder="选择模型"
-            class="model-select"
+            class="w-50"
             :loading="store.loading.loadingModels"
             :disabled="store.queryType === QueryType.NORMAL"
             clearable
@@ -119,7 +119,7 @@ watch(() => store.queryType, (newType) => {
           <!-- 普通问答模式提示 -->
           <div 
             v-if="store.queryType === QueryType.NORMAL" 
-            class="model-hint"
+            class="text-xs text-gray-500 mt-1 leading-1.4"
           >
             普通问答模式使用 {{ store.NORMAL_CHAT_MODEL }}
           </div>
@@ -127,18 +127,18 @@ watch(() => store.queryType, (newType) => {
           <!-- 模型错误提示 -->
           <div 
             v-if="store.normalChatModelError" 
-            class="model-error"
+            class="text-xs text-red-600 mt-1 leading-1.4 bg-red-50 p-2 rounded border border-red-200"
           >
             {{ store.normalChatModelError }}
           </div>
         </div>
       </div>
 
-      <div class="query-type-selector-wrapper">
+      <div class="flex gap-3 w-50">
         <ElSelect
           v-model="store.queryType"
           placeholder="选择问答类型"
-          class="query-type-selector"
+          class="w-50"
         >
           <ElOption
             label="普通问答"
@@ -155,7 +155,7 @@ watch(() => store.queryType, (newType) => {
         </ElSelect>
       </div>
       
-      <div class="header-actions">
+      <div class="flex gap-3">
         <ElButton text @click="handleShowWorkflows">
           <ElIcon>
             <Bell />
@@ -172,7 +172,7 @@ watch(() => store.queryType, (newType) => {
     </header>
 
     <!-- 主要内容区域 - 根据查询类型渲染不同的子组件 -->
-    <div class="chat-content">
+    <div class="flex-1 overflow-hidden">
       <!-- 普通问答模式 -->
       <NormalChat
         v-if="store.queryType === QueryType.NORMAL"
@@ -218,12 +218,12 @@ watch(() => store.queryType, (newType) => {
     </div>
 
     <!-- 查询类型选择器 -->
-    <!-- <div class="query-type-selector-container">
-      <div class="query-type-selector-wrapper">
+    <!-- <div class="p-3 border-t border-gray-200 bg-white">
+      <div class="flex justify-center w-75">
         <ElSelect
           v-model="store.queryType"
           placeholder="选择问答类型"
-          class="query-type-selector"
+          class="w-75"
         >
           <ElOption
             label="普通问答"
@@ -248,162 +248,3 @@ watch(() => store.queryType, (newType) => {
     />
   </div>
 </template>
-
-<style scoped>
-.chat-area {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: white;
-}
-
-.chat-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: white;
-  z-index: 10;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.chat-header h1 {
-  margin: 0;
-  color: #111827;
-  font-size: 20px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.model-selector {
-  margin-left: 24px;
-}
-
-.model-select {
-  width: 200px;
-}
-
-.model-hint {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-  line-height: 1.4;
-}
-
-.model-error {
-  font-size: 12px;
-  color: #dc2626;
-  margin-top: 4px;
-  line-height: 1.4;
-  background: #fef2f2;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #fecaca;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.chat-content {
-  flex: 1;
-  overflow: hidden;
-}
-
-.query-type-selector-container {
-  padding: 12px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: white;
-}
-
-.query-type-selector-wrapper {
-  display: flex;
-  justify-content: center;
-  width: 300px;
-}
-
-.query-type-selector {
-  width: 300px;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .chat-area {
-    height: 100vh;
-    /* Safari移动端适配 */
-    height: 100dvh;
-  }
-
-  .chat-header {
-    padding: 12px 16px;
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-    /* 确保header不会超出视窗 */
-    flex-shrink: 0;
-  }
-
-  .header-left {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .chat-header h1 {
-    font-size: 18px;
-    margin: 0;
-    flex-shrink: 0;
-  }
-
-  .model-selector {
-    margin-left: 0;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .model-select {
-    width: 100%;
-    min-width: 120px;
-  }
-
-  .query-type-selector-wrapper {
-    width: 100%;
-  }
-
-  .query-type-selector {
-    width: 100%;
-  }
-
-  .header-actions {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .header-actions .el-button {
-    flex: 1;
-    max-width: 120px;
-  }
-
-  .chat-content {
-    /* 确保内容区域能正确滚动 */
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .query-type-selector-container {
-    padding: 12px 16px;
-    flex-shrink: 0;
-  }
-}
-</style>
