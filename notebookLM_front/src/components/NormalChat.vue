@@ -177,8 +177,8 @@ function isReasoningExpanded(messageId: string) {
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+      <div v-if="messages.length === 0" class="messageWelcomeContainer text-center mx-auto text-gray-700">
+        <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
             <strong class="block mb-2 text-sm font-medium text-gray-900">🌐 网络搜索</strong>
             <p class="text-xs text-gray-600 leading-relaxed">实时搜索最新信息</p>
@@ -191,7 +191,8 @@ function isReasoningExpanded(messageId: string) {
             <strong class="block mb-2 text-sm font-medium text-gray-900">🎯 精准回答</strong>
             <p class="text-xs text-gray-600 leading-relaxed">基于搜索结果生成准确答案</p>
           </div>
-        </div>
+        </div> -->
+        <p class="text-center text-gray-700 messageWelcome">给我一个问题</p>
       </div>
 
       <!-- 对话消息 -->
@@ -324,6 +325,17 @@ function isReasoningExpanded(messageId: string) {
 </template>
 
 <style scoped>
+.messageWelcomeContainer {
+  margin-top: 20%;
+  padding-left: 16px;
+  width: fit-content;
+  border-left: 6px solid #4f46e5;
+}
+.messageWelcome {
+  position: relative;
+  font-size: 24px;
+}
+
 /* 状态消息样式 */
 .status-message {
   border-radius: 8px !important;

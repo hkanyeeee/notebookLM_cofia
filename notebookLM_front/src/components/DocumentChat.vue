@@ -144,7 +144,7 @@ function isQueryDisabled() {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <p class=" mt-8 mb-10 text-base leading-relaxed">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</p>
+        <div class="welcomeMessage mt-8 mb-10 text-base leading-relaxed">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</div>
         
         <!-- 课题输入 -->
         <div class="flex gap-3 items-center mb-6">
@@ -370,6 +370,12 @@ function isQueryDisabled() {
 
 .candidate-item:active {
   transform: scale(0.98);
+}
+
+.welcomeMessage {
+  padding-left: 16px;
+  width: fit-content;
+  border-left: 6px solid #4f46e5;
 }
 
 /* 响应式设计 */

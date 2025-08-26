@@ -153,21 +153,134 @@ function getInputPlaceholder() {
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       
-      <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-sm font-medium text-gray-900">📚 知识库问答</strong>
-            <p class="text-xs text-gray-600 leading-relaxed">基于Collection中的文档回答</p>
+      <!-- 智能欢迎消息 -->
+      <div v-if="messages.length === 0" class="max-w-4xl mx-auto p-6">
+        
+        <!-- 没有任何Collection时 - 引导添加 -->
+        <div v-if="collections.length === 0 && !loadingCollections" class="text-center">
+          <div class="mb-8">
+            <div class="text-6xl mb-4">📚</div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">欢迎使用Collection问答</h2>
+            <p class="text-gray-600 mb-8 max-w-lg mx-auto">
+              通过添加URL创建您的第一个Collection，或者选择现有的Collection开始对话。
+            </p>
           </div>
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-sm font-medium text-gray-900">🔍 混合搜索</strong>
-            <p class="text-xs text-gray-600 leading-relaxed">结合知识库和网络搜索</p>
+          
+          <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-center mb-4">
+              <div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold mr-3">1</div>
+              <h3 class="text-lg font-semibold text-gray-900">创建您的第一个Collection</h3>
+            </div>
+            <p class="text-gray-600 mb-4">在下方输入一个URL，系统将自动抓取并处理内容，创建可搜索的Collection。</p>
           </div>
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-sm font-medium text-gray-900">📊 精准匹配</strong>
-            <p class="text-xs text-gray-600 leading-relaxed">智能检索相关文档片段</p>
+
+        </div>
+
+        <!-- 有Collection但未选择时 - 显示可选择的Collection -->
+        <div v-else-if="collections.length > 0 && !selectedCollection" class="text-center">
+          <div class="mb-8">
+            <div class="text-5xl mb-4">🎯</div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">选择一个Collection开始对话</h2>
+            <p class="text-gray-600 mb-6">
+              您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
+            </p>
           </div>
+
+          <!-- Collection卡片列表 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <div 
+              v-for="collection in collections" 
+              :key="collection.collection_id"
+              class="p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer"
+              @click="handleCollectionChange(collection.collection_id)"
+            >
+              <div class="text-left">
+                <div class="flex items-start justify-between mb-3">
+                  <div class="text-2xl">📁</div>
+                  <div class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    {{ collection.collection_id.substring(0, 8) }}...
+                  </div>
+                </div>
+                <h3 class="font-semibold text-gray-900 mb-2 text-sm line-clamp-2">
+                  {{ collection.document_title || '未命名Collection' }}
+                </h3>
+                <p class="text-xs text-gray-600 mb-3 line-clamp-3">
+                  {{ collection.url || '无描述' }}
+                </p>
+                <div class="flex justify-between items-center text-xs text-gray-500">
+                  <span>点击选择</span>
+                  <span>→</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div class="flex items-center justify-center text-sm text-green-700">
+              <span class="mr-2">✨</span>
+              <span>您也可以通过下方的URL输入框添加新的Collection</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 已选择Collection时 - 显示Collection信息 -->
+        <div v-else-if="selectedCollection" class="text-center">
+          <div class="mb-8">
+            <div class="text-5xl mb-4">💡</div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">
+              {{ collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
+            </h2>
+            <div class="max-w-2xl mx-auto">
+              <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
+                <div class="text-left space-y-3">
+                  <div class="flex items-center">
+                    <span class="text-indigo-600 font-medium w-16">📋 标题:</span>
+                    <span class="text-gray-700">{{ collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知' }}</span>
+                  </div>
+                  <div class="flex items-center">
+                    <span class="text-indigo-600 font-medium w-16">🔗 来源:</span>
+                    <a 
+                      :href="collections.find(c => c.collection_id === selectedCollection)?.url" 
+                      target="_blank"
+                      class="text-indigo-600 hover:text-indigo-800 underline text-sm truncate flex-1"
+                    >
+                      {{ collections.find(c => c.collection_id === selectedCollection)?.url }}
+                    </a>
+                  </div>
+                  <div class="flex items-center">
+                    <span class="text-blue-600 font-medium w-16">🆔 ID:</span>
+                    <span class="text-gray-600 font-mono text-sm">{{ selectedCollection }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                  <div class="text-2xl mb-2">🎯</div>
+                  <h4 class="font-semibold text-gray-900 mb-2">准确回答</h4>
+                  <p class="text-sm text-gray-600">基于选定Collection内容提供精准答案</p>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                  <div class="text-2xl mb-2">📖</div>
+                  <h4 class="font-semibold text-gray-900 mb-2">来源引用</h4>
+                  <p class="text-sm text-gray-600">每个回答都标注具体的文档来源</p>
+                </div>
+              </div>
+
+              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div class="flex items-center justify-center text-sm text-amber-800">
+                  <span class="mr-2">💬</span>
+                  <span>现在您可以开始提问了！在下方输入您的问题。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div v-else-if="loadingCollections" class="text-center py-12">
+          <div class="text-4xl mb-4">⏳</div>
+          <h2 class="text-xl text-gray-600">正在加载Collection...</h2>
         </div>
       </div>
 
@@ -289,9 +402,24 @@ function getInputPlaceholder() {
 </template>
 
 <style scoped>
-/* 移除所有scoped样式，因为已转换为Tailwind类 */
+/* line-clamp utilities for text truncation */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 </style>
 
 <style>
-/* 移除所有全局样式，因为已转换为Tailwind类 */
+/* 全局聊天消息样式 */
 </style>
