@@ -46,7 +46,7 @@ GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "6"))  # 每个知�
 
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
-PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "20.0"))
+PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "15.0"))
 
 # 关键词生成配置
 ENABLE_QUERY_GENERATION = get_config_value("ENABLE_QUERY_GENERATION", "true").lower() == "true"
