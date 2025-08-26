@@ -304,7 +304,7 @@ watch(() => store.queryType, (newType) => {
 <style scoped>
 /* 头部容器 */
 .header-container {
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid #e5e7eb;
   background-color: white;
   z-index: 10;
@@ -393,7 +393,7 @@ watch(() => store.queryType, (newType) => {
 /* 大屏幕适配 (1440px以上) */
 @media (min-width: 1440px) {
   .header-container {
-    padding: 16px 32px;
+    padding: 12px 32px;
   }
   
   /* 大屏幕下限制选择器宽度，避免过度拉伸 */
