@@ -84,7 +84,7 @@ body {
 }
 
 .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 2px #4f46e5;
+  box-shadow: 0 0 0 1px #4f46e5;
 }
 
 /* Element Plus Select 组件样式统一 */
@@ -93,7 +93,7 @@ body {
 }
 
 .el-select .el-input.is-focus .el-input__wrapper {
-  box-shadow: 0 0 0 2px #4f46e5 !important;
+  box-shadow: 0 0 0 1px #4f46e5 !important;
 }
 
 .el-select-dropdown {
