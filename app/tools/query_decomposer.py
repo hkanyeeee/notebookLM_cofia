@@ -309,7 +309,6 @@ class QueryDecomposer:
                         {"role": "user", "content": user_prompt}
                     ],
                     "temperature": 0.0,
-                    "max_tokens": 150
                 },
                 timeout=LLM_DEFAULT_TIMEOUT
             )

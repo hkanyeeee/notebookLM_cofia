@@ -207,7 +207,6 @@ class ReasoningEngine:
                             {"role": "user", "content": user_prompt}
                         ],
                         "temperature": 0.0,
-                        "max_tokens": 128
                     },
                     timeout=REASONING_TIMEOUT
                 )
