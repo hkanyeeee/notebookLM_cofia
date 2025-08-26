@@ -35,12 +35,12 @@ MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 # Web 搜索相关配置 - 简化后的限制
 WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2"))  # 每个搜索关键词的结果控制在2个
 WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "15"))  # 总搜索查询数量上限
-WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "30"))  # 总结果数量上限（保持原来的限制）
+WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "24"))  # 总结果数量上限
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "5"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "20.0"))
 
 # 知识缺口和关键词限制
-MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "15"))  # 用于网络搜索的知识缺口最多15个
+MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "10"))  # 用于网络搜索的知识缺口最多10个
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
 GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "6"))  # 每个知识缺口召回top 6
 
