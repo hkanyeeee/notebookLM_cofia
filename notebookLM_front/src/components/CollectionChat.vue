@@ -215,12 +215,6 @@ function getInputPlaceholder() {
             </div>
           </div>
 
-          <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-            <div class="flex items-center justify-center text-sm text-green-700">
-              <span class="mr-2">✨</span>
-              <span>您也可以通过下方的URL输入框添加新的Collection</span>
-            </div>
-          </div>
         </div>
 
         <!-- 已选择Collection时 - 显示Collection信息 -->
@@ -253,26 +247,7 @@ function getInputPlaceholder() {
                   </div>
                 </div>
               </div>
-              
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div class="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                  <div class="text-2xl mb-2">🎯</div>
-                  <h4 class="font-semibold text-gray-900 mb-2">准确回答</h4>
-                  <p class="text-sm text-gray-600">基于选定Collection内容提供精准答案</p>
-                </div>
-                <div class="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                  <div class="text-2xl mb-2">📖</div>
-                  <h4 class="font-semibold text-gray-900 mb-2">来源引用</h4>
-                  <p class="text-sm text-gray-600">每个回答都标注具体的文档来源</p>
-                </div>
-              </div>
 
-              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <div class="flex items-center justify-center text-sm text-amber-800">
-                  <span class="mr-2">💬</span>
-                  <span>现在您可以开始提问了！在下方输入您的问题。</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
