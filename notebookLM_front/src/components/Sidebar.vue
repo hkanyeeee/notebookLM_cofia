@@ -215,11 +215,7 @@ function handleRemoveFailedUrl(url: string) {
   </aside>
 </template>
 
-<!-- 响应式设计：在移动端隐藏侧边栏 -->
+<!-- 响应式设计 -->
 <style scoped>
-@media (max-width: 768px) {
-  aside {
-    display: none;
-  }
-}
+/* 移动端侧边栏样式在 App.vue 中处理 */
 </style>
