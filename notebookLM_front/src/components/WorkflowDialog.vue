@@ -125,7 +125,7 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
     @update:model-value="handleVisibilityChange"
     title="n8n工作流执行状态" 
     :width="isMobile ? '95%' : '85%'"
-    max-height="70vh"
+    max-height="70%"
     class="workflow-dialog"
   >
     <div class="workflow-status-container" v-loading="loadingWorkflows">
@@ -364,7 +364,7 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
 /* 响应式调整 */
 @media (max-width: 768px) {
   .workflow-dialog :deep(.el-dialog) {
-    margin: 5vh auto;
+    margin: 5% auto;
   }
   
   .workflow-dialog :deep(.el-dialog__header) {
@@ -397,7 +397,7 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
 @media (max-width: 480px) {
   .workflow-dialog :deep(.el-dialog) {
     width: 95% !important;
-    margin: 3vh auto;
+    margin: 3% auto;
   }
   
   .mobile-workflow-card {

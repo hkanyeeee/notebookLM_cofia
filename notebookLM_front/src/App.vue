@@ -41,7 +41,7 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 <style scoped>
 .app-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
   background-color: #fafafa;
 }
 
@@ -58,8 +58,8 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .app-container {
-    /* Safari移动端适配 */
-    height: 100dvh;
+    /* Safari移动端适配 - 使用百分比避免滚动条问题 */
+    height: 100%;
   }
 
   .main-content {

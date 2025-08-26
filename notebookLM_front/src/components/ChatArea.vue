@@ -124,7 +124,7 @@ watch(() => store.queryType, (newType) => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-white">
+  <div class="flex flex-col h-full bg-white">
     <!-- 头部 -->
     <header class="header-container" :class="{ 'header-collapsed': headerCollapsed }">
       <!-- 第一行：标题和按钮 -->
