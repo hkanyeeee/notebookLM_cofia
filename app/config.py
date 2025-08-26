@@ -70,8 +70,8 @@ WEB_CACHE_TTL_SECONDS = int(get_config_value("WEB_CACHE_TTL_SECONDS", "3600"))  
 WEB_CACHE_MAX_CONTENT_SIZE = int(get_config_value("WEB_CACHE_MAX_CONTENT_SIZE", "1048576"))  # 1MB
 
 # 文档处理配置
-CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "700"))
-CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "50"))
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "800"))
+CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "80"))
 
 # RAG 相关配置
 RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
