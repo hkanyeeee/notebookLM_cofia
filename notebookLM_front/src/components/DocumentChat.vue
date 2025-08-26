@@ -140,7 +140,7 @@ function isQueryDisabled() {
 <template>
   <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
         <p class="mb-10 text-base leading-relaxed">您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>

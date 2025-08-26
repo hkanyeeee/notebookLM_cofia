@@ -153,7 +153,7 @@ function getInputPlaceholder() {
 <template>
   <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- Collection查询结果区域 -->
       <div v-if="collectionQueryResults.length > 0 && messages.length === 0" class="mb-6 p-5 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-200">

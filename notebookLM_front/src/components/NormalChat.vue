@@ -131,12 +131,39 @@ function canEditMessage(message: Message) {
   return message.type === 'user'
 }
 
+// 双击检测逻辑
+const clickTimers = ref<Record<string, number>>({})
+
+// 处理消息点击（双击检测）
+function handleMessageClick(messageId: string) {
+  const now = Date.now()
+  const lastClickTime = clickTimers.value[messageId]
+  
+  if (lastClickTime && now - lastClickTime < 300) {
+    // 双击检测成功，触发编辑模式
+    delete clickTimers.value[messageId]
+    const message = props.messages.find(m => m.id === messageId)
+    if (message && message.type === 'user' && !message.isEditing) {
+      handleStartEdit(messageId)
+    }
+  } else {
+    // 记录第一次点击时间
+    clickTimers.value[messageId] = now
+    // 300ms后清除记录
+    setTimeout(() => {
+      if (clickTimers.value[messageId] === now) {
+        delete clickTimers.value[messageId]
+      }
+    }, 300)
+  }
+}
+
 </script>
 
 <template>
   <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
         <p class="mb-10 text-base leading-relaxed">我会使用网络搜索为您提供最新的信息和答案，直接在下方输入您的问题即可开始对话。</p>
@@ -206,7 +233,7 @@ function canEditMessage(message: Message) {
               </div>
             </div>
             <!-- 普通显示模式 -->
-            <div v-else>
+            <div v-else @click="handleMessageClick(message.id)" class="cursor-pointer">
               <div class="chat-message-content" v-html="marked(message.content)"></div>
               <div class="text-xs opacity-70 mt-2 text-right">{{ formatTime(message.timestamp) }}</div>
             </div>
@@ -244,20 +271,7 @@ function canEditMessage(message: Message) {
           </div>
         </div>
         
-        <!-- 编辑按钮（消息外边右下角） -->
-        <div 
-          v-if="message.type === 'user' && !message.isEditing"
-          class="absolute -bottom-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-        >
-          <ElButton
-            text
-            size="small"
-            @click="handleStartEdit(message.id)"
-            class="p-1 min-h-6 w-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full shadow-sm border border-gray-200 bg-white"
-          >
-            <ElIcon size="12"><Edit /></ElIcon>
-          </ElButton>
-        </div>
+
       </div>
     </div>
 
