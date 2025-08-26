@@ -188,19 +188,6 @@ export function useCollectionStore() {
         }
       )
 
-      // 同时获取搜索结果用于显示
-      const response = await notebookApi.queryCollection(request)
-      if (response.success) {
-        return {
-          success: true,
-          message: response.message,
-          total_found: response.total_found,
-          results: response.results
-        }
-      } else {
-        throw new Error(response.message || 'Collection查询失败')
-      }
-
     } catch (error: any) {
       console.error('Collection查询失败:', error)
       
