@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useDocumentStore } from './useDocumentStore'
 import { useMessageStore } from './useMessageStore'
@@ -95,6 +95,14 @@ export const useNotebookStore = defineStore('notebook', () => {
     ...loading.value,
     querying: queryingState.value
   }))
+
+  // 监听问答类型切换，自动清空聊天历史
+  watch(queryType, (newType, oldType) => {
+    if (oldType !== undefined && newType !== oldType) {
+      messageStore.clearMessages()
+      console.log(`问答类型从 ${oldType} 切换到 ${newType}，已清空聊天历史`)
+    }
+  })
 
   return {
     // 问答类型相关

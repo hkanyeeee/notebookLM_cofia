@@ -55,6 +55,25 @@ body {
   border-color: #4338ca;
 }
 
+/* 主题色相关的 disabled 状态样式 */
+.el-button--primary:disabled,
+.el-button--primary.is-disabled {
+  background-color: #a5b4fc !important;
+  border-color: #a5b4fc !important;
+  color: #ffffff !important;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.el-button:disabled,
+.el-button.is-disabled {
+  background-color: #e0e7ff !important;
+  border-color: #c7d2fe !important;
+  color: #6366f1 !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .el-input__wrapper {
   border-radius: 8px;
   box-shadow: 0 0 0 1px #d1d5db;
@@ -67,6 +86,48 @@ body {
 
 .el-input__wrapper.is-focus {
   box-shadow: 0 0 0 2px #4f46e5;
+}
+
+/* Element Plus Select 组件样式统一 */
+.el-select {
+  --el-select-input-focus-border-color: #4f46e5;
+}
+
+.el-select .el-input.is-focus .el-input__wrapper {
+  box-shadow: 0 0 0 2px #4f46e5 !important;
+}
+
+.el-select-dropdown {
+  border-color: #c7d2fe !important;
+}
+
+.el-option:hover {
+  background-color: #eef2ff !important;
+}
+
+.el-option.is-selected {
+  background-color: #e0e7ff !important;
+  color: #4f46e5 !important;
+  font-weight: 600;
+}
+
+.el-option.is-selected::after {
+  color: #4f46e5 !important;
+}
+
+/* Element Plus Collapse 组件样式统一 */
+.el-collapse-item__header {
+  color: #3730a3 !important;
+  border-bottom-color: #c7d2fe !important;
+}
+
+.el-collapse-item__header:hover {
+  color: #4f46e5 !important;
+}
+
+.el-collapse-item.is-active .el-collapse-item__header {
+  color: #4f46e5 !important;
+  border-bottom-color: #4f46e5 !important;
 }
 
 .el-textarea__inner {
@@ -239,6 +300,11 @@ body {
   }
 }
 
+/* 主题色相关的状态消息颜色 */
+.status-message {
+  color: #6366f1 !important; /* 使用主题色 */
+}
+
 /* 聊天消息字体设置 */
 .chat-message-content {
   font-size: 14px !important;
@@ -388,12 +454,12 @@ body {
 
 /* 引用块样式优化 */
 .chat-message-content blockquote {
-  border-left: 4px solid #6366f1 !important;
-  background-color: #f8fafc !important;
+  border-left: 4px solid #4f46e5 !important;
+  background-color: #f1f5f9 !important;
   margin: 12px 0 !important;
   padding: 12px 16px !important;
   border-radius: 0 6px 6px 0 !important;
-  color: #475569 !important;
+  color: #3730a3 !important;
   font-style: italic !important;
   line-height: 1.6 !important;
 }
