@@ -140,8 +140,8 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
           max-height="200"
           :empty-text="loadingWorkflows ? '加载中...' : '暂无正在执行的工作流'"
         >
-          <ElTableColumn prop="executionId" label="执行ID" width="180" />
-          <ElTableColumn prop="documentName" label="文档名称" min-width="250" />
+          <ElTableColumn prop="executionId" label="执行ID" min-width="200" />
+          <ElTableColumn prop="documentName" label="文档名称" width="230" />
           <ElTableColumn prop="status" label="状态" width="100">
             <template #default="{ row }">
               <ElTag type="warning" effect="plain">{{ getStatusText(row.status) }}</ElTag>
@@ -192,8 +192,8 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
           max-height="300"
           :empty-text="loadingWorkflows ? '加载中...' : '暂无执行历史'"
         >
-          <ElTableColumn prop="executionId" label="执行ID" width="180" />
-          <ElTableColumn prop="documentName" label="文档名称" min-width="250" />
+          <ElTableColumn prop="executionId" label="执行ID" min-width="200" />
+          <ElTableColumn prop="documentName" label="文档名称" width="230" />
           <ElTableColumn prop="status" label="状态" width="100">
             <template #default="{ row }">
               <ElTag 
