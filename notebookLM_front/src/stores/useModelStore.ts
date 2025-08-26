@@ -4,6 +4,8 @@ import { ElMessage } from 'element-plus'
 
 // 普通问答模式限制使用的模型
 const NORMAL_CHAT_MODEL = 'openai/gpt-oss-20b'
+const GPT_OSS_KEYWORD = 'gpt-oss'
+const RECOMMENDED_NORMAL_CHAT_MODEL = 'openai/gpt-oss-20b'
 
 // 从本地存储读取保存的模型选择
 function getStoredSelectedModel(): string {
@@ -36,9 +38,9 @@ export function useModelStore() {
 
   // 验证普通问答模式所需的模型是否存在
   function validateNormalChatModel(): boolean {
-    const model = models.value.find(m => m.id === NORMAL_CHAT_MODEL)
-    if (!model) {
-      normalChatModelError.value = `普通问答模式所需的模型 "${NORMAL_CHAT_MODEL}" 不存在，请联系管理员配置该模型。`
+    const hasGptOssSeries = models.value.some(m => m.id.toLowerCase().includes(GPT_OSS_KEYWORD))
+    if (!hasGptOssSeries) {
+      normalChatModelError.value = '普通问答模式需要 gpt-oss 系列模型，请联系管理员配置该系列模型。'
       ElMessage.error(normalChatModelError.value)
       return false
     }
@@ -48,8 +50,14 @@ export function useModelStore() {
 
   // 强制选择普通问答模式的模型
   function forceSelectNormalChatModel() {
-    if (validateNormalChatModel()) {
-      selectedModel.value = NORMAL_CHAT_MODEL
+    if (!validateNormalChatModel()) return
+
+    // 优先选择推荐模型，其次选择系列中的第一个可用模型
+    const preferred = models.value.find(m => m.id === RECOMMENDED_NORMAL_CHAT_MODEL)
+      || models.value.find(m => m.id.toLowerCase().includes(GPT_OSS_KEYWORD))
+
+    if (preferred) {
+      selectedModel.value = preferred.id
     }
   }
 

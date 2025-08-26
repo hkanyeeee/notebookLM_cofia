@@ -205,7 +205,7 @@ watch(() => store.queryType, (newType) => {
           v-if="store.queryType === QueryType.NORMAL" 
           class="hint-text"
         >
-          普通问答模式使用 {{ store.NORMAL_CHAT_MODEL }}
+          普通问答模式使用 gpt-oss 系列（当前：{{ store.selectedModel }}）
         </div>
         
         <!-- 模型错误提示 -->

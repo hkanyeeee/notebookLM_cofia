@@ -54,6 +54,17 @@ async def query(
     
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
+    # 普通问答模式：限制 gpt-oss 系列
+    if query_type == "normal":
+        model_lower = (llm_model or "").lower()
+        if "gpt-oss" not in model_lower:
+            # 若传入的不是 gpt-oss 系列，优先回退到默认模型（若默认是 gpt-oss），否则报错
+            default_lower = (DEFAULT_SEARCH_MODEL or "").lower()
+            if "gpt-oss" in default_lower:
+                llm_model = DEFAULT_SEARCH_MODEL
+            else:
+                raise HTTPException(status_code=400, detail="普通问答模式仅支持 gpt-oss 系列模型。")
+
     if not q:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
