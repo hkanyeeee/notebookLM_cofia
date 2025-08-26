@@ -34,7 +34,7 @@ export function useMessageStore() {
     let controller: AbortController | null = null;
     try {
       controller = new AbortController();
-      timeoutId = window.setTimeout(() => controller?.abort(), 300000);
+      timeoutId = window.setTimeout(() => controller?.abort(), 3600000);
       
       // 构建查询参数
       const queryParams: any = {
