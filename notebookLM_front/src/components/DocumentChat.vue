@@ -468,27 +468,7 @@ function isQueryDisabled() {
   border-radius: 0;
 }
 
-/* 表格样式（GFM） */
-.document-chat .message-text table {
-  width: 100%;
-  border-collapse: collapse;
-  border-spacing: 0;
-  margin: 1em 0;
-}
-.document-chat .message-text thead th {
-  background: #f3f4f6;
-}
-.document-chat .message-text th,
-.document-chat .message-text td {
-  border: 1px solid #e5e7eb;
-  padding: 8px 12px;
-  text-align: left;
-  vertical-align: top;
-  word-break: break-word;
-}
-.document-chat .message-text tr:nth-child(even) td {
-  background: #fafafa;
-}
+/* 移除重复的表格样式，使用全局统一的 .chat-message-content 样式 */
 .document-chat .message-text {
   overflow-x: auto;
 }
