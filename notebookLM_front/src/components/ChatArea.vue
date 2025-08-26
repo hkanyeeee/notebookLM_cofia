@@ -258,7 +258,6 @@ watch(() => store.queryType, (newType) => {
         :selected-collection="store.selectedCollection"
         :loading="store.loading.querying"
         :loading-collections="store.loading.loadingCollections"
-        :collection-query-results="store.collectionQueryResults"
         :agentic-ingest-url="store.agenticIngestUrl"
         :triggering-agentic-ingest="store.loading.triggeringAgenticIngest"
         :should-use-web-search="store.shouldUseWebSearch"

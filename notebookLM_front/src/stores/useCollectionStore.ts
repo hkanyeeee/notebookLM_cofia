@@ -10,7 +10,6 @@ export function useCollectionStore() {
   // Collection相关状态
   const collections = ref<AgenticCollection[]>([])
   const selectedCollection = ref<string>('')
-  const collectionQueryResults = ref<CollectionResult[]>([])
   const collectionQueryInput = ref<string>('')
 
   const loading = reactive({
@@ -141,13 +140,13 @@ export function useCollectionStore() {
           } else if (data.type === 'llm_start') {
             // 开始生成LLM回答
             onMessageUpdate(messageIndex, {
-              content: '正在生成智能回答...'
+              content: '处理中...'
             })
           } else if (data.type === 'content') {
             // LLM生成的内容
             const currentMessage = messages[messageIndex]
-            const newContent = (currentMessage.content === '正在生成智能回答...' || 
-                              currentMessage.content.includes('正在生成智能回答') ||
+            const newContent = (currentMessage.content === '处理中...' || 
+                              currentMessage.content.includes('处理中') ||
                               currentMessage.content.includes('找到') && currentMessage.content.includes('个相关结果')) 
                               ? data.content 
                               : currentMessage.content + data.content
@@ -192,7 +191,6 @@ export function useCollectionStore() {
       // 同时获取搜索结果用于显示
       const response = await notebookApi.queryCollection(request)
       if (response.success) {
-        collectionQueryResults.value = response.results
         return {
           success: true,
           message: response.message,
@@ -205,7 +203,6 @@ export function useCollectionStore() {
 
     } catch (error: any) {
       console.error('Collection查询失败:', error)
-      collectionQueryResults.value = []
       
       // 更新消息显示错误
       if (messages[messageIndex]) {
@@ -242,7 +239,6 @@ export function useCollectionStore() {
 
       const response = await notebookApi.queryCollection(request)
       if (response.success) {
-        collectionQueryResults.value = response.results
         return {
           success: true,
           message: response.message,
@@ -254,7 +250,6 @@ export function useCollectionStore() {
       }
     } catch (error: any) {
       console.error('Collection查询失败:', error)
-      collectionQueryResults.value = []
       throw error
     } finally {
       loading.queryingCollection = false
@@ -263,7 +258,6 @@ export function useCollectionStore() {
 
   // 清空collection查询结果
   function clearCollectionResults() {
-    collectionQueryResults.value = []
     collectionQueryInput.value = ''
   }
 
@@ -272,7 +266,6 @@ export function useCollectionStore() {
     agenticIngestUrl,
     collections,
     selectedCollection,
-    collectionQueryResults,
     collectionQueryInput,
     loading,
     

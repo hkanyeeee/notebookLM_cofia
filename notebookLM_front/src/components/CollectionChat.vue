@@ -19,7 +19,6 @@ interface Props {
   selectedCollection: string | null
   loading: boolean
   loadingCollections: boolean
-  collectionQueryResults: CollectionResult[]
   agenticIngestUrl: string
   triggeringAgenticIngest: boolean
   shouldUseWebSearch: boolean
@@ -153,26 +152,9 @@ function getInputPlaceholder() {
   <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
-      <!-- Collection查询结果区域 -->
-      <div v-if="collectionQueryResults.length > 0 && messages.length === 0" class="mb-6 p-5 bg-gray-50 rounded-lg border border-gray-200">
-        <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">Collection搜索结果 ({{ collectionQueryResults.length }} 个相关文档片段)</h3>
-          <button @click="handleClearCollectionResults()" class="text-sm text-gray-600 hover:text-gray-900">
-            清空结果
-          </button>
-        </div>
-        <div class="p-4 bg-white rounded-lg border border-gray-200 text-center">
-          <p class="text-sm text-gray-700 mb-2">
-            📄 找到 {{ collectionQueryResults.length }} 个相关文档片段，
-            <button @click="handleSendQuery()" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-              点击生成智能回答
-            </button>
-          </p>
-        </div>
-      </div>
       
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0 && collectionQueryResults.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
+      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
             <strong class="block mb-2 text-sm font-medium text-gray-900">📚 知识库问答</strong>
@@ -208,7 +190,12 @@ function getInputPlaceholder() {
               </el-collapse-item>
             </el-collapse>
           </div>
-          <div v-if="message.content" class="whitespace-pre-wrap chat-message-content" :class="{ 'text-gray-600': isStatusMessage(message.content) }" v-html="marked(message.content)"></div>
+          <div 
+            v-if="message.content" 
+            class="chat-message-content" 
+            :class="{ 'status-message': isStatusMessage(message.content) }" 
+            v-html="marked(message.content)"
+          ></div>
           <div v-else>思考中...</div>
           <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">{{ formatTime(message.timestamp) }}</div>
 

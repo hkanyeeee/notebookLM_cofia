@@ -390,7 +390,7 @@ async def query_collection_stream(
             search_summary = {
                 "type": "search_results",
                 "total_found": len(search_results),
-                "message": f"找到 {len(search_results)} 个相关结果，正在生成智能回答..."
+                "message": f"找到 {len(search_results)} 个相关结果，处理中..."
             }
             yield f"data: {json.dumps(search_summary, ensure_ascii=False)}\n\n"
             

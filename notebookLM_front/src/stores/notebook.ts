@@ -96,10 +96,15 @@ export const useNotebookStore = defineStore('notebook', () => {
     querying: queryingState.value
   }))
 
-  // 监听问答类型切换，自动清空聊天历史
+  // 监听问答类型切换，自动清空聊天历史和候选网址
   watch(queryType, (newType, oldType) => {
     if (oldType !== undefined && newType !== oldType) {
       messageStore.clearMessages()
+      // 当切换到非文档问答模式时，清空候选网址和课题输入
+      if (newType !== QueryType.DOCUMENT) {
+        documentStore.candidateUrls.value = []
+        documentStore.topicInput.value = ''
+      }
       console.log(`问答类型从 ${oldType} 切换到 ${newType}，已清空聊天历史`)
     }
   })
@@ -124,7 +129,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     agenticIngestUrl: collectionStore.agenticIngestUrl,
     collections: collectionStore.collections,
     selectedCollection: collectionStore.selectedCollection,
-    collectionQueryResults: collectionStore.collectionQueryResults,
     collectionQueryInput: collectionStore.collectionQueryInput,
     
     // 模型相关 (来自 modelStore)
