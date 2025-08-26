@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElTooltip } from 'element-plus'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
 import { Promotion } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message, Document, IngestionProgress } from '../stores/notebook'
@@ -126,6 +126,7 @@ function handleGenerateCandidates() {
 
 // 添加候选网址
 function handleAddCandidate(url: string) {
+  ElMessage.success('已添加网址')
   emit('addCandidate', url)
 }
 
