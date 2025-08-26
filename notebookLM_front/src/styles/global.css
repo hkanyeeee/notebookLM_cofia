@@ -75,7 +75,6 @@ body {
 }
 
 .el-input__wrapper {
-  border-radius: 8px;
   box-shadow: 0 0 0 1px #d1d5db;
   transition: all 0.2s;
 }
@@ -131,8 +130,6 @@ body {
 }
 
 .el-textarea__inner {
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
   transition: all 0.2s;
 }
 
