@@ -40,7 +40,7 @@ WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQ
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "20.0"))
 
 # 知识缺口和关键词限制
-MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "10"))  # 用于网络搜索的知识缺口最多10个
+MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "5"))  # 用于网络搜索的知识缺口最多10个
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
 GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "5"))  # 每个知识缺口召回top 5
 
