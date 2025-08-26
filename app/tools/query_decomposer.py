@@ -222,10 +222,20 @@ class QueryDecomposer:
         # 只有简单问题才使用快速路由
         return complexity == "简单"
 
-    async def should_use_fast_route_async(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
+    async def should_use_fast_route_async(
+        self, 
+        query: str, 
+        context: Optional[ToolExecutionContext] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         """
         使用 LLM 判断问题的处理路由，返回详细的路由决策信息。
         失败时回退到启发式规则。
+        
+        Args:
+            query: 用户问题
+            context: 工具执行上下文
+            conversation_history: 对话历史，用于识别续问和上下文相关查询
         
         Returns:
             包含路由决策信息的字典:
@@ -237,7 +247,7 @@ class QueryDecomposer:
             }
         """
         try:
-            result = await self._judge_complexity_with_llm(query, context)
+            result = await self._judge_complexity_with_llm(query, context, conversation_history)
             if isinstance(result, dict):
                 complexity = result.get("complexity", "中等")
                 needs_tools = result.get("needs_tools", True)
@@ -273,14 +283,20 @@ class QueryDecomposer:
                 "reason": f"判断失败，使用保守策略: {str(e)}"
             }
 
-    async def _judge_complexity_with_llm(self, query: str, context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
+    async def _judge_complexity_with_llm(
+        self, 
+        query: str, 
+        context: Optional[ToolExecutionContext] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         """
         使用 LLM 判断问题复杂度、是否走快速路由以及是否需要外部工具。
+        现在会考虑对话历史来识别续问和上下文相关的查询。
         返回形如 {"complexity": "简单|中等|复杂", "fast_route": bool, "needs_tools": bool, "reason": str}。
         """
         system_prompt = (
             "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
-            "请判断用户问题的三个维度：\n"
+            "请基于用户当前问题和对话历史来判断三个维度：\n"
             "1. complexity（复杂度）：简单/中等/复杂\n"
             "2. fast_route（快速路由）：是否可跳过复杂的问题拆解流程\n"
             "3. needs_tools（需要工具）：是否需要调用外部工具（搜索、API等）获取信息\n\n"
@@ -294,9 +310,14 @@ class QueryDecomposer:
             '输出格式：{"complexity": "简单|中等|复杂", "fast_route": true/false, "needs_tools": true/false, "reason": "不超过50字"}。\n'
             "无法确定时，将 fast_route 和 needs_tools 都设为 true，complexity 设为 中等。"
         )
+        
+        # 格式化对话历史
+        history_context = self._format_conversation_history(conversation_history)
+        
         user_prompt = (
-            f"问题：{query}\n"
-            "只输出JSON。"
+            f"对话历史：\n{history_context}\n\n"
+            f"当前问题：{query}\n\n"
+            "请判断当前问题的处理方式。只输出JSON。"
         )
         model_name = (context.run_config.model if context else DEFAULT_SEARCH_MODEL)
         async with httpx.AsyncClient() as client:

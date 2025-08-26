@@ -55,7 +55,7 @@ class IntelligentOrchestrator:
         
         try:
             # 智能路由：检查问题的处理方式（由LLM判定）
-            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context)
+            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context, conversation_history)
             use_fast_route = route_decision.get("use_fast_route", False)
             needs_tools = route_decision.get("needs_tools", True)
             reason = route_decision.get("reason", "")
@@ -137,7 +137,7 @@ class IntelligentOrchestrator:
         
         try:
             # 智能路由：检查问题的处理方式（由LLM判定）
-            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context)
+            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context, conversation_history)
             use_fast_route = route_decision.get("use_fast_route", False)
             needs_tools = route_decision.get("needs_tools", True)
             reason = route_decision.get("reason", "")
