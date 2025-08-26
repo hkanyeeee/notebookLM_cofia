@@ -511,7 +511,7 @@ watch(() => store.queryType, (newType) => {
   }
 
   .header-row {
-    margin-bottom: 12px;
+    margin-bottom: 2px;
   }
 
   .header-actions {

@@ -245,7 +245,7 @@ function getInputPlaceholder() {
           :model-value="agenticIngestUrl"
           @update:model-value="handleAgenticIngestUrlUpdate"
           placeholder="输入URL进行Agentic Ingest"
-          class="flex-1 min-w-[200px]"
+          class="flex-1 min-w-[100px]"
           clearable
         />
         
