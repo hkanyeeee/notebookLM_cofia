@@ -161,6 +161,11 @@ export function useCollectionStore() {
             onMessageUpdate(messageIndex, {
               reasoning: (currentMessage.reasoning || '') + data.content
             })
+          } else if (data.type === 'sources') {
+            // 参考来源数据
+            onMessageUpdate(messageIndex, {
+              sources: data.sources
+            })
           } else if (data.type === 'error') {
             // 错误信息
             onMessageUpdate(messageIndex, {

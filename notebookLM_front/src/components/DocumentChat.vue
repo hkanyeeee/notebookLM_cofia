@@ -143,7 +143,7 @@ function isQueryDisabled() {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <p class="mb-10 text-base leading-relaxed">您可以输入一个课题，我会先生成搜索查询并抓取候选网页供添加；或者在左侧直接添加网址。</p>
+        <p class=" mt-8 mb-10 text-base leading-relaxed">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</p>
         
         <!-- 课题输入 -->
         <div class="flex gap-3 items-center mb-6">

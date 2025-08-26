@@ -409,6 +409,18 @@ async def query_collection_stream(
                         }
                         yield f"data: {json.dumps(delta_data, ensure_ascii=False)}\n\n"
                     
+                    # 发送参考来源数据
+                    sources = [
+                        {
+                            "url": source.url,
+                            "title": source.title,
+                            "content": result["content"] if len(result["content"]) <= 300 else result["content"][:300] + "...",
+                            "score": result["score"]
+                        }
+                        for result in search_results
+                    ]
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': sources}, ensure_ascii=False)}\n\n"
+                    
                     # 发送完成状态
                     complete_data = {"type": "complete", "message": "回答生成完成"}
                     yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"

@@ -39,7 +39,6 @@ const emit = defineEmits<{
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
-const showDetailedResults = ref(false)
 // 控制思维链和参考来源的展开状态，默认展开思维链
 const activeNames = ref(['reasoning'])
 
@@ -158,31 +157,11 @@ function getInputPlaceholder() {
       <div v-if="collectionQueryResults.length > 0 && messages.length === 0" class="mb-6 p-5 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-200">
           <h3 class="text-lg font-semibold text-gray-900">Collection搜索结果 ({{ collectionQueryResults.length }} 个相关文档片段)</h3>
-          <div class="flex gap-2 items-center">
-            <button @click="showDetailedResults = !showDetailedResults" class="text-sm text-gray-600 hover:text-gray-900">
-              {{ showDetailedResults ? '隐藏详细结果' : '查看详细结果' }}
-            </button>
-            <button @click="handleClearCollectionResults()" class="text-sm text-gray-600 hover:text-gray-900">
-              清空结果
-            </button>
-          </div>
+          <button @click="handleClearCollectionResults()" class="text-sm text-gray-600 hover:text-gray-900">
+            清空结果
+          </button>
         </div>
-        <div v-if="showDetailedResults" class="max-h-96 overflow-y-auto">
-          <div 
-            v-for="(result, index) in collectionQueryResults" 
-            :key="index" 
-            class="mb-3 p-4 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all duration-200"
-          >
-            <div class="flex justify-between items-center mb-2">
-              <span class="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">相关度: {{ result.score.toFixed(4) }}</span>
-              <a :href="result.source_url" target="_blank" class="text-sm font-medium text-indigo-600 hover:text-indigo-800 truncate max-w-[400px]">
-                {{ result.source_title }}
-              </a>
-            </div>
-            <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{{ result.content }}</p>
-          </div>
-        </div>
-        <div v-else class="p-4 bg-white rounded-lg border border-gray-200 text-center">
+        <div class="p-4 bg-white rounded-lg border border-gray-200 text-center">
           <p class="text-sm text-gray-700 mb-2">
             📄 找到 {{ collectionQueryResults.length }} 个相关文档片段，
             <button @click="handleSendQuery()" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
@@ -194,9 +173,6 @@ function getInputPlaceholder() {
       
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0 && collectionQueryResults.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <h2 class="text-2xl font-semibold text-gray-900 mb-4">Collection问答</h2>
-        <p class="mb-10 text-base leading-relaxed">选择一个Collection进行基于知识库的问答，同时可以结合网络搜索获取最新信息。</p>
-        
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
             <strong class="block mb-2 text-sm font-medium text-gray-900">📚 知识库问答</strong>

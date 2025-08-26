@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon } from 'element-plus'
-import { Promotion, Edit, Check, Close } from '@element-plus/icons-vue'
+import { Promotion, Edit, Check, Close, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import { QueryType } from '../stores/types'
@@ -34,6 +34,8 @@ const emit = defineEmits<{
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
+// 控制分析过程的展开/折叠状态，默认为展开
+const reasoningExpanded = ref<Record<string, boolean>>({})
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -158,6 +160,16 @@ function handleMessageClick(messageId: string) {
   }
 }
 
+// 切换分析过程展开/折叠状态
+function toggleReasoning(messageId: string) {
+  reasoningExpanded.value[messageId] = !isReasoningExpanded(messageId)
+}
+
+// 检查分析过程是否展开（默认为收起）
+function isReasoningExpanded(messageId: string) {
+  return reasoningExpanded.value[messageId] === true
+}
+
 </script>
 
 <template>
@@ -166,8 +178,6 @@ function handleMessageClick(messageId: string) {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
-        <p class="mb-10 text-base leading-relaxed">我会使用网络搜索为您提供最新的信息和答案，直接在下方输入您的问题即可开始对话。</p>
-        
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
             <strong class="block mb-2 text-sm font-medium text-gray-900">🌐 网络搜索</strong>
@@ -197,8 +207,20 @@ function handleMessageClick(messageId: string) {
         >
           <!-- Reasoning Chain (for assistant messages) -->
           <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3">
-            <div class="text-sm font-medium text-gray-800 mb-2">分析过程</div>
-            <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg chat-message-content" >{{ message.reasoning }}</div>
+            <div 
+              class="text-sm font-medium text-gray-800 mb-2 cursor-pointer hover:text-indigo-600 flex items-center justify-between"
+              @click="toggleReasoning(message.id)"
+            >
+              <span>分析过程</span>
+              <ElIcon class="text-gray-500 hover:text-indigo-600 transition-transform duration-200" 
+                      :class="{ 'rotate-180': !isReasoningExpanded(message.id) }">
+                <ArrowUp />
+              </ElIcon>
+            </div>
+            <div 
+              v-if="isReasoningExpanded(message.id)"
+              class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg chat-message-content"
+            >{{ message.reasoning }}</div>
           </div>
 
           <!-- 用户消息：编辑模式或普通显示 -->
