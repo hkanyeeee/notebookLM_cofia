@@ -134,8 +134,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 模型相关 (来自 modelStore)
     models: modelStore.models,
     selectedModel: modelStore.selectedModel,
-    normalChatModelError: modelStore.normalChatModelError,
-    NORMAL_CHAT_MODEL: modelStore.NORMAL_CHAT_MODEL,
     
     // 加载状态
     loading: loadingWithQuery,
@@ -182,8 +180,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     
     // 模型方法
     loadModels: modelStore.loadModels,
-    validateNormalChatModel: modelStore.validateNormalChatModel,
-    forceSelectNormalChatModel: modelStore.forceSelectNormalChatModel,
     
   }
 })
