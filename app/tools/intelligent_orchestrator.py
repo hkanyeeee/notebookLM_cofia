@@ -195,7 +195,7 @@ class IntelligentOrchestrator:
             # 第二步：独立思考
             yield {
                 "type": "reasoning", 
-                "content": "基于已有知识进行独立思考..."
+                "content": "💡基于已有知识进行独立思考..."
             }
             
             thoughts = await self.reasoning_engine.think_about_decomposition(

@@ -185,6 +185,7 @@ class JSONFunctionCallingStrategy(BaseStrategy):
                                             "arguments": ""
                                         }
                                     }
+
                                 
                                 function_delta = tool_call_delta.get("function", {})
                                 if "name" in function_delta:
@@ -253,6 +254,19 @@ class JSONFunctionCallingStrategy(BaseStrategy):
                                 "name": tool_call.name,
                                 "result": f"工具 '{tool_call.name}' 不在允许列表中"
                             }
+
+                    # 如果没有工具调用但产生了内容，视为直接最终答案
+                    if not (tool_call_data and tool_call_data["function"]["name"]) and accumulated_content.strip():
+                        final_text = accumulated_content.strip()
+                        yield {
+                            "type": "final_answer",
+                            "content": final_text
+                        }
+                        # 记录最终答案步骤，便于 orchestrator 判断终止
+                        context.add_step(Step(
+                            step_type=StepType.FINAL_ANSWER,
+                            content=final_text
+                        ))
         
         except Exception as e:
             yield {

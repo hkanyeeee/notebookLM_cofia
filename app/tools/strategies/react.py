@@ -1,5 +1,6 @@
 """ReAct 策略实现"""
 import json
+import httpx
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from .base import BaseStrategy
 from ..models import ToolCall, ToolResult, Step, StepType, ToolExecutionContext
@@ -223,6 +224,18 @@ class ReActStrategy(BaseStrategy):
                                 content=f"Observation: {tool_result.result}",
                                 tool_result=tool_result
                             ))
+                        elif final_answer:
+                            # 无工具调用但模型直接给出最终答案
+                            final_text = final_answer.strip()
+                            if final_text:
+                                yield {
+                                    "type": "final_answer",
+                                    "content": final_text
+                                }
+                                context.add_step(Step(
+                                    step_type=StepType.FINAL_ANSWER,
+                                    content=final_text
+                                ))
         
         except Exception as e:
             yield {
