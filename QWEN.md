@@ -1,118 +1,73 @@
-# NotebookLM-Py Project Context
+# NotebookLM-cofia Project Context
 
 ## Project Overview
 
-This is a Python-based backend project for a NotebookLM-like application. It leverages FastAPI for the web API, SQLAlchemy for database interactions (primarily with SQLite), and integrates with external services for embedding, LLM reasoning, reranking, and web search (Searxng). The core idea is to ingest documents (from URLs), process them (chunking, embedding), store them (SQLite for metadata, Qdrant for vectors), and then use them for Retrieval-Augmented Generation (RAG) to answer user queries, potentially using tools for web search or other actions.
+This is a Python-based backend service for a project named NotebookLM-cofia. It's built using the FastAPI framework. The service is designed to handle document ingestion, chunking, embedding, and storage in a vector database (Qdrant). It also provides capabilities for searching and querying these documents, likely to support a Retrieval-Augmented Generation (RAG) system.
 
-Key features include:
-- Document ingestion via URL with progress streaming.
-- Text chunking, embedding, and storage in a vector database (Qdrant).
-- A tool orchestration system that can perform multi-step reasoning and actions (like web search) to answer complex queries.
-- Integration with n8n for workflow execution.
-- Webhook support for asynchronous processing.
+A key feature is its "Tool Orchestration" system (`app/tools`), which implements a Reasoning-Action-Observation loop (similar to ReAct or Agent frameworks) to allow the LLM to use external tools (like web search) to answer queries. It supports multiple strategies for tool interaction (JSON Function Calling, ReAct, Harmony DSL).
 
-The project is designed to be run in a containerized environment (Docker Compose) but can also be run locally.
+The project uses SQLite as its primary relational database (via SQLAlchemy) for storing document metadata and chunked text. It integrates with external services for embeddings, LLMs, reranking, and web search (Searxng). It also includes integration with n8n, a workflow automation tool, via webhooks.
 
-## Directory Structure
+## Key Technologies
 
-```
-notebookLM_cofia/
-├── app/                  # Main Python application code
-│   ├── api/              # FastAPI routers for different functionalities (ingest, search, collections, etc.)
-│   ├── tools/            # Tool orchestration system (Reason-Act-Observation loop)
-│   ├── config.py         # Centralized configuration loading from .env
-│   ├── database.py       # Database setup and session management
-│   ├── models.py         # SQLAlchemy data models
-│   ├── main.py           # FastAPI application entry point and lifespan management
-│   ├── fetch_parse.py    # Utilities for fetching and parsing web content
-│   ├── chunking.py       # Text chunking logic
-│   ├── embedding_client.py # Client for calling the embedding service
-│   ├── vector_db_client.py # Client for interacting with the Qdrant vector database
-│   ├── llm_client.py     # Client for calling the LLM service
-│   ├── rerank_client.py  # Client for calling the reranker service
-│   └── cache.py          # Caching utilities (e.g., for web content)
-├── notebookLM_front/     # (Likely) Frontend application code (not analyzed)
-├── gateway_script/       # (Likely) Scripts for the embedding gateway (not analyzed)
-├── data/                 # (Likely created at runtime) Persistent data directory for Docker
-├── tests/                # (Likely) Test scripts (test_*.py)
-├── Dockerfile.backend    # Dockerfile for the backend service
-├── docker-compose.yml    # Docker Compose configuration for all services
-├── requirements.txt      # Python dependencies
-├── readme               # Brief startup instructions
-└── .env                 # Environment variables (not committed)
-```
+- **Language:** Python
+- **Framework:** FastAPI
+- **Database:** SQLite (SQLAlchemy for ORM)
+- **Vector Store:** Qdrant
+- **External Services:**
+  - Custom Embedding Gateway
+  - Custom LLM Service (e.g., LM Studio)
+  - Searxng (for web search)
+  - n8n (workflow automation)
 
-## Key Technologies & Components
+## Architecture
 
-- **FastAPI**: The core web framework.
-- **SQLAlchemy (Async)**: ORM for database interactions. Uses SQLite (`test.db`) by default.
-- **Qdrant**: Vector database for storing and searching document embeddings.
-- **Searxng**: External service for web search capabilities.
-- **n8n**: Workflow automation tool, integrated via webhooks and API calls.
-- **Playwright/Trafilatura**: Libraries for web page fetching and parsing.
-- **Docker/Docker Compose**: For containerized deployment.
-
-## Configuration (app/config.py)
-
-Configuration is primarily loaded from a `.env` file in the project root. Key configuration variables include:
-- Database URL (`DATABASE_URL`)
-- Service URLs for Embedding, LLM, Reranker (`EMBEDDING_SERVICE_URL`, `LLM_SERVICE_URL`, `RERANKER_SERVICE_URL`)
-- Qdrant connection details (`QDRANT_HOST`, `QDRANT_PORT`)
-- Searxng query URL (`SEARXNG_QUERY_URL`)
-- Webhook prefix for n8n callbacks (`WEBHOOK_PREFIX`)
-- Concurrency and batch size settings for embedding (`EMBEDDING_MAX_CONCURRENCY`, `EMBEDDING_BATCH_SIZE`)
-- Tool orchestration settings (`DEFAULT_TOOL_MODE`, `MAX_TOOL_STEPS`)
-- Web search limitations and configurations (`WEB_SEARCH_RESULT_COUNT`, `WEB_SEARCH_MAX_QUERIES`, etc.)
-- Chunking settings (`CHUNK_SIZE`, `CHUNK_OVERLAP`)
-- RAG settings (`RAG_TOP_K`, `RAG_RERANK_TOP_K`)
-
-## Data Models (app/models.py)
-
-- `Source`: Represents a document ingested from a URL. Has a one-to-many relationship with `Chunk`.
-- `Chunk`: Represents a segment of text from a `Source`.
-- `WorkflowExecution`: Tracks the execution status of n8n workflows.
-
-## Core API Endpoints (app/api/)
-
-- `/ingest`: Ingests a document from a URL, chunking, embedding, and storing it. Streams progress via Server-Sent Events (SSE).
-- `/agenttic_ingest`: Alternative ingestion endpoint, likely involving more complex processing or tool usage.
-- `/collections`: Manages document collections/sessions (listing, creating, deleting).
-- `/search`: Performs semantic search on ingested documents using Qdrant.
-- `/documents`: Manages individual documents within collections (listing, deleting).
-- `/query`: The main endpoint for querying the system. Uses RAG and can invoke the tool orchestrator.
-- `/export`: Exports data, potentially in PDF format via n8n workflows.
-- `/models`: Retrieves available models from the LLM service.
-- `/webhook`: Handles incoming webhooks, likely from n8n.
-- `/n8n_workflow`: Manages n8n workflow execution.
-
-## Tool Orchestration (app/tools/)
-
-A sophisticated system implementing a "Reason-Act-Observation" loop. It can use different strategies (JSON Function Calling, ReAct, Harmony) to decide which tools to use and how to interpret their results. Tools include web search and potentially others. The orchestrator is initialized in `app/main.py` during application startup.
+- **Main App (`app/main.py`):** The FastAPI application entry point. Configures CORS, initializes the database and tool orchestrator, and includes various API routers.
+- **Configuration (`app/config.py`):** Loads configuration from `.env` file and environment variables. Defines numerous settings for database, external services, chunking, RAG, web search, tools, etc.
+- **Database (`app/database.py`, `app/models.py`):** Uses SQLAlchemy for async database operations. Models define `Source`, `Chunk`, and `WorkflowExecution`.
+- **API (`app/api/`):** Contains routers for different functionalities:
+  - `ingest.py`: Handles document ingestion from URLs.
+  - `agenttic_ingest.py`: Alternative ingestion endpoint, possibly with tool orchestration.
+  - `collections.py`, `documents.py`, `search.py`, `query.py`: Manage collections, documents, and perform search/query operations.
+  - `webhook.py`, `n8n_workflow.py`: Handle callbacks and interactions with n8n.
+- **Core Logic (`app/fetch_parse.py`, `app/chunking.py`, `app/embedding_client.py`, `app/vector_db_client.py`):** Utilities for fetching web content, chunking text, calling the embedding service, and interacting with Qdrant.
+- **Tool Orchestration (`app/tools/`):** A dedicated subsystem for managing LLM tool usage.
+  - `orchestrator.py`: The main controller for the Reason-Act-Observation loop.
+  - `registry.py`: Registers and manages available tools.
+  - `models.py`: Data structures for tools, steps, and configurations.
+  - `strategies/`: Contains different implementations for interacting with tools (JSON, ReAct, Harmony).
+  - Specific tools are likely defined elsewhere or registered dynamically.
 
 ## Building and Running
 
-### Local Development
+Based on the `readme` file and `requirements.txt`, the project is intended to be run in a Conda environment named `mlx` (though it uses standard Python packages).
 
-1.  **Setup Environment**: Ensure Python (likely 3.8+) is installed.
-2.  **Install Dependencies**: `pip install -r requirements.txt`.
-3.  **Configure**: Create a `.env` file based on the variables used in `app/config.py`. You'll need to provide URLs for your Qdrant, embedding, LLM, and Searxng services.
-4.  **Run**: `conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` (as per the `readme`). Note: The `conda activate mlx` part might be specific to the developer's setup; the core command is `uvicorn app.main:app ...`.
+1.  **Setup Environment:**
+    - Create/activate a Python environment (e.g., using Conda or venv).
+    - Install dependencies: `pip install -r requirements.txt`
 
-### Docker Compose (Recommended)
+2.  **Configuration:**
+    - Configure environment variables in a `.env` file. Key variables include:
+        - `DATABASE_URL` (e.g., `sqlite+aiosqlite:///./test.db`)
+        - `EMBEDDING_SERVICE_URL` (URL of the embedding gateway)
+        - `LLM_SERVICE_URL` (URL of the LLM service)
+        - `QDRANT_HOST`, `QDRANT_PORT` (Qdrant connection details)
+        - `SEARXNG_QUERY_URL` (URL of the Searxng instance)
+        - `WEBHOOK_PREFIX` (Base URL for webhooks)
+        - `N8N_*` variables (n8n integration settings)
 
-1.  **Setup Network**: `docker network create localnet`.
-2.  **Configure**: Review and adjust the environment variables in `docker-compose.yml` and the `.env` file.
-3.  **Build & Run**: `docker-compose up --build`.
-    - This will start services for the backend, frontend, embedding gateway, and n8n.
-    - The backend will be accessible on port 8000.
-    - The frontend will be accessible on port 9001.
-    - n8n will be accessible on port 5678.
+3.  **Run the Application:**
+    - The command from the `readme` is: `conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+    - This starts the FastAPI development server on port 8000, reloading on code changes.
 
 ## Development Conventions
 
-- **Asynchronous Programming**: Heavy use of `async`/`await` throughout the backend for I/O-bound operations (database, HTTP requests).
-- **FastAPI Structure**: Clear separation of concerns using routers (`app/api/`) and dependency injection (e.g., `Depends(get_db)`, `Depends(get_session_id)`).
-- **Environment-based Configuration**: Centralized configuration management via `.env` and `app/config.py`.
-- **SQLAlchemy ORM**: Used for database interactions, with models defined in `app/models.py`.
-- **Streaming Responses**: Used for long-running processes like document ingestion to provide real-time feedback.
-- **Modular Tool System**: Tools and orchestration strategies are modular and extensible.
+- The project uses SQLAlchemy for database interactions with an async setup.
+- FastAPI is used for the web framework, leveraging Pydantic models for request/response validation.
+- Configuration is managed centrally through `config.py` using environment variables and `.env` files.
+- The codebase is structured into modules based on functionality (`api`, `tools`, core utilities).
+- Tools are managed through a registry and orchestration system, allowing for modular addition of new capabilities.
+
+## Docker Deployment
+
+The project includes a `docker-compose.yml` file, suggesting it's designed for containerized deployment. This setup includes services for the backend, frontend, an embedding gateway, and n8n, all connected via a custom Docker network (`localnet`). The backend service configuration shows how various services are connected using environment variables.
