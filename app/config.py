@@ -86,7 +86,7 @@ DEFAULT_INGEST_MODEL= get_config_value("DEFAULT_INGEST_MODEL", "qwen/qwen3-coder
 REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "3600.0"))
 
 # Web搜索关键词生成LLM配置
-WEB_SEARCH_LLM_TIMEOUT = float(get_config_value("WEB_SEARCH_LLM_TIMEOUT", "120.0"))
+WEB_SEARCH_LLM_TIMEOUT = float(get_config_value("WEB_SEARCH_LLM_TIMEOUT", "1800.0"))  # 30分钟
 
 # Proxy configuration (optional)
 HTTP_PROXY = get_config_value("HTTP_PROXY")

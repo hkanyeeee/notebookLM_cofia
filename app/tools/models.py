@@ -86,7 +86,7 @@ class RunConfig(BaseModel):
 
 class ToolMetadata(BaseModel):
     """工具元数据与运行控制（注册时可选提供）"""
-    timeout_s: float = 300.0
+    timeout_s: float = 1800.0  # 30分钟
     max_retries: int = 1
     max_concurrency: int = 8
     description_override: Optional[str] = None

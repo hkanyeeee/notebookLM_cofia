@@ -21,7 +21,7 @@ class BaseStrategy(ABC):
         """获取HTTP客户端（单例模式，复用连接）"""
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(300.0, connect=30.0),
+                timeout=httpx.Timeout(1800.0, connect=30.0),  # 30分钟超时
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
             )
         return self._http_client

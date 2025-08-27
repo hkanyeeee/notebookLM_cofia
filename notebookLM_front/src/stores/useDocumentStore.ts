@@ -34,7 +34,7 @@ export function useDocumentStore(initialModel?: string) {
     try {
       controller = new AbortController();
       controllers.set(url, controller);
-      timeoutId = window.setTimeout(() => controller?.abort(), 300000);
+      timeoutId = window.setTimeout(() => controller?.abort(), 1800000); // 30分钟
       const response = await fetch(`${notebookApi.getBaseUrl()}/ingest`, {
         method: 'POST',
         headers: {
