@@ -1,4 +1,4 @@
-# NotebookLM-cofia Backend
+# NotebookLM-cofia
 
 这是一个基于 Python 和 FastAPI 构建的后端服务，旨在为类似 NotebookLM 的应用提供强大的文档处理、检索增强生成 (RAG) 和智能工具调用能力。
 
@@ -16,7 +16,7 @@
 *   **框架:** FastAPI (异步 API)
 *   **数据库:** SQLite (通过 SQLAlchemy async ORM)
 *   **向量库:** Qdrant
-*   **搜索引擎:** Searxng (可选)
+*   **搜索引擎:** Searxng
 *   **依赖管理:** pip / conda
 
 ## 快速开始
@@ -54,7 +54,7 @@ EMBEDDING_SERVICE_URL=http://localhost:7998/v1 # 你的嵌入服务地址
 LLM_SERVICE_URL=http://localhost:1234/v1       # 你的大模型服务地址 (如 LM Studio)
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
-SEARXNG_QUERY_URL=http://localhost:8080/search # 你的 Searxng 地址 (可选)
+SEARXNG_QUERY_URL=http://localhost:8080/search # 你的 Searxng 地址
 ```
 
 ### 3. 启动服务
@@ -70,7 +70,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 服务将在 `http://localhost:8000` 启动。API 文档可通过 `http://localhost:8000/docs` 访问。
 
-## Docker 部署 (可选)
+## Docker 部署
 
 项目提供了 `docker-compose.yml` 文件，可以方便地使用 Docker Compose 进行部署。请确保已安装 Docker 和 Docker Compose。
 
