@@ -37,7 +37,7 @@ WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2")) 
 WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "15"))  # 总搜索查询数量上限
 WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "30"))  # 总结果数量上限
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "4"))
-WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "20.0"))
+WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "15.0"))
 
 # 知识缺口和关键词限制
 MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "5"))  # 用于网络搜索的知识缺口最多10个
