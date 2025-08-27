@@ -105,22 +105,13 @@ onMounted(async () => {
     
     await Promise.all(loadPromises)
     
-    // 如果当前是普通问答模式，强制选择指定模型
-    if (store.queryType === QueryType.NORMAL) {
-      store.forceSelectNormalChatModel()
-    }
+
   } catch (error) {
     console.warn('初始加载数据失败:', error)
   }
 })
 
-// 监听问答类型变化
-watch(() => store.queryType, (newType) => {
-  if (newType === QueryType.NORMAL) {
-    // 切换到普通问答模式时，强制选择指定模型
-    store.forceSelectNormalChatModel()
-  }
-})
+
 </script>
 
 <template>
@@ -162,7 +153,6 @@ watch(() => store.queryType, (newType) => {
             placeholder="选择模型"
             class="model-select"
             :loading="store.loading.loadingModels"
-            :disabled="store.queryType === QueryType.NORMAL"
             clearable
             filterable
           >
@@ -198,24 +188,7 @@ watch(() => store.queryType, (newType) => {
         </div>
       </div>
 
-      <!-- 提示信息 -->
-      <div v-if="store.queryType === QueryType.NORMAL && (!isMobile || !headerCollapsed)" class="header-hints">
-        <!-- 普通问答模式提示 -->
-        <div 
-          v-if="store.queryType === QueryType.NORMAL" 
-          class="hint-text"
-        >
-          普通问答模式使用 gpt-oss 系列（当前：{{ store.selectedModel }}）
-        </div>
-        
-        <!-- 模型错误提示 -->
-        <div 
-          v-if="store.normalChatModelError" 
-          class="error-hint"
-        >
-          {{ store.normalChatModelError }}
-        </div>
-      </div>
+
     </header>
 
     <!-- 主要内容区域 - 根据查询类型渲染不同的子组件 -->

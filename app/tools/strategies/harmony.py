@@ -9,7 +9,7 @@ from ..parsers import HarmonyParser
 
 
 class HarmonyStrategy(BaseStrategy):
-    """Harmony DSL 工具标记策略（仅适用于 gpt-oss 模型）"""
+    """Harmony DSL 工具标记策略"""
     
     def __init__(self, llm_service_url: str):
         super().__init__(llm_service_url)

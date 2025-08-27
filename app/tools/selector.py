@@ -26,13 +26,7 @@ class StrategySelector:
             return ToolMode.OFF
         
         # AUTO 模式下的自动选择逻辑
-        model_lower = model.lower()
-        
-        # gpt-oss 模型优先使用 Harmony 策略
-        if "gpt-oss" in model_lower:
-            return ToolMode.HARMONY
-        
-        # 其他模型优先使用 JSON Function Calling
+        # 所有模型优先使用 JSON Function Calling
         # 这里假设大部分现代模型都支持 JSON FC
         # 如果不支持，可以在具体策略中处理回退逻辑
         return ToolMode.JSON
@@ -73,13 +67,7 @@ class StrategySelector:
         Returns:
             是否适用
         """
-        model_lower = model.lower()
-        
-        if strategy == ToolMode.HARMONY:
-            # Harmony 策略仅适用于 gpt-oss 模型
-            return "gpt-oss" in model_lower
-        
-        # 其他策略适用于所有模型
+        # 所有策略适用于所有模型
         return True
     
     @staticmethod
@@ -94,11 +82,5 @@ class StrategySelector:
         Returns:
             回退策略
         """
-        model_lower = model.lower()
-        
-        # gpt-oss 模型的回退顺序: Harmony -> ReAct
-        if "gpt-oss" in model_lower:
-            return ToolMode.REACT
-        
-        # 其他模型的回退顺序: JSON -> ReAct
+        # 所有模型的回退策略: JSON -> ReAct
         return ToolMode.REACT
