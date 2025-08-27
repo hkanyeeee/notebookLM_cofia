@@ -7,7 +7,7 @@ const API_BASE_URL = ''
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 300000, // 300秒超时
+  timeout: 1800000, // 1800秒超时（30分钟）
   headers: {
     'Content-Type': 'application/json'
   }
@@ -370,10 +370,21 @@ export const notebookApi = {
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let lastActivity = Date.now()
+      const STREAM_TIMEOUT = 30000 // 30秒超时
+      let parseErrors = 0
 
       while (true) {
+        // 检查超时
+        if (Date.now() - lastActivity > STREAM_TIMEOUT) {
+          console.warn('Collection流式响应超时，强制结束')
+          break
+        }
+        
         const { done, value } = await reader.read()
         if (done) break
+        
+        lastActivity = Date.now()
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -388,6 +399,10 @@ export const notebookApi = {
                 onData(data)
               } catch (e) {
                 console.warn('解析流式数据失败:', e, dataStr)
+                if (++parseErrors > 10) {
+                  console.error('Collection流式响应解析错误过多，强制结束')
+                  break
+                }
               }
             }
           }
