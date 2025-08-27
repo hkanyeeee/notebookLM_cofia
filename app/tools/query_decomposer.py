@@ -295,7 +295,7 @@ class QueryDecomposer:
         返回形如 {"complexity": "简单|中等|复杂", "fast_route": bool, "needs_tools": bool, "reason": str}。
         """
         system_prompt = (
-            "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
+            "你是一个严格的问题分类器。只输出JSON且不包含额外文本。\n"
             "请基于用户当前问题和对话历史来判断三个维度：\n"
             "1. complexity（复杂度）：简单/中等/复杂\n"
             "2. fast_route（快速路由）：是否可跳过复杂的问题拆解流程\n"

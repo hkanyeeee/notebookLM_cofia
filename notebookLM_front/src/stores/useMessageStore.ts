@@ -98,10 +98,28 @@ export function useMessageStore() {
       let accumulatedContent = '';
       let accumulatedReasoning = '';
       let isToolRunning = false;
+      let lastActivity = Date.now();
+      const STREAM_TIMEOUT = 3600000; // 3600秒无数据自动结束
+      let parseErrors = 0; // 解析错误计数
       
       while (true) {
+        // 检查流式超时
+        if (Date.now() - lastActivity > STREAM_TIMEOUT) {
+          console.warn('流式响应超时，强制结束');
+          // 设置超时消息
+          if (accumulatedContent === '' || accumulatedContent === '正在思考...' || accumulatedContent === '搜索中...') {
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: '响应超时，请重试。',
+            };
+          }
+          break;
+        }
+        
         const { done, value } = await reader.read();
         if (done) break;
+        
+        lastActivity = Date.now(); // 更新活动时间
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -215,6 +233,18 @@ export function useMessageStore() {
             }
           } catch (e) {
             console.warn('Failed to parse stream line:', line, e);
+            // 如果解析失败太多次，可能是响应格式错误，强制结束
+            if (++parseErrors > 10) {
+              console.error('流式响应解析错误过多，强制结束');
+              // 设置错误消息
+              if (accumulatedContent === '' || accumulatedContent === '正在思考...' || accumulatedContent === '搜索中...') {
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: '响应格式错误，请重试。',
+                };
+              }
+              break;
+            }
           }
         }
       }

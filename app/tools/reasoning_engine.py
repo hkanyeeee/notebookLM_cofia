@@ -187,7 +187,7 @@ class ReasoningEngine:
         try:
             model_name = execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL
             system_prompt = (
-                "你是一个严格的分类器。只输出JSON且不包含额外文本。\n"
+                "你是一个严格的问题分类器。只输出JSON且不包含额外文本。\n"
                 "判断用户问题是否需要获取“实时信息”（如天气、股价、新闻、时间、价格、实时事件等）。\n"
                 "输出格式：{\"needs_realtime\": true/false, \"reason\": \"不超过50字的原因\"}。\n"
                 "无法确定时，将 needs_realtime 设为 false。"
