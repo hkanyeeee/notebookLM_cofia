@@ -73,7 +73,8 @@ class ToolOrchestrator:
         self,
         question: str,
         contexts: List[str],
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """非流式执行工具编排
         
@@ -88,7 +89,8 @@ class ToolOrchestrator:
         context = ToolExecutionContext(
             question=question,
             contexts=contexts,
-            run_config=run_config
+            run_config=run_config,
+            conversation_history=conversation_history
         )
         
         strategy = self._select_strategy(context)
@@ -163,7 +165,8 @@ class ToolOrchestrator:
         self,
         question: str,
         contexts: List[str],
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行工具编排
         
@@ -178,7 +181,8 @@ class ToolOrchestrator:
         context = ToolExecutionContext(
             question=question,
             contexts=contexts,
-            run_config=run_config
+            run_config=run_config,
+            conversation_history=conversation_history
         )
         
         strategy = self._select_strategy(context)

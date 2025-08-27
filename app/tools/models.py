@@ -107,6 +107,7 @@ class ToolExecutionContext(BaseModel):
     run_config: RunConfig
     steps: List[Step] = []
     current_step: int = 0
+    conversation_history: Optional[List[Dict[str, str]]] = None
     
     def add_step(self, step: Step):
         """添加执行步骤"""

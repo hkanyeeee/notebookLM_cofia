@@ -16,6 +16,10 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         """构建 messages 用于 OpenAI 兼容接口"""
         messages = [{"role": "system", "content": self.build_base_system_prompt()}]
         
+        # 添加外部对话历史（如果存在）
+        if context.conversation_history:
+            messages.extend(context.conversation_history)
+        
         # 添加用户问题
         messages.append({"role": "user", "content": self.build_user_content(context)})
         

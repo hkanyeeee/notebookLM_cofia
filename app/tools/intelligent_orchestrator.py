@@ -63,7 +63,7 @@ class IntelligentOrchestrator:
             if use_fast_route:
                 if needs_tools:
                     print(f"[IntelligentOrchestrator] 检测到简单问题，需要工具调用，使用快速路由: {reason}")
-                    return await self._handle_simple_query_directly(query, contexts, run_config)
+                    return await self._handle_simple_query_directly(query, contexts, run_config, conversation_history)
                 else:
                     print(f"[IntelligentOrchestrator] 检测到简单问题，无需工具，直接基于知识回答: {reason}")
                     return await self._handle_context_only_query(query, contexts, run_config)
@@ -148,7 +148,7 @@ class IntelligentOrchestrator:
                         "type": "reasoning",
                         "content": f"分类为简单查询，需要外部工具，直接获取信息... ({reason})"
                     }
-                    async for event in self._handle_simple_query_directly_stream(query, contexts, run_config):
+                    async for event in self._handle_simple_query_directly_stream(query, contexts, run_config, conversation_history):
                         yield event
                     return
                 else:
@@ -659,7 +659,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         直接处理简单问题，跳过复杂的分解和推理流程
@@ -675,7 +676,7 @@ class IntelligentOrchestrator:
         try:
             # 直接使用工具编排器处理
             result = await self.tool_orchestrator.execute_non_stream(
-                query, contexts, run_config
+                query, contexts, run_config, conversation_history
             )
             
             return {
@@ -704,7 +705,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式处理简单问题，跳过复杂的分解和推理流程
@@ -720,7 +722,7 @@ class IntelligentOrchestrator:
         try:
             # 直接使用工具编排器流式处理
             async for event in self.tool_orchestrator.execute_stream(
-                query, contexts, run_config
+                query, contexts, run_config, conversation_history
             ):
                 yield event
                 

@@ -57,6 +57,10 @@ class HarmonyStrategy(BaseStrategy):
         system_prompt = self.build_system_prompt(context)
         messages = [{"role": "system", "content": system_prompt}]
         
+        # 添加外部对话历史（如果存在）
+        if context.conversation_history:
+            messages.extend(context.conversation_history)
+        
         # 添加用户问题
         messages.append({"role": "user", "content": self.build_user_content(context)})
         
