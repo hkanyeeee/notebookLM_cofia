@@ -81,6 +81,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 2.  在 `.env` 文件中配置好相关环境变量。
 3.  构建并启动服务：
     ```bash
+    docker compose build
     docker-compose up -d
     ```
 

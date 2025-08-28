@@ -55,7 +55,7 @@ async def fetch_rendered_text(
     selector: str | None = "article",
     timeout: float = 15.0,
     min_chars: int = 200,
-    max_nodes_check: int = 20,
+    max_nodes_check: int = 200,
 ) -> str:
     """
     用 Playwright 真渲染并直接读取可见文本（包括 Shadow DOM 渲染后的文本）。
