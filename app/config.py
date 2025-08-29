@@ -32,17 +32,17 @@ WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/
 DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
 MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 
-# Web 搜索相关配置 - 简化后的限制
+# Web 搜索相关配置
 WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2"))  # 每个搜索关键词的结果控制在2个
-WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "20"))  # 总搜索查询数量上限
+WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "10"))  # 总搜索查询数量上限
 WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "30"))  # 总结果数量上限
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "4"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "15.0"))
 
 # 知识缺口和关键词限制
-MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "6"))  # 用于网络搜索的知识缺口最多6个
-MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
-GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "5"))  # 每个知识缺口召回top 5
+MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "8"))  # 用于网络搜索的知识缺口最多8个
+MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "1"))  # 每个知识缺口的搜索关键词最多1个
+GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "4"))  # 每个知识缺口召回top 4
 
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
@@ -70,8 +70,8 @@ WEB_CACHE_TTL_SECONDS = int(get_config_value("WEB_CACHE_TTL_SECONDS", "3600"))  
 WEB_CACHE_MAX_CONTENT_SIZE = int(get_config_value("WEB_CACHE_MAX_CONTENT_SIZE", "1048576"))  # 1MB
 
 # 文档处理配置
-CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "800"))
-CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "80"))
+CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "1000"))
+CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "100"))
 
 # RAG 相关配置
 RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
