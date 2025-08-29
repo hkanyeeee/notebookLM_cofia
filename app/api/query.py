@@ -289,6 +289,13 @@ async def query(
                                 if "retries" in event:
                                     payload["retries"] = event.get("retries")
                                 yield "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+                            elif et == "final_answer":
+                                # 转发最终答案事件，便于前端立刻结束等待状态
+                                yield "data: " + json.dumps({
+                                    "type": "final_answer",
+                                    "content": event.get("content", ""),
+                                    "message": event.get("message", "")
+                                }, ensure_ascii=False) + "\n\n"
                             elif et == "error":
                                 yield "data: " + json.dumps({
                                     "type": "error",

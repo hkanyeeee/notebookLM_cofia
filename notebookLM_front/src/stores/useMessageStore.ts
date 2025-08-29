@@ -155,7 +155,7 @@ export function useMessageStore() {
               isToolRunning = true;
               const toolName = evt.tool_name || evt.name || 'unknown';
               let statusMessage = '';
-              if (toolName === 'web_search') {
+              if (toolName === 'web_search' || toolName === 'web_search_and_recall') {
                 statusMessage = '搜索中...';
               } else {
                 statusMessage = '正在思考...';
@@ -184,7 +184,7 @@ export function useMessageStore() {
                 };
               } else {
                 // 工具成功执行，显示简洁的状态信息
-                if (toolName === 'web_search') {
+                if (toolName === 'web_search' || toolName === 'web_search_and_recall') {
                   statusMessage = '正在分析搜索结果...';
                 } else {
                   statusMessage = '正在处理...';
@@ -195,6 +195,17 @@ export function useMessageStore() {
                   content: statusMessage,
                 };
               }
+            } else if (evt.type === 'final_answer') {
+              // 后端已透传 final_answer，立即结束等待并显示
+              isToolRunning = false;
+              const finalContent = (evt.content || '').trim();
+              if (finalContent) {
+                messages.value[messageIndex] = {
+                  ...messages.value[messageIndex],
+                  content: finalContent,
+                };
+              }
+              break;
             } else if (evt.type === 'status' && typeof evt.message === 'string') {
               // 状态更新
               messages.value[messageIndex] = {
