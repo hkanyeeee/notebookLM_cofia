@@ -27,8 +27,8 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [
-        -352,
-        -80
+        -416,
+        -416
       ],
       "id": "3e23af51-88a6-4c04-91f6-b62e768a64fb",
       "name": "Redis1",
@@ -84,8 +84,8 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [
-        128,
-        -208
+        112,
+        -448
       ],
       "id": "b9f8863a-4572-4b7f-8133-1cfadde7207e",
       "name": "Redis",
@@ -249,7 +249,7 @@
       "typeVersion": 1,
       "position": [
         1376,
-        -208
+        -608
       ],
       "id": "e637de7d-3ef3-42bb-9ffa-9162bf7dfa39",
       "name": "Redis2 (Save Result)",
@@ -273,7 +273,7 @@
       "typeVersion": 1,
       "position": [
         1616,
-        -208
+        -608
       ],
       "id": "44399a75-6586-4255-a3c6-9493d9ea4cbf",
       "name": "Redis3",
@@ -371,7 +371,7 @@
       "main": [
         [
           {
-            "node": "Redis1",
+            "node": "If",
             "type": "main",
             "index": 0
           }
@@ -380,20 +380,14 @@
     },
     "Redis1": {
       "main": [
-        [
-          {
-            "node": "If",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "If": {
       "main": [
         [
           {
-            "node": "Redis",
+            "node": "Edit Fields",
             "type": "main",
             "index": 0
           }
@@ -409,13 +403,7 @@
     },
     "Redis": {
       "main": [
-        [
-          {
-            "node": "Edit Fields",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "AI Agent": {
@@ -475,20 +463,14 @@
     },
     "Redis3": {
       "main": [
-        [
-          {
-            "node": "HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Aggregate": {
       "main": [
         [
           {
-            "node": "Redis2 (Save Result)",
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
@@ -522,7 +504,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "a327b7d6-219d-466b-9e26-4aff3322d097",
+  "versionId": "79137d32-790f-471d-ab76-346806546316",
   "meta": {
     "instanceId": "49948187dff24f20d59ed246a03374f7ebe0523b1a6c50181f0425d516497ad9"
   },
