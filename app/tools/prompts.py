@@ -69,7 +69,7 @@ REASONING_USER_PROMPT_TEMPLATE = """你是一个专业的问题分析专家。�
 
 搜索关键词智能生成：
 - 生成原子化的英文搜索关键词，每个关键词最多3个英文单词
-- 关键词格式：使用空格分隔单词，如 "machine learning", "data processing", "api integration"
+- 关键词格式：使用空格分隔单词
 - 优先使用英文专业术语，避免使用中文或混合语言
 - 每个知识缺口生成2-3个不同角度的原子化关键词
 - 关键词应具体、聚焦，避免过于宽泛的概念
@@ -89,7 +89,7 @@ REASONING_USER_PROMPT_TEMPLATE = """你是一个专业的问题分析专家。�
     {{
       "gap_description": "具体的知识缺口描述",
       "importance": "高|中|低",
-      "search_keywords": ["原子化英文关键词，每个最多3个单词，如 'neural networks', 'deep learning', 'model training'"]
+      "search_keywords": ["原子化英文关键词，每个最多3个单词"]
     }}
   ],
   "reasoning_steps": [
