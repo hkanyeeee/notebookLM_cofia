@@ -33,7 +33,7 @@ DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
 MAX_TOOL_STEPS = int(get_config_value("MAX_TOOL_STEPS", "5"))
 
 # Web 搜索相关配置
-WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "2"))  # 每个搜索关键词的结果控制在2个
+WEB_SEARCH_RESULT_COUNT = int(get_config_value("WEB_SEARCH_RESULT_COUNT", "3"))  # 每个搜索关键词的结果控制在3个
 WEB_SEARCH_MAX_QUERIES = int(get_config_value("WEB_SEARCH_MAX_QUERIES", "10"))  # 总搜索查询数量上限
 WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "30"))  # 总结果数量上限
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "4"))
