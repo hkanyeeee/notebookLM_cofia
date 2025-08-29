@@ -66,7 +66,7 @@ class IntelligentOrchestrator:
                     return await self._handle_simple_query_directly(query, contexts, run_config, conversation_history)
                 else:
                     print(f"[IntelligentOrchestrator] 检测到简单问题，无需工具，直接基于知识回答: {reason}")
-                    return await self._handle_context_only_query(query, contexts, run_config)
+                    return await self._handle_context_only_query(query, contexts, run_config, conversation_history)
             
             # 第一步：问题拆解
             print("[IntelligentOrchestrator] 开始问题拆解...")
@@ -92,7 +92,7 @@ class IntelligentOrchestrator:
             
             # 第四步：综合所有信息生成最终答案
             final_answer = await self._synthesize_final_answer(
-                query, decomposition, thoughts, tool_results, contexts, run_config
+                query, decomposition, thoughts, tool_results, contexts, run_config, conversation_history
             )
             
             return {
@@ -156,7 +156,7 @@ class IntelligentOrchestrator:
                         "type": "reasoning",
                         "content": f"分类为简单问题，基于已有知识回答... ({reason})"
                     }
-                    async for event in self._handle_context_only_query_stream(query, contexts, run_config):
+                    async for event in self._handle_context_only_query_stream(query, contexts, run_config, conversation_history):
                         yield event
                     return
             
@@ -244,7 +244,7 @@ class IntelligentOrchestrator:
             }
             
             async for synthesis_event in self._synthesize_final_answer_stream(
-                query, decomposition, thoughts, tool_results, contexts, run_config
+                query, decomposition, thoughts, tool_results, contexts, run_config, conversation_history
             ):
                 yield synthesis_event
                 
@@ -581,7 +581,8 @@ class IntelligentOrchestrator:
         thoughts: List[Dict[str, Any]],
         tool_results: Dict[str, Any],
         contexts: List[str],
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """
         综合所有信息生成最终答案
@@ -604,7 +605,8 @@ class IntelligentOrchestrator:
             return await chat_complete(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                model=run_config.model
+                model=run_config.model,
+                conversation_history=conversation_history
             )
                 
         except Exception as e:
@@ -619,7 +621,8 @@ class IntelligentOrchestrator:
         thoughts: List[Dict[str, Any]],
         tool_results: Dict[str, Any],
         contexts: List[str],
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式综合生成最终答案
@@ -641,7 +644,8 @@ class IntelligentOrchestrator:
             async for event in chat_complete_stream(
                 system_prompt=SYNTHESIS_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                model=run_config.model
+                model=run_config.model,
+                conversation_history=conversation_history
             ):
                 yield event
                             
@@ -736,7 +740,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         处理完全不需要外部工具的简单问题，直接基于提供的上下文生成答案
@@ -771,7 +776,8 @@ class IntelligentOrchestrator:
             answer = await chat_complete(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=run_config.model
+                model=run_config.model,
+                conversation_history=conversation_history
             )
             
             return {
@@ -800,7 +806,8 @@ class IntelligentOrchestrator:
         self, 
         query: str, 
         contexts: List[str], 
-        run_config: RunConfig
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式处理完全不需要外部工具的简单问题，直接基于提供的上下文生成答案
@@ -835,7 +842,8 @@ class IntelligentOrchestrator:
             async for event in chat_complete_stream(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=run_config.model
+                model=run_config.model,
+                conversation_history=conversation_history
             ):
                 yield event
                             

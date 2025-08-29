@@ -237,7 +237,8 @@ async def chat_complete(
     user_prompt: str,
     model: str = DEFAULT_SEARCH_MODEL,
     timeout: Optional[float] = None,
-    stream: bool = False
+    stream: bool = False,
+    conversation_history: Optional[List[Dict]] = None,
 ) -> str:
     """
     通用LLM聊天完成函数（非流式）
@@ -254,12 +255,16 @@ async def chat_complete(
     """
     url = f"{LLM_SERVICE_URL}/chat/completions"
     
+    # 组合对话历史
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    if conversation_history:
+        # conversation_history 形如 [{"role":"user|assistant", "content":"..."}]
+        messages.extend(conversation_history)
+    messages.append({"role": "user", "content": user_prompt})
+
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
+        "messages": messages,
     }
     
     timeout_value = timeout if timeout is not None else LLM_DEFAULT_TIMEOUT
@@ -278,7 +283,8 @@ async def chat_complete_stream(
     system_prompt: str,
     user_prompt: str,
     model: str = DEFAULT_SEARCH_MODEL,
-    timeout: Optional[float] = None
+    timeout: Optional[float] = None,
+    conversation_history: Optional[List[Dict]] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     通用LLM聊天完成函数（流式）
@@ -294,12 +300,14 @@ async def chat_complete_stream(
     """
     url = f"{LLM_SERVICE_URL}/chat/completions"
     
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    if conversation_history:
+        messages.extend(conversation_history)
+    messages.append({"role": "user", "content": user_prompt})
+
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
+        "messages": messages,
         "stream": True
     }
     
