@@ -319,19 +319,19 @@ async def chat_complete_stream(
             async for line in response.aiter_lines():
                 if not line:
                     continue
-                    
-                if line.startswith("data: "):
-                    data_str = line[6:]  # 移除"data: "前缀
+                
+                # 兼容两种SSE前缀："data:" 与 "data: "
+                if line.startswith("data:"):
+                    # 去掉前缀并修剪空白
+                    data_str = line[5:].strip()
                     if data_str == "[DONE]":
                         break
-                    
                     try:
                         chunk = json.loads(data_str)
                         if "choices" in chunk and len(chunk["choices"]) > 0:
                             delta = chunk["choices"][0].get("delta", {})
                             reasoning_content = delta.get("reasoning_content")
                             content = delta.get("content")
-                            
                             if reasoning_content:
                                 yield {"type": "reasoning", "content": reasoning_content}
                             if content:
