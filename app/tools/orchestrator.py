@@ -53,7 +53,7 @@ class ToolOrchestrator:
     def _should_continue(self, context: ToolExecutionContext) -> bool:
         """判断是否应该继续执行"""
         # 检查最大步数限制
-        if context.current_step >= context.run_config.max_steps:
+        if context.current_step >= context.run_config.get_max_steps():
             return False
         
         # 检查是否已经有最终答案
@@ -68,6 +68,10 @@ class ToolOrchestrator:
         # 允许工具执行后进行一轮最终回答生成
         
         return True
+    
+    def _should_force_final_answer(self, context: ToolExecutionContext) -> bool:
+        """判断是否应该强制生成最终答案（达到步数限制时）"""
+        return context.current_step >= context.run_config.get_max_steps()
     
     async def execute_non_stream(
         self,
@@ -124,15 +128,26 @@ class ToolOrchestrator:
                 if step.step_type == StepType.FINAL_ANSWER:
                     break
             
-            # 提取最终答案
+            # 检查是否需要强制生成最终答案
             final_answer = ""
-            if context.steps:
-                final_step = context.steps[-1]
-                if final_step.step_type == StepType.FINAL_ANSWER:
-                    final_answer = final_step.content
-                else:
-                    # 如果没有明确的最终答案，使用最后的内容
-                    final_answer = "执行完成，但未找到明确的最终答案。"
+            if context.steps and context.steps[-1].step_type == StepType.FINAL_ANSWER:
+                final_answer = context.steps[-1].content
+            elif self._should_force_final_answer(context):
+                # 达到最大步数限制，强制生成最终答案
+                print(f"[Orchestrator] 达到最大工具调用步数限制({context.run_config.get_max_steps()}步)，强制生成最终答案")
+                try:
+                    final_step = await strategy.force_final_answer(context)
+                    if final_step:
+                        context.add_step(final_step)
+                        final_answer = final_step.content
+                    else:
+                        final_answer = "已达到最大工具调用步数限制，但无法生成最终答案。"
+                except Exception as e:
+                    print(f"[Orchestrator] 强制生成最终答案时出错: {e}")
+                    final_answer = f"已达到最大工具调用步数限制，生成最终答案时出错：{str(e)}"
+            else:
+                # 如果没有明确的最终答案，使用最后的内容
+                final_answer = "执行完成，但未找到明确的最终答案。"
             
             return {
                 "answer": final_answer,
@@ -195,8 +210,9 @@ class ToolOrchestrator:
         
         try:
             step_count = 0
+            max_steps = run_config.get_max_steps()
             
-            while step_count < run_config.max_steps:
+            while step_count < max_steps:
                 step_count += 1
                 
                 # 检查是否应该继续
@@ -242,12 +258,23 @@ class ToolOrchestrator:
                 # 小延迟，避免过于频繁的请求
                 await asyncio.sleep(0.1)
             
-            # 如果达到最大步数，发送完成事件
-            if step_count >= run_config.max_steps:
+            # 如果达到最大步数，强制生成最终答案
+            if step_count >= max_steps and not (context.steps and context.steps[-1].step_type == StepType.FINAL_ANSWER):
                 yield {
-                    "type": "complete",
-                    "message": f"已达到最大步数限制 ({run_config.max_steps})"
+                    "type": "info",
+                    "message": f"已达到最大工具调用步数限制({max_steps}步)，正在生成最终答案..."
                 }
+                try:
+                    # 流式强制生成最终答案
+                    async for event in strategy.stream_force_final_answer(context):
+                        yield event
+                        if event.get("type") == "final_answer":
+                            return
+                except Exception as e:
+                    yield {
+                        "type": "error",
+                        "message": f"强制生成最终答案时出错: {str(e)}"
+                    }
             
         except Exception as e:
             yield {

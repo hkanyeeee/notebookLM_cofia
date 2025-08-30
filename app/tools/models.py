@@ -71,7 +71,7 @@ class RunConfig(BaseModel):
     """运行配置"""
     tool_mode: ToolMode = ToolMode.AUTO
     tools: List[ToolSchema] = []
-    max_steps: int = 6
+    max_steps: Optional[int] = None  # 默认为None，将从配置文件读取
     model: Optional[str] = None
     # 可选：按工具名覆盖的运行控制参数
     tool_timeouts: Optional[Dict[str, float]] = None  # seconds
@@ -79,6 +79,16 @@ class RunConfig(BaseModel):
     # 运行与步骤超时（秒）
     run_timeout_s: Optional[float] = None
     step_timeout_s: Optional[float] = None
+    
+    def get_max_steps(self) -> int:
+        """获取实际的最大步数，如果未设置则使用配置文件中的 MAX_TOOL_STEPS"""
+        if self.max_steps is not None:
+            return self.max_steps
+        try:
+            from ..config import MAX_TOOL_STEPS
+            return MAX_TOOL_STEPS
+        except ImportError:
+            return 5  # 兜底默认值
     
     class Config:
         extra = "forbid"

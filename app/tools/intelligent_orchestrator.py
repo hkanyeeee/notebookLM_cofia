@@ -50,7 +50,8 @@ class IntelligentOrchestrator:
         execution_context = ToolExecutionContext(
             question=query,
             contexts=contexts,
-            run_config=run_config
+            run_config=run_config,
+            conversation_history=conversation_history
         )
         
         try:
@@ -132,7 +133,8 @@ class IntelligentOrchestrator:
         execution_context = ToolExecutionContext(
             question=query,
             contexts=contexts,
-            run_config=run_config
+            run_config=run_config,
+            conversation_history=conversation_history
         )
         
         try:

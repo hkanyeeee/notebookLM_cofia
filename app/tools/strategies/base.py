@@ -230,3 +230,13 @@ class BaseStrategy(ABC):
     async def stream_execute_step(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行单个步骤"""
         pass
+    
+    @abstractmethod
+    async def force_final_answer(self, context: ToolExecutionContext) -> Step:
+        """当达到工具调用步数限制时，强制生成最终答案"""
+        pass
+    
+    @abstractmethod
+    async def stream_force_final_answer(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
+        """流式强制生成最终答案"""
+        pass

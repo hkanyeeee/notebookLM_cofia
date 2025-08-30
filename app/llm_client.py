@@ -197,7 +197,7 @@ async def stream_answer_with_tools(
     # 检查是否应该使用工具
     if not StrategySelector.should_use_tools(run_config, run_config.model or DEFAULT_SEARCH_MODEL):
         # 退化为普通流式问答
-        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL):
+        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL, conversation_history):
             yield delta
         return
     
@@ -205,7 +205,7 @@ async def stream_answer_with_tools(
     orchestrator = get_orchestrator()
     if not orchestrator:
         # 编排器未初始化，退化为普通流式问答
-        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL):
+        async for delta in stream_answer(question, contexts, run_config.model or DEFAULT_SEARCH_MODEL, conversation_history):
             yield delta
         return
     

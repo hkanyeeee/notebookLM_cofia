@@ -14,7 +14,10 @@ class JSONFunctionCallingStrategy(BaseStrategy):
     
     def build_messages(self, context: ToolExecutionContext) -> List[Dict[str, Any]]:
         """构建 messages 用于 OpenAI 兼容接口"""
-        messages = [{"role": "system", "content": self.build_base_system_prompt()}]
+        # 构建系统提示，包含步数限制信息
+        system_prompt = self.build_base_system_prompt()
+        system_prompt += f"\n\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步函数调用。请合理规划，避免浪费步数。当接近限制时，请及时提供基于已收集信息的最终答案。"
+        messages = [{"role": "system", "content": system_prompt}]
         
         # 添加外部对话历史（如果存在）
         if context.conversation_history:
@@ -273,3 +276,107 @@ class JSONFunctionCallingStrategy(BaseStrategy):
                 "type": "error",
                 "message": f"流式执行出错: {str(e)}"
             }
+    
+    async def force_final_answer(self, context: ToolExecutionContext) -> Step:
+        """当达到工具调用步数限制时，强制生成最终答案"""
+        try:
+            # 构建强制最终答案的消息
+            messages = self.build_messages_for_final_answer(context)
+            payload = {
+                "model": context.run_config.model or "openai/gpt-oss-20b",
+                "messages": messages,
+                "stream": False,
+                "temperature": 0.1,
+            }
+            
+            response = await self.call_llm(payload, stream=False)
+            if isinstance(response, dict):
+                content = self.extract_response_content(response).strip()
+                if content:
+                    return Step(
+                        step_type=StepType.FINAL_ANSWER,
+                        content=content
+                    )
+            
+            # 兜底答案
+            return Step(
+                step_type=StepType.FINAL_ANSWER,
+                content="根据已收集的信息，我无法提供更详细的答案。请重新表述您的问题或提供更多背景信息。"
+            )
+            
+        except Exception as e:
+            return Step(
+                step_type=StepType.FINAL_ANSWER,
+                content=f"在生成最终答案时遇到错误：{str(e)}。请重新尝试您的查询。"
+            )
+    
+    async def stream_force_final_answer(self, context: ToolExecutionContext) -> AsyncGenerator[Dict[str, Any], None]:
+        """流式强制生成最终答案"""
+        try:
+            # 构建强制最终答案的消息
+            messages = self.build_messages_for_final_answer(context)
+            payload = {
+                "model": context.run_config.model or "openai/gpt-oss-20b",
+                "messages": messages,
+                "stream": True,
+                "temperature": 0.1,
+            }
+            
+            response = await self.call_llm(payload, stream=True)
+            accumulated_content = ""
+            
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                
+                data_str = line[5:].strip()
+                if not data_str or data_str == "[DONE]":
+                    if accumulated_content.strip():
+                        yield {
+                            "type": "final_answer",
+                            "content": accumulated_content.strip(),
+                            "message": "已达到最大工具调用步数限制，基于当前信息生成最终答案"
+                        }
+                        context.add_step(Step(
+                            step_type=StepType.FINAL_ANSWER,
+                            content=accumulated_content.strip()
+                        ))
+                    continue
+                
+                try:
+                    chunk = json.loads(data_str)
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        reasoning_content, content = self.parse_stream_delta(delta)
+                        
+                        if reasoning_content:
+                            yield {"type": "reasoning", "content": reasoning_content}
+                        
+                        if content:
+                            accumulated_content += content
+                            yield {"type": "content", "content": content}
+                            
+                except (json.JSONDecodeError, KeyError) as e:
+                    continue
+            
+        except Exception as e:
+            yield {
+                "type": "error",
+                "message": f"强制生成最终答案时出错: {str(e)}"
+            }
+    
+    def build_messages_for_final_answer(self, context: ToolExecutionContext) -> List[Dict[str, str]]:
+        """构建用于强制生成最终答案的消息"""
+        messages = []
+        
+        # 添加系统提示
+        system_prompt = self.build_system_prompt(context)
+        system_prompt += f"\n\n**重要提示**：您已达到最大工具调用步数限制({context.run_config.get_max_steps()}步)。请基于当前已收集的所有信息，直接提供完整的最终答案，不要再进行任何函数调用。如果信息不完整，请说明这一点，并基于现有信息给出最佳回答。"
+        
+        messages.append({"role": "system", "content": system_prompt})
+        
+        # 添加用户内容和步骤历史
+        messages.extend(context.get_conversation_history())
+        
+        return messages
