@@ -150,14 +150,12 @@ class ToolRegistry:
             now = _time.monotonic()
             if tool_call.name in self._cb_open_until and now < self._cb_open_until[tool_call.name]:
                 return ToolResult(
-                    name=tool_call.name,
-                    result=f"工具临时不可用（断路器打开）",
-                    success=False,
-                    error="circuit_open",
-                    call_id=tool_call.call_id,
-                    latency_ms=(time.perf_counter() - start) * 1000.0,
-                    retries=0,
-                )
+                        name=tool_call.name,
+                        result=f"工具临时不可用（断路器打开）",
+                        success=False,
+                        error="circuit_open",
+                        call_id=tool_call.call_id,
+                    )
             while attempt <= max_retries:
                 try:
                     print(f"[Registry] 开始执行工具处理函数: {tool_call.name}, 尝试 {attempt+1}/{max_retries+1}, 超时 {timeout_s}s")
@@ -175,8 +173,6 @@ class ToolRegistry:
                         result=result,
                         success=True,
                         call_id=tool_call.call_id,
-                        latency_ms=latency_ms,
-                        retries=attempt,
                     )
                     
                     # 缓存功能已简化
@@ -229,8 +225,6 @@ class ToolRegistry:
             success=False,
             error=str(last_error) if last_error else 'Unknown',
             call_id=tool_call.call_id,
-            latency_ms=latency_ms,
-            retries=max_retries,
         )
 
 

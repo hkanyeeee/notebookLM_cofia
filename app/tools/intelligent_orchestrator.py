@@ -27,8 +27,6 @@ class IntelligentOrchestrator:
         self.tool_orchestrator = ToolOrchestrator(llm_service_url)
         self.search_planner = SearchPlanner()
 
-
-
     async def process_query_intelligently(
         self, 
         query: str, 
@@ -491,8 +489,6 @@ class IntelligentOrchestrator:
         except Exception as e:
             print(f"[IntelligentOrchestrator] 知识缺口召回失败: {e}")
             return []
-    
-
 
     async def _execute_tools_for_gaps_stream(
         self, 
@@ -656,10 +652,6 @@ class IntelligentOrchestrator:
                 "type": "error", 
                 "message": f"流式答案生成失败: {str(e)}"
             }
-
-
-
-
 
     async def _handle_simple_query_directly(
         self, 

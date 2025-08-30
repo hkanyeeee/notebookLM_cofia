@@ -285,11 +285,7 @@ async def query(
                                     "result": event.get("result"),
                                     "success": event.get("success", True)
                                 }
-                                # 透传可观测性字段
-                                if "latency_ms" in event:
-                                    payload["latency_ms"] = event.get("latency_ms")
-                                if "retries" in event:
-                                    payload["retries"] = event.get("retries")
+                                
                                 yield "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
                             elif et == "final_answer":
                                 # 转发最终答案事件，便于前端立刻结束等待状态
