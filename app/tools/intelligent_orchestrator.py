@@ -77,19 +77,16 @@ class IntelligentOrchestrator:
         Yields:
             流式处理事件
         """
-        events_queue = []
+        # 创建一个真正的流式回调函数，实时yield事件
+        async def stream_event(event_data):
+            """实时流式输出回调函数"""
+            # 过滤掉final_result事件，因为流式处理不需要最终结果事件
+            if event_data.get("type") != "final_result":
+                yield event_data
         
-        async def yield_event(event_data):
-            """用于流式输出的回调函数"""
-            events_queue.append(event_data)
-        
-        # 使用核心处理方法，传入流式输出回调
-        await self._process_query_core(query, contexts, run_config, conversation_history, yield_event)
-        
-        # 流式输出所有收集到的事件（除了最终结果）
-        for event in events_queue:
-            if event.get("type") != "final_result":
-                yield event
+        # 使用流式核心处理方法，实时yield事件
+        async for event in self._process_query_core_stream(query, contexts, run_config, conversation_history):
+            yield event
 
     async def _process_query_core(
         self,
@@ -277,6 +274,205 @@ class IntelligentOrchestrator:
                 await event_callback({"type": "final_result", "data": error_result})
             
             return error_result
+
+    async def _process_query_core_stream(
+        self,
+        query: str,
+        contexts: List[str],
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        流式核心处理逻辑，实时yield事件
+        
+        Args:
+            query: 用户问题
+            contexts: 相关上下文
+            run_config: 运行配置
+            conversation_history: 对话历史
+        
+        Yields:
+            流式处理事件
+        """
+        execution_context = ToolExecutionContext(
+            question=query,
+            contexts=contexts,
+            run_config=run_config,
+            conversation_history=conversation_history
+        )
+        
+        try:
+            # 智能路由：检查问题的处理方式（由LLM判定）
+            route_decision = await self.decomposer.should_use_fast_route_async(query, execution_context, conversation_history)
+            use_fast_route = route_decision.get("use_fast_route", False)
+            needs_tools = route_decision.get("needs_tools", True)
+            reason = route_decision.get("reason", "")
+            
+            if use_fast_route:
+                if needs_tools:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"分类为简单查询，需要外部工具，直接获取信息... ({reason})"
+                    }
+                    
+                    # 使用工具编排器直接进行流式处理
+                    from ..tools.orchestrator import get_orchestrator
+                    orchestrator = get_orchestrator()
+                    if orchestrator:
+                        async for event in orchestrator.execute_stream(query, contexts, run_config, conversation_history):
+                            yield event
+                    else:
+                        # 回退到普通流式问答
+                        from ..llm_client import stream_answer
+                        async for event in stream_answer(query, contexts, run_config.model, conversation_history):
+                            yield event
+                    return
+                else:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"分类为简单问题，基于已有知识回答... ({reason})"
+                    }
+                    
+                    # 直接进行流式基于上下文的问答
+                    context_str = "\n".join(contexts) if contexts else "无特定上下文"
+                    
+                    system_prompt = (
+                        "你是一个知识渊博的助手。请仔细阅读对话历史，理解用户问题的完整语境，然后基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                        "重要指导原则：\n"
+                        "1. 充分理解对话历史：如果用户的问题是对之前对话的延续或追问（如'那明天呢？'、'还有其他的吗？'），请结合历史对话来理解当前问题的真实意图。\n"
+                        "2. 不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
+                        "**重要要求：必须完全使用中文进行回答。**"
+                    )
+                    
+                    user_prompt = (
+                        f"上下文信息：\n{context_str}\n\n"
+                        f"用户问题：{query}\n\n"
+                        "请直接回答用户的问题。"
+                    )
+                    
+                    # 使用流式LLM调用
+                    from ..llm_client import chat_complete_stream
+                    async for event in chat_complete_stream(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        model=run_config.model,
+                        conversation_history=conversation_history
+                    ):
+                        yield event
+                    return
+            
+            # 第一步：问题拆解
+            yield {
+                "type": "reasoning",
+                "content": "正在分析和拆解您的问题..."
+            }
+            
+            decomposition = await self.decomposer.decompose(query, execution_context, conversation_history)
+            
+            # 显示子问题的具体内容
+            sub_queries = decomposition.get('sub_queries', [])
+            sub_queries_count = len(sub_queries)
+            
+            yield {
+                "type": "reasoning",
+                "content": f"问题拆解完成，识别到{sub_queries_count}个关键子问题。"
+            }
+            
+            # 逐一显示每个子问题
+            for i, sub_query in enumerate(sub_queries, 1):
+                if isinstance(sub_query, dict):
+                    question = sub_query.get("question", "")
+                    importance = sub_query.get("importance", "中")
+                else:
+                    question = str(sub_query)
+                    importance = "中"
+                
+                if question:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"子问题{i}（{importance}重要性）：{question}"
+                    }
+            
+            # 第二步：独立思考
+            yield {
+                "type": "reasoning", 
+                "content": "💡基于已有知识进行独立思考..."
+            }
+            
+            thoughts = await self.reasoning_engine.think_about_decomposition(
+                decomposition, contexts, execution_context, conversation_history
+            )
+            
+            overall_confidence = self.reasoning_engine.assess_overall_confidence(thoughts)
+            yield {
+                "type": "reasoning",
+                "content": f"思考完成，整体置信度: {overall_confidence}。"
+            }
+            
+            # 第三步：决定是否需要工具调用
+            need_tools, knowledge_gaps = self._should_invoke_tools(thoughts)
+            
+            tool_results = {}
+            if need_tools:
+                yield {
+                    "type": "reasoning",
+                    "content": f"检测到{len(knowledge_gaps)}个知识缺口，开始搜索外部信息..."
+                }
+                
+                # 流式执行工具调用，使用统一的工具执行方法
+                tool_results = await self._execute_tools_for_gaps_unified(
+                    knowledge_gaps, query, contexts, run_config, None
+                )
+                
+                # 手动发送工具调用事件（因为统一方法可能不发送流式事件）
+                if tool_results.get("success", False):
+                    yield {
+                        "type": "tool_result",
+                        "name": "web_search_and_recall",
+                        "result": "搜索和召回完成",
+                        "success": True
+                    }
+            else:
+                yield {
+                    "type": "reasoning",
+                    "content": "基于现有知识可以回答，无需外部搜索"
+                }
+            
+            # 第四步：流式综合最终答案
+            yield {
+                "type": "reasoning",
+                "content": "正在综合所有信息生成完整答案..."
+            }
+            
+            # 直接进行流式答案综合，不使用统一方法的回调机制
+            
+            # 准备综合信息
+            reasoning_summary = OutputFormatter.format_reasoning_summary(thoughts)
+            tool_summary = OutputFormatter.format_tool_results(tool_results)
+            context_str = "\n".join(contexts) if contexts else "无特定上下文"
+            
+            user_prompt = SYNTHESIS_USER_PROMPT_TEMPLATE.format(
+                original_query=query,
+                reasoning_summary=reasoning_summary,
+                tool_results=tool_summary,
+                context=context_str
+            )
+            
+            # 直接使用流式LLM调用
+            from ..llm_client import chat_complete_stream
+            async for event in chat_complete_stream(
+                system_prompt=SYNTHESIS_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                model=run_config.model,
+                conversation_history=conversation_history
+            ):
+                yield event
+                
+        except Exception as e:
+            yield {
+                "type": "error",
+                "message": f"智能处理失败: {str(e)}"
+            }
 
     async def _run_web_search_and_recall(
         self,
