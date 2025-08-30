@@ -497,7 +497,8 @@ class WebSearchTool:
         filter_list: Optional[List[str]] = None,
         model: str = None,
         predefined_queries: Optional[List[str]] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        perform_retrieval: bool = True
     ) -> Dict[str, Any]:
         """执行完整的 Web 搜索流程
         
@@ -660,37 +661,41 @@ class WebSearchTool:
                     print(f"[WebSearch] 文档处理耗时: {proc_time/1000.0:.2f}s")
                     print(f"[WebSearch] 处理了 {len(source_ids)} 个文档源")
             
-            # 5. 搜索和召回
+            # 5. 搜索和召回（可选）
             if result["source_ids"]:
-                print(f"[WebSearch] 开始搜索和召回...")
-                t4 = time.perf_counter()
-                hits = await self.search_and_retrieve(
-                    query, 
-                    session_id, 
-                    source_ids=result["source_ids"]
-                )
-                retrieve_time = (time.perf_counter() - t4) * 1000.0
-                result["metrics"]["step_durations_ms"]["search_and_retrieve"] = retrieve_time
-                print(f"[WebSearch] 搜索和召回耗时: {retrieve_time/1000.0:.2f}s")
-                
-                # 格式化召回内容
-                retrieved_content = []
-                for chunk, score in hits:
-                    retrieved_content.append({
-                        "content": chunk.content,
-                        "score": float(score),
-                        "source_url": chunk.source.url if chunk.source else "",
-                        "source_title": chunk.source.title if chunk.source else "",
-                        "chunk_id": chunk.chunk_id
-                    })
-                
-                result["retrieved_content"] = retrieved_content
-                print(f"召回了 {len(retrieved_content)} 个相关内容片段")
-                
-                if retrieved_content:
-                    result["message"] = f"搜索完成，找到 {len(result['search_results'])} 个网页，召回 {len(retrieved_content)} 个相关内容片段"
+                if perform_retrieval:
+                    print(f"[WebSearch] 开始搜索和召回...")
+                    t4 = time.perf_counter()
+                    hits = await self.search_and_retrieve(
+                        query, 
+                        session_id, 
+                        source_ids=result["source_ids"]
+                    )
+                    retrieve_time = (time.perf_counter() - t4) * 1000.0
+                    result["metrics"]["step_durations_ms"]["search_and_retrieve"] = retrieve_time
+                    print(f"[WebSearch] 搜索和召回耗时: {retrieve_time/1000.0:.2f}s")
+                    
+                    # 格式化召回内容
+                    retrieved_content = []
+                    for chunk, score in hits:
+                        retrieved_content.append({
+                            "content": chunk.content,
+                            "score": float(score),
+                            "source_url": chunk.source.url if chunk.source else "",
+                            "source_title": chunk.source.title if chunk.source else "",
+                            "chunk_id": chunk.chunk_id
+                        })
+                    
+                    result["retrieved_content"] = retrieved_content
+                    print(f"召回了 {len(retrieved_content)} 个相关内容片段")
+                    
+                    if retrieved_content:
+                        result["message"] = f"搜索完成，找到 {len(result['search_results'])} 个网页，召回 {len(retrieved_content)} 个相关内容片段"
+                    else:
+                        result["message"] = "搜索完成，但没有找到相关内容"
                 else:
-                    result["message"] = "搜索完成，但没有找到相关内容"
+                    # 仅完成搜索、抓取、切分与入库，跳过召回
+                    result["message"] = f"搜索完成，入库 {len(result['source_ids'])} 个数据源（未执行召回）"
             else:
                 result["message"] = "没有找到可用的搜索结果"
                 
@@ -725,6 +730,7 @@ async def web_search(
     model: str = None,
     predefined_queries: Optional[List[str]] = None,
     session_id: Optional[str] = None,
+    perform_retrieval: bool = True,
     **kwargs  # 接受额外的参数用于向后兼容
 ) -> str:
     """Web 搜索工具函数
@@ -753,7 +759,14 @@ async def web_search(
         if param in kwargs:
             print(f"[WebSearch] 注意：{param} 参数已移除，将由外部 SearxNG 控制")
     
-    result = await web_search_tool.execute(query, filter_list, model, predefined_queries, session_id)
+    result = await web_search_tool.execute(
+        query=query,
+        filter_list=filter_list,
+        model=model,
+        predefined_queries=predefined_queries,
+        session_id=session_id,
+        perform_retrieval=perform_retrieval
+    )
     
     # 构建返回的摘要信息
     if result["success"]:

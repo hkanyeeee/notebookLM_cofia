@@ -513,7 +513,8 @@ class IntelligentOrchestrator:
                 filter_list=None,
                 model=run_config.model,
                 predefined_queries=final_queries,
-                session_id=unified_session_id
+                session_id=unified_session_id,
+                perform_retrieval=False
             )
             
             if not search_result.get("success") or not search_result.get("source_ids"):
