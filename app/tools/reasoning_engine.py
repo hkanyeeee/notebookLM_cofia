@@ -5,7 +5,36 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, REASONING_TIMEOUT
+from ..config import (
+    DEFAULT_TOOL_MODE, 
+    MAX_TOOL_STEPS,
+    WEB_SEARCH_RESULT_COUNT,
+    WEB_SEARCH_MAX_QUERIES,
+    WEB_SEARCH_MAX_RESULTS,
+    WEB_SEARCH_CONCURRENT_REQUESTS,
+    WEB_SEARCH_TIMEOUT,
+    WEB_LOADER_ENGINE,
+    PLAYWRIGHT_TIMEOUT,
+    WEB_CACHE_ENABLED,
+    WEB_CACHE_MAX_SIZE,
+    WEB_CACHE_TTL_SECONDS,
+    WEB_CACHE_MAX_CONTENT_SIZE,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
+    RAG_TOP_K,
+    RAG_RERANK_TOP_K,
+    LLM_DEFAULT_TIMEOUT,
+    DEFAULT_SEARCH_MODEL,
+    DEFAULT_INGEST_MODEL,
+    REASONING_TIMEOUT,
+    WEB_SEARCH_LLM_TIMEOUT,
+    PROXY_URL,
+    HTTP_PROXY,
+    HTTPS_PROXY,
+    ENABLE_QUERY_GENERATION,
+    QUERY_GENERATION_PROMPT_TEMPLATE,
+    MAX_WORDS_PER_QUERY
+)
 from .prompts import REASONING_SYSTEM_PROMPT, REASONING_USER_PROMPT_TEMPLATE
 
 
@@ -443,7 +472,7 @@ class ReasoningEngine:
         # 限制关键词数量，去重
         final_keywords = []
         seen = set()
-        for kw in keywords[:3]:  # 最多3个关键词
+        for kw in keywords[:MAX_WORDS_PER_QUERY]:  # 最多MAX_WORDS_PER_QUERY个关键词
             kw_clean = kw.strip()
             if kw_clean and kw_clean not in seen:
                 seen.add(kw_clean)

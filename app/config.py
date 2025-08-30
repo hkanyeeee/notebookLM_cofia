@@ -39,6 +39,9 @@ WEB_SEARCH_MAX_RESULTS = int(get_config_value("WEB_SEARCH_MAX_RESULTS", "30"))  
 WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQUESTS", "5"))
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "10.0"))
 
+# 搜索关键词词数限制
+MAX_WORDS_PER_QUERY = int(get_config_value("MAX_WORDS_PER_QUERY", "3"))  # 每个查询的最大词数
+
 # 知识缺口和关键词限制
 MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "8"))  # 用于网络搜索的知识缺口最多8个
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
@@ -126,6 +129,7 @@ print(f"WEB_SEARCH_MAX_RESULTS: {WEB_SEARCH_MAX_RESULTS}")
 print(f"MAX_KNOWLEDGE_GAPS: {MAX_KNOWLEDGE_GAPS}")
 print(f"MAX_KEYWORDS_PER_GAP: {MAX_KEYWORDS_PER_GAP}")
 print(f"GAP_RECALL_TOP_K: {GAP_RECALL_TOP_K}")
+print(f"MAX_WORDS_PER_QUERY: {MAX_WORDS_PER_QUERY}")
 print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
 print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
 print(f"CHUNK_SIZE: {CHUNK_SIZE}")

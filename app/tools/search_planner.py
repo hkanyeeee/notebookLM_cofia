@@ -6,7 +6,8 @@ from typing import List, Dict, Any, Set
 from ..config import (
     WEB_SEARCH_MAX_QUERIES, 
     MAX_KNOWLEDGE_GAPS, 
-    MAX_KEYWORDS_PER_GAP
+    MAX_KEYWORDS_PER_GAP,
+    MAX_WORDS_PER_QUERY
 )
 
 
@@ -16,7 +17,7 @@ class SearchPlanner:
     """
     
     def __init__(self):
-        self.MAX_WORDS_PER_QUERY = 5  # 每个查询的最大词数
+        self.MAX_WORDS_PER_QUERY = MAX_WORDS_PER_QUERY  # 每个查询的最大词数
     
     def plan_search_queries(
         self, 
@@ -108,7 +109,7 @@ class SearchPlanner:
         # 限制关键词数量，去重
         final_keywords = []
         seen = set()
-        for kw in keywords[:3]:  # 最多3个关键词
+        for kw in keywords[:MAX_WORDS_PER_QUERY]:  # 最多MAX_WORDS_PER_QUERY个关键词
             kw_clean = kw.strip()
             if kw_clean and kw_clean not in seen:
                 seen.add(kw_clean)
