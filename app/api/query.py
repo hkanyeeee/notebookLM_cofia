@@ -14,11 +14,11 @@ from ..config import (
     EMBEDDING_DIMENSIONS,
     QUERY_TOP_K_BEFORE_RERANK,
     MAX_TOOL_STEPS,
-    RAG_RERANK_TOP_K
+    RAG_RERANK_TOP_K,
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import (
-    generate_answer, stream_answer, DEFAULT_SEARCH_MODEL,
+    generate_answer, stream_answer,
     generate_answer_with_tools, stream_answer_with_tools
 )
 from ..tools.models import RunConfig, ToolMode, ToolSchema
