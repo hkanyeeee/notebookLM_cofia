@@ -21,7 +21,8 @@ class ReasoningEngine:
         self, 
         question: str, 
         context: List[str] = None,
-        execution_context: Optional[ToolExecutionContext] = None
+        execution_context: Optional[ToolExecutionContext] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         对单个问题进行独立思考
@@ -44,19 +45,27 @@ class ReasoningEngine:
                 context=context_str
             )
             
+            # 构建消息列表
+            messages = [
+                {
+                    "role": "system",
+                    "content": REASONING_SYSTEM_PROMPT
+                }
+            ]
+            
+            # 添加对话历史（如果提供）
+            if conversation_history:
+                messages.extend(conversation_history)
+            
+            messages.append({"role": "user", "content": prompt})
+            
             # 调用LLM进行思考
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.llm_service_url}/chat/completions",
                     json={
                         "model": execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": REASONING_SYSTEM_PROMPT
-                            },
-                            {"role": "user", "content": prompt}
-                        ],
+                        "messages": messages,
                     },
                     timeout=REASONING_TIMEOUT
                 )
@@ -102,7 +111,8 @@ class ReasoningEngine:
         self, 
         decomposition: Dict[str, Any], 
         context: List[str] = None,
-        execution_context: Optional[ToolExecutionContext] = None
+        execution_context: Optional[ToolExecutionContext] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> List[Dict[str, Any]]:
         """
         对拆解后的多个子问题进行思考
@@ -128,7 +138,8 @@ class ReasoningEngine:
                 thought = await self.think_independently(
                     question, 
                     context, 
-                    execution_context
+                    execution_context,
+                    conversation_history
                 )
                 thought["sub_query_id"] = sub_query.get("id") if isinstance(sub_query, dict) else None
                 thoughts.append(thought)

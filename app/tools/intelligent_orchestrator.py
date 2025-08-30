@@ -76,7 +76,7 @@ class IntelligentOrchestrator:
             # 第二步：独立思考
             print("[IntelligentOrchestrator] 开始独立思考...")
             thoughts = await self.reasoning_engine.think_about_decomposition(
-                decomposition, contexts, execution_context
+                decomposition, contexts, execution_context, conversation_history
             )
             
             # 第三步：决定是否需要工具调用
@@ -201,7 +201,7 @@ class IntelligentOrchestrator:
             }
             
             thoughts = await self.reasoning_engine.think_about_decomposition(
-                decomposition, contexts, execution_context
+                decomposition, contexts, execution_context, conversation_history
             )
             
             overall_confidence = self.reasoning_engine.assess_overall_confidence(thoughts)
@@ -761,9 +761,10 @@ class IntelligentOrchestrator:
             context_str = "\n".join(contexts) if contexts else "无特定上下文"
             
             system_prompt = (
-                "你是一个知识渊博的助手。请仅基于你的已有知识和提供的上下文来回答用户的问题。\n"
-                "不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
-                "如果上下文中有相关信息，请优先使用；如果没有，则基于你的常识知识回答。\n"
+                "你是一个知识渊博的助手。请仔细阅读对话历史，理解用户问题的完整语境，然后基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                "重要指导原则：\n"
+                "1. 充分理解对话历史：如果用户的问题是对之前对话的延续或追问（如'那明天呢？'、'还有其他的吗？'），请结合历史对话来理解当前问题的真实意图。\n"
+                "2. 不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
                 "**重要要求：必须完全使用中文进行回答。**"
             )
             
@@ -827,9 +828,10 @@ class IntelligentOrchestrator:
             context_str = "\n".join(contexts) if contexts else "无特定上下文"
             
             system_prompt = (
-                "你是一个知识渊博的助手。请仅基于你的已有知识和提供的上下文来回答用户的问题。\n"
-                "不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
-                "如果上下文中有相关信息，请优先使用；如果没有，则基于你的常识知识回答。\n"
+                "你是一个知识渊博的助手。请仔细阅读对话历史，理解用户问题的完整语境，然后基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                "重要指导原则：\n"
+                "1. 充分理解对话历史：如果用户的问题是对之前对话的延续或追问（如'那明天呢？'、'还有其他的吗？'），请结合历史对话来理解当前问题的真实意图。\n"
+                "2. 不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
                 "**重要要求：必须完全使用中文进行回答。**"
             )
             
