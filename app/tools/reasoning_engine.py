@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
 from ..config import (
+    LLM_SERVICE_URL,
     DEFAULT_TOOL_MODE, 
     MAX_TOOL_STEPS,
     WEB_SEARCH_RESULT_COUNT,
