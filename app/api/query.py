@@ -11,7 +11,10 @@ from ..config import (
     RERANKER_MAX_TOKENS,
     RERANK_CLIENT_MAX_CONCURRENCY,
     DEFAULT_SEARCH_MODEL,
-    EMBEDDING_DIMENSIONS
+    EMBEDDING_DIMENSIONS,
+    QUERY_TOP_K_BEFORE_RERANK,
+    MAX_TOOL_STEPS,
+    RAG_RERANK_TOP_K
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import (
@@ -22,7 +25,6 @@ from ..tools.models import RunConfig, ToolMode, ToolSchema
 from ..tools.selector import StrategySelector
 from ..models import Chunk
 from ..vector_db_client import query_embeddings, query_hybrid, qdrant_client, COLLECTION_NAME
-from ..rerank_client import DEFAULT_RERANKER_TOP_K
 from . import get_session_id
 
 
@@ -37,7 +39,7 @@ async def query(
     session_id: str = Depends(get_session_id),
 ):
     q = data.get("query", "")
-    top_k = data.get("top_k", 200)
+    top_k = data.get("top_k", QUERY_TOP_K_BEFORE_RERANK)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
     document_ids = data.get("document_ids", [])  # Optional filtering by document
@@ -48,7 +50,7 @@ async def query(
     # 新增工具相关参数
     tool_mode = data.get("tool_mode", "auto")  # "off" | "auto" | "json" | "react" | "harmony"
     tools_data = data.get("tools", [])  # 工具定义列表
-    max_steps = data.get("max_steps", 6)  # 最大执行步数
+    max_steps = data.get("max_steps", MAX_TOOL_STEPS)  # 最大执行步数
     query_type = data.get("query_type", "normal")  # 查询类型
     conversation_history = data.get("conversation_history", [])  # 消息历史
     
@@ -172,7 +174,7 @@ async def query(
                     original_ranks[chunk_key] = i + 1
 
                 # Find new ranks and log changes
-                for i, (chunk, _) in enumerate(all_reranked_hits[:DEFAULT_RERANKER_TOP_K]):
+                for i, (chunk, _) in enumerate(all_reranked_hits[:RAG_RERANK_TOP_K]):
                     chunk_key = chunk.content[:100]
                     original_rank = original_ranks.get(chunk_key, "N/A")
                     new_rank = i + 1
@@ -183,13 +185,13 @@ async def query(
                 print("=== End Rerank Ranking Changes ===")
 
                 # final_hits now contains Chunk objects with their reranker scores
-                final_hits = all_reranked_hits[:DEFAULT_RERANKER_TOP_K]
+                final_hits = all_reranked_hits[:RAG_RERANK_TOP_K]
 
             except Exception as e:
                 print(f"Reranking failed: {e}. Falling back to vector search results.")
-                final_hits = hits[:DEFAULT_RERANKER_TOP_K]
+                final_hits = hits[:RAG_RERANK_TOP_K]
         else:
-            final_hits = hits[:DEFAULT_RERANKER_TOP_K]
+            final_hits = hits[:RAG_RERANK_TOP_K]
 
         contexts = [chunk.content for chunk, _ in final_hits]
         
@@ -216,7 +218,7 @@ async def query(
             model=llm_model
         )
         
-        # 判断是否使用工具功能
+        # 判断是否使用工具功能，纯代码
         use_tools = StrategySelector.should_use_tools(run_config, llm_model)
         
         # 检查是否是普通问答模式，如果是则使用智能编排器
