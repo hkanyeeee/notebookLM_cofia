@@ -42,7 +42,7 @@ WEB_SEARCH_CONCURRENT_REQUESTS = int(get_config_value("WEB_SEARCH_CONCURRENT_REQ
 WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "10.0"))
 
 # 搜索关键词词数限制
-MAX_WORDS_PER_QUERY = int(get_config_value("MAX_WORDS_PER_QUERY", "3"))  # 每个查询的最大词数
+MAX_WORDS_PER_QUERY = int(get_config_value("MAX_WORDS_PER_QUERY", "4"))  # 每个查询的最大词数
 
 # 知识缺口和关键词限制
 MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "8"))  # 用于网络搜索的知识缺口最多8个
@@ -63,7 +63,7 @@ QUERY_GENERATION_PROMPT_TEMPLATE = get_config_value(
 - 生成最多4个搜索查询，根据实际需要判断具体数量
 - 优先使用英文关键词（搜索结果更多）
 - 每个查询聚焦一个特定方面
-- 保持查询简洁有效，不能超过 3 个英文关键词，使用空格分割
+- 保持查询简洁有效，不能超过 4 个关键词（刚才说的优先使用英文关键词），使用空格分割
 
 返回JSON：{"queries": ["查询1", "查询2", ...]}"""
 )
