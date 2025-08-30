@@ -1,4 +1,3 @@
-import os
 from typing import List, Tuple, Optional, Dict
 
 from qdrant_client import QdrantClient, models
@@ -7,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Chunk, Source
-from app.config import QDRANT_URL, QDRANT_API_KEY
+from app.config import QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION_NAME
 
 # Qdrant Collection Name
-COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "notebooklm_prod")
+COLLECTION_NAME = QDRANT_COLLECTION_NAME
 
 # Global Qdrant Client
 # Use a global client to avoid reconnecting on every request

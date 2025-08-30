@@ -20,6 +20,7 @@ QDRANT_HOST = get_config_value("QDRANT_HOST", "localhost")
 QDRANT_PORT = get_config_value("QDRANT_PORT", "6333")
 QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 QDRANT_API_KEY = get_config_value("QDRANT_API_KEY", None)
+QDRANT_COLLECTION_NAME = get_config_value("QDRANT_COLLECTION_NAME", "notebooklm_prod")
 RERANKER_MAX_TOKENS = int(get_config_value("RERANKER_MAX_TOKENS", "8192"))
 RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRENCY", 4))
 
@@ -86,6 +87,7 @@ QUERY_TOP_K_BEFORE_RERANK = int(get_config_value("QUERY_TOP_K_BEFORE_RERANK", "2
 LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "3600.0"))
 DEFAULT_SEARCH_MODEL= get_config_value("DEFAULT_SEARCH_MODEL", "openai/gpt-oss-20b")
 DEFAULT_INGEST_MODEL= get_config_value("DEFAULT_INGEST_MODEL", "qwen/qwen3-coder-30b")
+DEFAULT_EMBEDDING_MODEL = get_config_value("DEFAULT_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 
 # 思考引擎LLM配置
 REASONING_TIMEOUT = float(get_config_value("REASONING_TIMEOUT", "3600.0"))
