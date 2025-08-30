@@ -196,28 +196,6 @@ export function useMessageStore() {
                 };
               }
             } else if (evt.type === 'final_answer') {
-              // 后端已透传 final_answer，立即结束等待并显示
-              isToolRunning = false;
-              const finalContent = (evt.content || '').trim();
-              if (finalContent) {
-                messages.value[messageIndex] = {
-                  ...messages.value[messageIndex],
-                  content: finalContent,
-                };
-              }
-              break;
-            } else if (evt.type === 'status' && typeof evt.message === 'string') {
-              // 状态更新
-              messages.value[messageIndex] = {
-                ...messages.value[messageIndex],
-                content: evt.message,
-              };
-            } else if (evt.type === 'sources' && Array.isArray(evt.sources)) {
-              messages.value[messageIndex] = {
-                ...messages.value[messageIndex],
-                sources: (evt.sources as Source[]).sort((a: Source, b: Source) => b.score - a.score),
-              };
-            } else if (evt.type === 'final_answer') {
               // 最终答案 - 结束工具运行状态并显示最终内容
               console.log('[Frontend] 收到最终答案事件:', evt);
               isToolRunning = false;
@@ -234,6 +212,17 @@ export function useMessageStore() {
               // 最终答案标记流式处理结束
               console.log('[Frontend] 最终答案处理完成，结束流式处理');
               break;
+            } else if (evt.type === 'status' && typeof evt.message === 'string') {
+              // 状态更新
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                content: evt.message,
+              };
+            } else if (evt.type === 'sources' && Array.isArray(evt.sources)) {
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                sources: (evt.sources as Source[]).sort((a: Source, b: Source) => b.score - a.score),
+              };
             } else if (evt.type === 'complete') {
               // 流式处理完成
               console.log('[Frontend] 流式处理完成');
