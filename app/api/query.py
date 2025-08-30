@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import json
 from typing import List, Tuple
 
@@ -11,7 +10,8 @@ from ..config import (
     RERANKER_SERVICE_URL,
     RERANKER_MAX_TOKENS,
     RERANK_CLIENT_MAX_CONCURRENCY,
-    DEFAULT_SEARCH_MODEL
+    DEFAULT_SEARCH_MODEL,
+    EMBEDDING_DIMENSIONS
 )
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import (
@@ -39,7 +39,7 @@ async def query(
     q = data.get("query", "")
     top_k = data.get("top_k", 200)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
     document_ids = data.get("document_ids", [])  # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
     stream = bool(data.get("stream", False))

@@ -16,7 +16,7 @@ from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE
+from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
 from ..vector_db_client import add_embeddings
 
 
@@ -130,7 +130,7 @@ async def process_sub_docs_concurrent(
                     "url": sub_url,
                     "recursive_depth": recursive_depth - 1,  # 减少递归深度
                     "embedding_model": DEFAULT_EMBEDDING_MODEL,
-                    "embedding_dimensions": 1024,
+                    "embedding_dimensions": EMBEDDING_DIMENSIONS,
                     "webhook_url": WEBHOOK_PREFIX + "/array2array",
                     "is_recursive": True,  # 标记为递归调用
                     "document_name": parent_doc_name,  # 传递父级文档名称
@@ -456,7 +456,7 @@ async def agenttic_ingest(
         raise HTTPException(status_code=400, detail="URL必须提供")
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
     recursive_depth = data.get("recursive_depth", 2)  # 默认递归深度为2
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用

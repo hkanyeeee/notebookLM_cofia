@@ -14,7 +14,7 @@ from ..fetch_parse import fetch_then_extract
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..vector_db_client import add_embeddings
-from ..config import EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE
+from ..config import EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
 from . import get_session_id
 
 
@@ -32,7 +32,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", 1024)
+    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
 
     try:
         # 1. Check if source already exists
