@@ -27,16 +27,16 @@ The project uses SQLite as its primary relational database (via SQLAlchemy) for 
 - **Database (`app/database.py`, `app/models.py`):** Uses SQLAlchemy for async database operations. Models define `Source`, `Chunk`, and `WorkflowExecution`.
 - **API (`app/api/`):** Contains routers for different functionalities:
   - `ingest.py`: Handles document ingestion from URLs.
-  - `agenttic_ingest.py`: Alternative ingestion endpoint, possibly with tool orchestration.
+  - `agenttic_ingest.py`: Alternative ingestion endpoint, possibly with tool orchestration. Supports recursive document ingestion and webhook integration.
   - `collections.py`, `documents.py`, `search.py`, `query.py`: Manage collections, documents, and perform search/query operations.
   - `webhook.py`, `n8n_workflow.py`: Handle callbacks and interactions with n8n.
 - **Core Logic (`app/fetch_parse.py`, `app/chunking.py`, `app/embedding_client.py`, `app/vector_db_client.py`):** Utilities for fetching web content, chunking text, calling the embedding service, and interacting with Qdrant.
 - **Tool Orchestration (`app/tools/`):** A dedicated subsystem for managing LLM tool usage.
   - `orchestrator.py`: The main controller for the Reason-Act-Observation loop.
-  - `registry.py`: Registers and manages available tools.
+  - `registry.py`: Registers and manages available tools. Includes tool execution logic with concurrency control, retries, and circuit breaker.
   - `models.py`: Data structures for tools, steps, and configurations.
   - `strategies/`: Contains different implementations for interacting with tools (JSON, ReAct, Harmony).
-  - Specific tools are likely defined elsewhere or registered dynamically.
+  - `web_search_tool.py`: Implements a comprehensive web search tool that integrates query generation, SearxNG search, web crawling, document processing, embedding, vector storage, and retrieval/reranking.
 
 ## Building and Running
 
@@ -67,7 +67,14 @@ Based on the `readme` file and `requirements.txt`, the project is intended to be
 - Configuration is managed centrally through `config.py` using environment variables and `.env` files.
 - The codebase is structured into modules based on functionality (`api`, `tools`, core utilities).
 - Tools are managed through a registry and orchestration system, allowing for modular addition of new capabilities.
+- Document ingestion involves fetching, parsing, chunking, embedding, and storing in Qdrant. The `agenttic_ingest` endpoint adds intelligence via LLM-powered document naming and recursive sub-document ingestion via webhooks.
+- Querying combines vector search (dense and optionally hybrid with BM25), reranking, and LLM-based answer generation. It supports both standard RAG and tool-augmented RAG (using the orchestration system).
 
 ## Docker Deployment
 
 The project includes a `docker-compose.yml` file, suggesting it's designed for containerized deployment. This setup includes services for the backend, frontend, an embedding gateway, and n8n, all connected via a custom Docker network (`localnet`). The backend service configuration shows how various services are connected using environment variables.
+
+## Qwen Added Memories
+- 项目名称: NotebookLM-cofia。项目核心技术栈: Python, FastAPI, SQLite (SQLAlchemy), Qdrant, Searxng。核心功能: 文档摄取与索引、RAG 检索、基于 ReAct 框架的工具编排（如网络搜索）、与 n8n 工作流集成。当前工作目录: /Users/hewenxin/code/notebookLM_cofia。
+- 项目配置文件为 /Users/hewenxin/code/notebookLM_cofia/.env。关键服务地址: LLM_SERVICE_URL=http://192.168.31.98:1234/v1, EMBEDDING_SERVICE_URL=http://192.168.31.125:7998/v1, RERANKER_SERVICE_URL=http://192.168.31.125:7996, QDRANT_HOST=192.168.31.125, SEARXNG_QUERY_URL=http://192.168.31.125:8080/search。数据库: DATABASE_URL=sqlite+aiosqlite:///./test.db。N8N集成: N8N_BASE_URL=http://n8n:5678/api/v1。
+- 项目启动命令为 `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`。API 文档地址为 http://localhost:8000/docs。
