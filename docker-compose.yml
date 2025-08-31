@@ -52,6 +52,8 @@ services:
       - N8N_API_KEY="${N8N_API_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZmZhZDY5OC03ZjI3LTQ3NGUtYjIxMy0zYzc5MWNmYjUzZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU1ODUzMTAwfQ.9uNlOMHCh49lvxMybMv_BJy76-ptqp48FIsfwCBX4NM}"
       - N8N_USERNAME="${N8N_USERNAME:-hkanyeeee@gmail.com}"
       - N8N_PASSWORD="${N8N_PASSWORD:-m63m3kuMMgXTqWw}"
+      # 工具和搜索配置
+      - MAX_KNOWLEDGE_GAPS=${MAX_KNOWLEDGE_GAPS:-10}
     volumes:
       - ./data:/app/data
     depends_on:
