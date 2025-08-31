@@ -5,7 +5,8 @@ import json
 import uuid
 import time
 import re
-from typing import List, Dict, Any, Optional, Tuple
+import hashlib
+from typing import List, Dict, Any, Optional, Tuple, Set
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from difflib import SequenceMatcher
@@ -42,9 +43,66 @@ def _normalize_text_for_similarity(text: str) -> str:
     return normalized.lower()
 
 
+def _get_text_hash(text: str) -> str:
+    """计算文本的MD5哈希值，用于快速去重"""
+    if not text:
+        return ""
+    normalized = _normalize_text_for_similarity(text)
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+
+
+def _get_text_shingles(text: str, k: int = 3) -> Set[str]:
+    """提取文本的k-shingles（连续k个字符的子串集合）"""
+    if not text or len(text) < k:
+        return set()
+    normalized = _normalize_text_for_similarity(text)
+    return {normalized[i:i+k] for i in range(len(normalized) - k + 1)}
+
+
+def _jaccard_similarity(set1: Set[str], set2: Set[str]) -> float:
+    """计算两个集合的Jaccard相似度"""
+    if not set1 and not set2:
+        return 1.0
+    if not set1 or not set2:
+        return 0.0
+    
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union if union > 0 else 0.0
+
+
+def _fast_similarity(text1: str, text2: str, max_length: int = 2000) -> float:
+    """快速计算两个文本的相似度
+    
+    Args:
+        text1, text2: 待比较的文本
+        max_length: 比较的最大文本长度，超出部分将被截断
+    
+    Returns:
+        相似度分数 (0-1)
+    """
+    if not text1 or not text2:
+        return 0.0
+    
+    # 截断长文本以提高性能
+    text1_truncated = text1[:max_length] if len(text1) > max_length else text1
+    text2_truncated = text2[:max_length] if len(text2) > max_length else text2
+    
+    # 使用k-shingles计算Jaccard相似度
+    shingles1 = _get_text_shingles(text1_truncated, k=3)
+    shingles2 = _get_text_shingles(text2_truncated, k=3)
+    
+    return _jaccard_similarity(shingles1, shingles2)
+
+
 def _sequence_ratio_from_normalized(args: Tuple[str, str]) -> float:
+    """备用的SequenceMatcher计算方法（仅在需要高精度时使用）"""
     a, b = args
-    return SequenceMatcher(None, a, b).ratio()
+    # 限制文本长度以防止性能问题
+    max_len = 1000
+    a_truncated = a[:max_len] if len(a) > max_len else a
+    b_truncated = b[:max_len] if len(b) > max_len else b
+    return SequenceMatcher(None, a_truncated, b_truncated).ratio()
 
 
 class WebSearchTool:
@@ -172,17 +230,12 @@ class WebSearchTool:
         if not text1 or not text2:
             return 0.0
         
-        # 复用模块级规范化
-        norm_text1 = _normalize_text_for_similarity(text1)
-        norm_text2 = _normalize_text_for_similarity(text2)
-        
-        # 使用SequenceMatcher计算相似度
-        similarity = SequenceMatcher(None, norm_text1, norm_text2).ratio()
-        return similarity
+        # 使用快速相似度计算方法
+        return _fast_similarity(text1, text2)
     
     def _deduplicate_documents(self, documents: List[Dict[str, str]], similarity_threshold: float = 0.8) -> List[Dict[str, str]]:
         """
-        对文档进行内容去重
+        对文档进行内容去重 - 使用优化的快速去重算法
         
         Args:
             documents: 文档列表
@@ -195,34 +248,44 @@ class WebSearchTool:
             return documents
         
         unique_documents: List[Dict[str, str]] = []
-        unique_norm_contents: List[str] = []
+        seen_hashes: Set[str] = set()  # 哈希去重
+        content_shingles: List[Set[str]] = []  # 存储已有文档的shingles用于相似度比较
         removed_count = 0
 
-        # 使用多进程并行化 SequenceMatcher 计算
-        max_workers = os.cpu_count() or 1
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for doc in documents:
-                content = doc.get("content", "")
-                if not content or not content.strip():
-                    continue  # 跳过空内容
+        print(f"[WebSearch] 开始快速去重处理 {len(documents)} 个文档...")
+        
+        for doc in documents:
+            content = doc.get("content", "")
+            if not content or not content.strip():
+                continue  # 跳过空内容
 
-                norm_content = _normalize_text_for_similarity(content)
+            # 第一步：快速哈希去重（完全相同的内容）
+            content_hash = _get_text_hash(content)
+            if content_hash in seen_hashes:
+                url = doc.get('url', 'unknown')
+                print(f"[WebSearch] 发现完全重复内容(哈希匹配)，跳过: {url}")
+                removed_count += 1
+                continue
+            
+            # 第二步：基于shingles的相似度检查（仅对前2000字符）
+            content_truncated = content[:2000] if len(content) > 2000 else content
+            current_shingles = _get_text_shingles(content_truncated, k=3)
+            
+            # 检查与已有文档的相似度
+            is_duplicate = False
+            for existing_shingles in content_shingles:
+                similarity = _jaccard_similarity(current_shingles, existing_shingles)
+                if similarity > similarity_threshold:
+                    url = doc.get('url', 'unknown')
+                    print(f"[WebSearch] 发现相似内容(相似度:{similarity:.2f})，跳过: {url}")
+                    is_duplicate = True
+                    removed_count += 1
+                    break
 
-                # 检查是否与已有文档重复（并行计算相似度）
-                is_duplicate = False
-                if unique_norm_contents:
-                    pairs = [(norm_content, existing_norm) for existing_norm in unique_norm_contents]
-                    for similarity in executor.map(_sequence_ratio_from_normalized, pairs, chunksize=1):
-                        if similarity > similarity_threshold:
-                            url = doc.get('url', 'unknown')
-                            print(f"[WebSearch] 发现重复内容(相似度:{similarity:.2f})，跳过: {url}")
-                            is_duplicate = True
-                            removed_count += 1
-                            break
-
-                if not is_duplicate:
-                    unique_documents.append(doc)
-                    unique_norm_contents.append(norm_content)
+            if not is_duplicate:
+                unique_documents.append(doc)
+                seen_hashes.add(content_hash)
+                content_shingles.append(current_shingles)
 
         if removed_count > 0:
             print(f"[WebSearch] 内容去重完成，移除了 {removed_count} 个重复文档，保留 {len(unique_documents)} 个")
