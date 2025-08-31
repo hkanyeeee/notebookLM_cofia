@@ -23,9 +23,16 @@ class HarmonyStrategy(BaseStrategy):
             "重要：工具执行完成后，请立即基于工具返回的结果给出完整的最终答案，不要再次调用相同或类似的工具。"
             "回答要简洁准确，不要使用'可能'、'大概'、'也许'等不确定词汇，"
             "也不要说'根据搜索结果'或'根据获取的信息'等提示性词语。"
-            f"\n\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步工具调用。请合理规划，避免浪费步数。当接近限制时，请及时提供基于已收集信息的最终答案。"
             "\n\n**重要要求：必须完全使用中文进行回答。**\n\n"
         )
+        
+        # 检查是否是最后一次工具调用机会
+        current_action_count = sum(1 for step in context.steps if step.step_type == StepType.ACTION)
+        max_steps = context.run_config.get_max_steps()
+        is_last_chance = current_action_count >= max_steps - 1
+        
+        if is_last_chance:
+            base_prompt += f"\n\n**重要警告**：这是您最后一次工具调用机会（已使用{current_action_count}/{max_steps}步）！请谨慎选择最重要的工具，使用后必须立即基于结果给出完整的最终答案，不能再进行任何工具调用。\n\n"
         
         # 添加工具说明
         if tool_registry.has_tools():

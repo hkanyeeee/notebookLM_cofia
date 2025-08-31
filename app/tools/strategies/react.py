@@ -18,6 +18,11 @@ class ReActStrategy(BaseStrategy):
         """构建 ReAct 系统提示"""
         base_prompt = self.build_base_system_prompt()
         
+        # 检查是否是最后一次工具调用机会
+        current_action_count = sum(1 for step in context.steps if step.step_type == StepType.ACTION)
+        max_steps = context.run_config.get_max_steps()
+        is_last_chance = current_action_count >= max_steps - 1
+        
         # 添加工具说明
         if tool_registry.has_tools():
             tools_desc = "你可以使用以下工具来获取额外信息（如需要）：\n"
@@ -32,7 +37,9 @@ class ReActStrategy(BaseStrategy):
             tools_desc += "Action Input: {\"key\": \"value\"}\n"
             tools_desc += "Observation: [工具返回结果，由系统自动填写]\n"
             tools_desc += "\n你可以重复 Thought -> Action -> Action Input -> Observation 的循环。\n"
-            tools_desc += f"**重要限制**：您最多可以进行{context.run_config.get_max_steps()}步工具调用。请合理规划，避免浪费步数。当接近限制时，请及时使用'Final Answer:'提供基于已收集信息的最终答案。\n"
+            
+            if is_last_chance:
+                tools_desc += f"\n**重要警告**：这是您最后一次工具调用机会（已使用{current_action_count}/{max_steps}步）！请谨慎选择最重要的工具，使用后必须立即使用'Final Answer:'给出完整的最终答案，不能再进行任何工具调用。\n"
             tools_desc += "\n**网络搜索使用原则**：\n"
             tools_desc += "1. 避免重复或过度相似的搜索：在Thought中仔细检查是否已搜索过相同或相似内容\n"
             tools_desc += "2. 基于前次结果判断：每次Observation后评估是否已获得足够信息回答问题\n"

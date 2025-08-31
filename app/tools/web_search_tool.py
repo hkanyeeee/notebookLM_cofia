@@ -314,7 +314,7 @@ class WebSearchTool:
             history_context += "\n请确保新生成的关键词与上述历史搜索明显不同，避免获取重复信息。"
         
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE + history_context
-        user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...', '...']}}"
+        user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
         
         payload = {
             "model": model,

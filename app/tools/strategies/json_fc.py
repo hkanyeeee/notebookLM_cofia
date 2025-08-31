@@ -19,7 +19,17 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         system_prompt += (
             "使用工具时要精准高效：一次工具调用通常就足够了，不要进行重复或冗余的搜索。"
             "重要：工具执行完成后，请立即基于工具返回的结果给出完整的最终答案，不要再次调用相同或类似的工具。"
-            f"\n\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步函数调用。请合理规划，避免浪费步数。当接近限制时，请及时提供基于已收集信息的最终答案。"
+        )
+        
+        # 检查是否是最后一次工具调用机会
+        current_action_count = sum(1 for step in context.steps if step.step_type == StepType.ACTION)
+        max_steps = context.run_config.get_max_steps()
+        is_last_chance = current_action_count >= max_steps - 1
+        
+        if is_last_chance:
+            system_prompt += f"\n\n**重要警告**：这是您最后一次函数调用机会（已使用{current_action_count}/{max_steps}步）！请谨慎选择最重要的工具，使用后必须立即基于结果给出完整的最终答案，不能再进行任何函数调用。"
+        
+        system_prompt += (
             "\n\n**网络搜索使用原则**：\n"
             "1. 避免重复或过度相似的搜索：仔细检查是否已搜索过相同或相似内容\n"
             "2. 基于前次结果判断：每次搜索后评估是否已获得足够信息回答问题\n"
