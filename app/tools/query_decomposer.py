@@ -382,8 +382,8 @@ class QueryDecomposer:
             content = msg.get("content", "")
             
             # 限制单条消息长度
-            if len(content) > 200:
-                content = content[:200] + "..."
+            if len(content) > 500:
+                content = content[:500] + "..."
             
             if role == "user":
                 formatted_lines.append(f"用户: {content}")
