@@ -52,6 +52,9 @@ class WebSearchTool:
         # 搜索结果缓存和去重
         self.search_result_cache = {}  # 基于查询fingerprint的搜索结果缓存
         self.executed_queries = set()  # 已执行的查询fingerprint集合
+        
+        # 单次问题的搜索历史管理（按session_id分组）
+        self.session_search_history = {}  # {session_id: [{"query": "...", "result_summary": "...", "timestamp": ...}]}
 
     def _normalize_query(self, text: str) -> str:
         if not isinstance(text, str):
@@ -66,6 +69,44 @@ class WebSearchTool:
         normalized_queries = sorted([self._normalize_query(q) for q in queries if q.strip()])
         fingerprint = f"queries:{'|'.join(normalized_queries)}"
         return fingerprint
+    
+    def _record_session_search(self, session_id: str, original_query: str, search_queries: List[str], result_summary: str):
+        """记录会话级搜索历史"""
+        import time
+        
+        if session_id not in self.session_search_history:
+            self.session_search_history[session_id] = []
+        
+        # 记录这次搜索
+        search_record = {
+            "original_query": original_query,
+            "search_queries": search_queries,
+            "result_summary": result_summary[:300] + "..." if len(result_summary) > 300 else result_summary,
+            "timestamp": time.time()
+        }
+        
+        self.session_search_history[session_id].append(search_record)
+        
+        # 限制每个会话的历史记录数量
+        if len(self.session_search_history[session_id]) > 10:
+            self.session_search_history[session_id].pop(0)  # 移除最旧的记录
+        
+        print(f"[WebSearch] 记录会话搜索历史: {session_id}, 当前历史记录数: {len(self.session_search_history[session_id])}")
+    
+    def _get_session_search_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """获取会话级搜索历史"""
+        if session_id not in self.session_search_history:
+            return []
+        
+        # 返回格式化的搜索历史，用于传递给关键词生成
+        formatted_history = []
+        for record in self.session_search_history[session_id]:
+            formatted_history.append({
+                "query": f"{record['original_query']} (搜索词: {', '.join(record['search_queries'])})",
+                "result_summary": record["result_summary"]
+            })
+        
+        return formatted_history
     
     def _similarity_check(self, fp1: str, fp2: str) -> float:
         """检查两个fingerprint的相似度 (0-1)"""
@@ -170,12 +211,28 @@ class WebSearchTool:
         
         return unique_documents
     
-    async def generate_search_queries(self, topic: str, model: str = None) -> List[str]:
-        """生成搜索关键词"""
+    async def generate_search_queries(self, topic: str, model: str = None, search_history: List[Dict[str, Any]] = None) -> List[str]:
+        """生成搜索关键词
+        
+        Args:
+            topic: 搜索主题
+            model: 模型名称  
+            search_history: 历史搜索记录列表，格式: [{"query": "关键词", "result_summary": "结果摘要"}]
+        """
         if not ENABLE_QUERY_GENERATION or not topic.strip():
             return [topic]
         
-        prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE
+        # 构建历史搜索信息
+        history_context = ""
+        if search_history:
+            history_context = "\n\n**历史搜索记录**（避免重复搜索相似内容）：\n"
+            for i, record in enumerate(search_history[-3:], 1):  # 只考虑最近3次搜索
+                history_context += f"{i}. 搜索关键词：{record.get('query', '')}\n"
+                if record.get('result_summary'):
+                    history_context += f"   获得结果：{record['result_summary'][:200]}...\n"
+            history_context += "\n请确保新生成的关键词与上述历史搜索明显不同，避免获取重复信息。"
+        
+        prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE + history_context
         user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...', '...']}}"
         
         payload = {
@@ -498,7 +555,8 @@ class WebSearchTool:
         model: str = None,
         predefined_queries: Optional[List[str]] = None,
         session_id: Optional[str] = None,
-        perform_retrieval: bool = True
+        perform_retrieval: bool = True,
+        search_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """执行完整的 Web 搜索流程
         
@@ -541,11 +599,19 @@ class WebSearchTool:
             else:
                 print(f"[WebSearch] 开始生成搜索关键词...")
                 t0 = time.perf_counter()
-                queries = await self.generate_search_queries(query, model)
+                
+                # 优先使用传入的搜索历史，如果没有则使用会话级历史
+                history_to_use = search_history
+                if not history_to_use and session_id:
+                    history_to_use = self._get_session_search_history(session_id)
+                
+                queries = await self.generate_search_queries(query, model, history_to_use)
                 self_time = (time.perf_counter() - t0) * 1000.0
                 result["metrics"]["step_durations_ms"]["generate_queries"] = self_time
                 print(f"[WebSearch] 生成搜索关键词耗时: {self_time/1000.0:.2f}s")
                 print(f"[WebSearch] 生成的搜索关键词: {queries}")
+                if history_to_use:
+                    print(f"[WebSearch] 使用搜索历史: {len(history_to_use)} 条记录")
             
             # 2. 生成搜索fingerprint并检查缓存和去重
             fingerprint = self._generate_search_fingerprint(queries)
@@ -708,6 +774,10 @@ class WebSearchTool:
         if result["success"] and result["retrieved_content"]:
             self.search_result_cache[fingerprint] = result.copy()
             print(f"[WebSearch] 搜索结果已存入缓存，fingerprint: {fingerprint}")
+            
+            # 记录会话级搜索历史
+            if session_id:
+                self._record_session_search(session_id, query, queries, result["message"])
             
             # 限制缓存大小，移除最老的条目
             if len(self.search_result_cache) > 50:  # 限制最多缓存50个查询结果

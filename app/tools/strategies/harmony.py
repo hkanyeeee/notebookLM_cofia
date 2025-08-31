@@ -134,6 +134,24 @@ class HarmonyStrategy(BaseStrategy):
             filters_norm = str(filters).strip().lower()
         return f"web_search|q={query}|filters={filters_norm}|model={model}"
     
+    def _build_web_search_history(self, context: ToolExecutionContext) -> List[Dict[str, Any]]:
+        """从上下文中构建 web_search 的历史记录，用于策略层面的历史传递"""
+        search_history = []
+        
+        # 使用基类的方法获取 web_search 工具的历史
+        web_search_history = self._get_tool_call_history(context, "web_search")
+        
+        for record in web_search_history:
+            if record["success"]:
+                query = record["arguments"].get("query", "")
+                if query:
+                    search_history.append({
+                        "query": query,
+                        "result_summary": record["result"][:300] + "..." if len(record["result"]) > 300 else record["result"]
+                    })
+        
+        return search_history
+    
     async def execute_step(self, context: ToolExecutionContext) -> Optional[Step]:
         """执行单个步骤"""
         payload = self.build_payload(context)
@@ -185,6 +203,14 @@ class HarmonyStrategy(BaseStrategy):
                 
                 # 执行工具（包含所有验证）
                 print(f"[Harmony Strategy] 开始执行工具: {tool_call.name}")
+                
+                # 如果是web_search，构建搜索历史并传递
+                if tool_call.name == "web_search":
+                    search_history = self._build_web_search_history(context)
+                    if search_history:
+                        tool_call.arguments["search_history"] = search_history
+                        print(f"[Harmony Strategy] 传递搜索历史: {len(search_history)} 条记录")
+                
                 tool_result = await self.execute_tool_with_validation(tool_call, context)
                 print(f"[Harmony Strategy] 工具执行完成: 成功={tool_result.success}")
                 if not tool_result.success:

@@ -33,6 +33,12 @@ class ReActStrategy(BaseStrategy):
             tools_desc += "Observation: [工具返回结果，由系统自动填写]\n"
             tools_desc += "\n你可以重复 Thought -> Action -> Action Input -> Observation 的循环。\n"
             tools_desc += f"**重要限制**：您最多可以进行{context.run_config.get_max_steps()}步工具调用。请合理规划，避免浪费步数。当接近限制时，请及时使用'Final Answer:'提供基于已收集信息的最终答案。\n"
+            tools_desc += "\n**网络搜索使用原则**：\n"
+            tools_desc += "1. 避免重复或过度相似的搜索：在Thought中仔细检查是否已搜索过相同或相似内容\n"
+            tools_desc += "2. 基于前次结果判断：每次Observation后评估是否已获得足够信息回答问题\n"
+            tools_desc += "3. 渐进式搜索：如需多次搜索，确保每次都有明确的新信息获取目标\n"
+            tools_desc += "4. 合理终止：当获得足够信息时及时使用'Final Answer:'给出答案\n"
+            tools_desc += "5. 搜索效率：优先使用精准关键词，避免宽泛无效的查询\n"
             tools_desc += "当你有足够信息回答问题时，请输出：\n"
             tools_desc += "Final Answer: [你的最终答案]\n\n"
         else:
@@ -74,6 +80,24 @@ class ReActStrategy(BaseStrategy):
             messages.append({"role": "assistant", "content": current_content.strip()})
         
         return messages
+    
+    def _build_web_search_history(self, context: ToolExecutionContext) -> List[Dict[str, Any]]:
+        """从上下文中构建 web_search 的历史记录，用于策略层面的历史传递"""
+        search_history = []
+        
+        # 使用基类的方法获取 web_search 工具的历史
+        web_search_history = self._get_tool_call_history(context, "web_search")
+        
+        for record in web_search_history:
+            if record["success"]:
+                query = record["arguments"].get("query", "")
+                if query:
+                    search_history.append({
+                        "query": query,
+                        "result_summary": record["result"][:300] + "..." if len(record["result"]) > 300 else record["result"]
+                    })
+        
+        return search_history
     
     def build_payload(self, context: ToolExecutionContext) -> Dict[str, Any]:
         """构建请求 payload"""
@@ -133,6 +157,13 @@ class ReActStrategy(BaseStrategy):
                 )
             
             elif tool_call:
+                # 如果是web_search，构建搜索历史并传递
+                if tool_call.name == "web_search":
+                    search_history = self._build_web_search_history(context)
+                    if search_history:
+                        tool_call.arguments["search_history"] = search_history
+                        print(f"[ReAct Strategy] 传递搜索历史: {len(search_history)} 条记录")
+                
                 # 执行工具（包含所有验证）
                 tool_result = await self.execute_tool_with_validation(tool_call, context)
                 return self.create_observation_step(tool_call, tool_result, format_content=True)

@@ -83,6 +83,37 @@ class BaseStrategy(ABC):
         else:
             return [schema.name for schema in tool_registry.get_all_schemas()]
     
+    def _get_tool_call_history(self, context: ToolExecutionContext, tool_name: str = None) -> List[Dict[str, Any]]:
+        """从上下文中提取工具调用历史
+        
+        Args:
+            context: 执行上下文
+            tool_name: 如果指定，则只返回该工具的历史；否则返回所有工具的历史
+        
+        Returns:
+            工具调用历史列表，格式: [{"tool": "工具名", "arguments": {...}, "result": "结果", "success": bool}]
+        """
+        history = []
+        
+        for step in context.steps:
+            if (step.step_type == StepType.ACTION and 
+                step.tool_call and 
+                step.tool_result):
+                
+                # 如果指定了工具名，则过滤
+                if tool_name and step.tool_call.name != tool_name:
+                    continue
+                
+                history.append({
+                    "tool": step.tool_call.name,
+                    "arguments": step.tool_call.arguments or {},
+                    "result": str(step.tool_result.result) if step.tool_result.result else "",
+                    "success": step.tool_result.success,
+                    "timestamp": getattr(step, 'timestamp', None)
+                })
+        
+        return history
+    
     async def call_llm(self, payload: Dict[str, Any], stream: bool = False) -> Union[Dict[str, Any], httpx.Response]:
         """调用LLM服务的通用方法"""
         if stream:

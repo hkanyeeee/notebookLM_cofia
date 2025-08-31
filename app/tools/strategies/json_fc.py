@@ -16,7 +16,17 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         """构建 messages 用于 OpenAI 兼容接口"""
         # 构建系统提示，包含步数限制信息
         system_prompt = self.build_base_system_prompt()
-        system_prompt += f"\n\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步函数调用。请合理规划，避免浪费步数。当接近限制时，请及时提供基于已收集信息的最终答案。"
+        system_prompt += (
+            "使用工具时要精准高效：一次工具调用通常就足够了，不要进行重复或冗余的搜索。"
+            "重要：工具执行完成后，请立即基于工具返回的结果给出完整的最终答案，不要再次调用相同或类似的工具。"
+            f"\n\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步函数调用。请合理规划，避免浪费步数。当接近限制时，请及时提供基于已收集信息的最终答案。"
+            "\n\n**网络搜索使用原则**：\n"
+            "1. 避免重复或过度相似的搜索：仔细检查是否已搜索过相同或相似内容\n"
+            "2. 基于前次结果判断：每次搜索后评估是否已获得足够信息回答问题\n"
+            "3. 渐进式搜索：如需多次搜索，确保每次都有明确的新信息获取目标\n"
+            "4. 合理终止：当获得足够信息时及时停止搜索并给出答案\n"
+            "5. 搜索效率：优先使用精准关键词，避免宽泛无效的查询\n"
+        )
         messages = [{"role": "system", "content": system_prompt}]
         
         # 添加外部对话历史（如果存在）
@@ -86,6 +96,24 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         
         return payload
     
+    def _build_web_search_history(self, context: ToolExecutionContext) -> List[Dict[str, Any]]:
+        """从上下文中构建 web_search 的历史记录，用于策略层面的历史传递"""
+        search_history = []
+        
+        # 使用基类的方法获取 web_search 工具的历史
+        web_search_history = self._get_tool_call_history(context, "web_search")
+        
+        for record in web_search_history:
+            if record["success"]:
+                query = record["arguments"].get("query", "")
+                if query:
+                    search_history.append({
+                        "query": query,
+                        "result_summary": record["result"][:300] + "..." if len(record["result"]) > 300 else record["result"]
+                    })
+        
+        return search_history
+    
 
     
     def parse_response(self, response_data: Dict[str, Any]) -> tuple[Optional[ToolCall], Optional[str]]:
@@ -131,6 +159,13 @@ class JSONFunctionCallingStrategy(BaseStrategy):
             tool_call, content = self.parse_response(response_data)
             
             if tool_call:
+                # 如果是web_search，构建搜索历史并传递
+                if tool_call.name == "web_search":
+                    search_history = self._build_web_search_history(context)
+                    if search_history:
+                        tool_call.arguments["search_history"] = search_history
+                        print(f"[JSON FC Strategy] 传递搜索历史: {len(search_history)} 条记录")
+                
                 # 执行工具（包含所有验证）
                 tool_result = await self.execute_tool_with_validation(tool_call, context)
                 return self.create_observation_step(tool_call, tool_result, format_content=True)
