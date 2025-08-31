@@ -16,10 +16,6 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         """构建 messages 用于 OpenAI 兼容接口"""
         # 构建系统提示，包含步数限制信息
         system_prompt = self.build_base_system_prompt()
-        system_prompt += (
-            "使用工具时要精准高效：一次工具调用通常就足够了，不要进行重复或冗余的搜索。"
-            "重要：工具执行完成后，请立即基于工具返回的结果给出完整的最终答案，不要再次调用相同或类似的工具。"
-        )
         
         # 检查是否是最后一次工具调用机会
         current_action_count = sum(1 for step in context.steps if step.step_type == StepType.ACTION)
@@ -31,11 +27,10 @@ class JSONFunctionCallingStrategy(BaseStrategy):
         
         system_prompt += (
             "\n\n**网络搜索使用原则**：\n"
-            "1. 避免重复或过度相似的搜索：仔细检查是否已搜索过相同或相似内容\n"
-            "2. 基于前次结果判断：每次搜索后评估是否已获得足够信息回答问题\n"
-            "3. 渐进式搜索：如需多次搜索，确保每次都有明确的新信息获取目标\n"
-            "4. 合理终止：当获得足够信息时及时停止搜索并给出答案\n"
-            "5. 搜索效率：优先使用精准关键词，避免宽泛无效的查询\n"
+            "1. 合理终止：对于简单查询（如天气、新闻），一次搜索即可\n"
+            "2. 避免重复或过度相似的搜索：仔细检查是否已搜索过相同或相似内容\n"
+            "3. 基于前次结果判断：每次搜索后评估是否已获得足够信息回答问题\n"
+            "4. 搜索效率：优先使用精准关键词，避免宽泛无效的查询\n"
         )
         messages = [{"role": "system", "content": system_prompt}]
         

@@ -44,7 +44,7 @@ class ReActStrategy(BaseStrategy):
             tools_desc += "1. 避免重复或过度相似的搜索：在Thought中仔细检查是否已搜索过相同或相似内容\n"
             tools_desc += "2. 基于前次结果判断：每次Observation后评估是否已获得足够信息回答问题\n"
             tools_desc += "3. 渐进式搜索：如需多次搜索，确保每次都有明确的新信息获取目标\n"
-            tools_desc += "4. 合理终止：当获得足够信息时及时使用'Final Answer:'给出答案\n"
+            tools_desc += "4. 合理终止：合理终止：对于简单查询（如天气、新闻），一次搜索即可，当获得足够信息时及时使用'Final Answer:'给出答案\n"
             tools_desc += "5. 搜索效率：优先使用精准关键词，避免宽泛无效的查询\n"
             tools_desc += "当你有足够信息回答问题时，请输出：\n"
             tools_desc += "Final Answer: [你的最终答案]\n\n"
