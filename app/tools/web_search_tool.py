@@ -9,6 +9,8 @@ from typing import List, Dict, Any, Optional, Tuple
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from difflib import SequenceMatcher
+import os
+from concurrent.futures import ProcessPoolExecutor
 
 from ..config import (
     EMBEDDING_BATCH_SIZE, LLM_SERVICE_URL, SEARXNG_QUERY_URL,
@@ -28,6 +30,21 @@ from ..rerank_client import rerank
 from ..models import Chunk, Source
 from ..database import AsyncSessionLocal
 from ..cache import get_web_content_cache
+
+
+# === 相似度计算的模块级辅助函数（可被多进程安全调用） ===
+def _normalize_text_for_similarity(text: str) -> str:
+    if not text:
+        return ""
+    # 移除多余空白和常见标点，仅保留中英文与数字下划线
+    normalized = re.sub(r"\s+", " ", text.strip())
+    normalized = re.sub(r"[^\w\s\u4e00-\u9fff]", "", normalized)
+    return normalized.lower()
+
+
+def _sequence_ratio_from_normalized(args: Tuple[str, str]) -> float:
+    a, b = args
+    return SequenceMatcher(None, a, b).ratio()
 
 
 class WebSearchTool:
@@ -155,15 +172,9 @@ class WebSearchTool:
         if not text1 or not text2:
             return 0.0
         
-        # 标准化文本（去除空白字符和标点）
-        def normalize_text(text):
-            # 移除多余空白和常见标点
-            normalized = re.sub(r'\s+', ' ', text.strip())
-            normalized = re.sub(r'[^\w\s\u4e00-\u9fff]', '', normalized)  # 保留中英文字符
-            return normalized.lower()
-        
-        norm_text1 = normalize_text(text1)
-        norm_text2 = normalize_text(text2)
+        # 复用模块级规范化
+        norm_text1 = _normalize_text_for_similarity(text1)
+        norm_text2 = _normalize_text_for_similarity(text2)
         
         # 使用SequenceMatcher计算相似度
         similarity = SequenceMatcher(None, norm_text1, norm_text2).ratio()
@@ -183,32 +194,39 @@ class WebSearchTool:
         if not documents:
             return documents
         
-        unique_documents = []
+        unique_documents: List[Dict[str, str]] = []
+        unique_norm_contents: List[str] = []
         removed_count = 0
-        
-        for doc in documents:
-            content = doc.get("content", "")
-            if not content.strip():
-                continue  # 跳过空内容
-            
-            # 检查是否与已有文档重复
-            is_duplicate = False
-            for existing_doc in unique_documents:
-                existing_content = existing_doc.get("content", "")
-                similarity = self._calculate_content_similarity(content, existing_content)
-                
-                if similarity > similarity_threshold:
-                    print(f"[WebSearch] 发现重复内容(相似度:{similarity:.2f})，跳过: {doc['url']}")
-                    is_duplicate = True
-                    removed_count += 1
-                    break
-            
-            if not is_duplicate:
-                unique_documents.append(doc)
-        
+
+        # 使用多进程并行化 SequenceMatcher 计算
+        max_workers = os.cpu_count() or 1
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            for doc in documents:
+                content = doc.get("content", "")
+                if not content or not content.strip():
+                    continue  # 跳过空内容
+
+                norm_content = _normalize_text_for_similarity(content)
+
+                # 检查是否与已有文档重复（并行计算相似度）
+                is_duplicate = False
+                if unique_norm_contents:
+                    pairs = [(norm_content, existing_norm) for existing_norm in unique_norm_contents]
+                    for similarity in executor.map(_sequence_ratio_from_normalized, pairs, chunksize=1):
+                        if similarity > similarity_threshold:
+                            url = doc.get('url', 'unknown')
+                            print(f"[WebSearch] 发现重复内容(相似度:{similarity:.2f})，跳过: {url}")
+                            is_duplicate = True
+                            removed_count += 1
+                            break
+
+                if not is_duplicate:
+                    unique_documents.append(doc)
+                    unique_norm_contents.append(norm_content)
+
         if removed_count > 0:
             print(f"[WebSearch] 内容去重完成，移除了 {removed_count} 个重复文档，保留 {len(unique_documents)} 个")
-        
+
         return unique_documents
     
     async def generate_search_queries(self, topic: str, model: str = None, search_history: List[Dict[str, Any]] = None) -> List[str]:
