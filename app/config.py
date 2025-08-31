@@ -79,9 +79,9 @@ CHUNK_SIZE = int(get_config_value("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(get_config_value("CHUNK_OVERLAP", "100"))
 
 # RAG 相关配置
-RAG_TOP_K = int(get_config_value("RAG_TOP_K", "15"))
+RAG_TOP_K = int(get_config_value("RAG_TOP_K", "12"))
 QUERY_TOP_K_BEFORE_RERANK = int(get_config_value("QUERY_TOP_K_BEFORE_RERANK", "200"))
-RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "15"))
+RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 
 # LLM 调用相关配置
 LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "3600.0"))
