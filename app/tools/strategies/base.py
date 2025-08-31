@@ -43,6 +43,27 @@ class BaseStrategy(ABC):
             "**重要要求：必须完全使用中文进行回答。**\n\n"
         )
     
+    def build_system_prompt(self, context: ToolExecutionContext) -> str:
+        """默认的系统提示（含工具说明）。
+        子类可覆盖；未覆盖时提供一个安全的基线，避免缺少方法导致报错。
+        """
+        base_prompt = self.build_base_system_prompt()
+        try:
+            if tool_registry.has_tools():
+                allowed_tools = set(self.get_allowed_tools(context))
+                if allowed_tools:
+                    tools_desc = "可用工具（JSON函数调用方式）：\n"
+                    for schema in tool_registry.get_all_schemas():
+                        if schema.name in allowed_tools:
+                            tools_desc += f"- {schema.name}: {schema.description}\n"
+                    tools_desc += (f"\n**工具使用限制**：您最多可以进行{context.run_config.get_max_steps()}步工具调用。"
+                                   "当接近限制时，请基于现有信息直接给出最终答案。\n")
+                    return base_prompt + tools_desc
+        except Exception:
+            # 任何异常下回落到基础提示，保证稳定
+            pass
+        return base_prompt
+    
     def build_user_content(self, context: ToolExecutionContext) -> str:
         """构建用户内容"""
         return "参考资料：\n" + "\n".join(context.contexts) + f"\n\n用户问题：{context.question}"

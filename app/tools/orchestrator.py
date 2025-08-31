@@ -258,8 +258,10 @@ class ToolOrchestrator:
                 # 小延迟，避免过于频繁的请求
                 await asyncio.sleep(0.1)
             
-            # 如果达到最大步数，强制生成最终答案
-            if step_count >= max_steps and not (context.steps and context.steps[-1].step_type == StepType.FINAL_ANSWER):
+            # 如果达到最大步数（按循环计数或上下文累计步数），强制生成最终答案
+            # 之前仅依据 step_count 判断，若策略在单轮内添加多个步骤导致 context.current_step 先到上限，
+            # 会提前跳出循环且无法进入强制生成分支，导致未产生 final_answer。
+            if (step_count >= max_steps or context.current_step >= max_steps) and not (context.steps and context.steps[-1].step_type == StepType.FINAL_ANSWER):
                 yield {
                     "type": "info",
                     "message": f"已达到最大工具调用步数限制({max_steps}步)，正在生成最终答案..."
