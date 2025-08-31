@@ -322,44 +322,46 @@ class JSONFunctionCallingStrategy(BaseStrategy):
                 "temperature": 0.1,
             }
             
-            response = await self.call_llm(payload, stream=True)
-            accumulated_content = ""
-            
-            async for line in response.aiter_lines():
-                if not line or not line.startswith("data:"):
-                    continue
+            ctx = await self.call_llm(payload, stream=True)
+            async with ctx as response:
+                response.raise_for_status()
+                accumulated_content = ""
                 
-                data_str = line[5:].strip()
-                if not data_str or data_str == "[DONE]":
-                    if accumulated_content.strip():
-                        yield {
-                            "type": "final_answer",
-                            "content": accumulated_content.strip(),
-                            "message": "已达到最大工具调用步数限制，基于当前信息生成最终答案"
-                        }
-                        context.add_step(Step(
-                            step_type=StepType.FINAL_ANSWER,
-                            content=accumulated_content.strip()
-                        ))
-                    continue
-                
-                try:
-                    chunk = json.loads(data_str)
-                    choices = chunk.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        reasoning_content, content = self.parse_stream_delta(delta)
-                        
-                        if reasoning_content:
-                            yield {"type": "reasoning", "content": reasoning_content}
-                        
-                        if content:
-                            accumulated_content += content
-                            yield {"type": "content", "content": content}
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    
+                    data_str = line[5:].strip()
+                    if not data_str or data_str == "[DONE]":
+                        if accumulated_content.strip():
+                            yield {
+                                "type": "final_answer",
+                                "content": accumulated_content.strip(),
+                                "message": "已达到最大工具调用步数限制，基于当前信息生成最终答案"
+                            }
+                            context.add_step(Step(
+                                step_type=StepType.FINAL_ANSWER,
+                                content=accumulated_content.strip()
+                            ))
+                        continue
+                    
+                    try:
+                        chunk = json.loads(data_str)
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            reasoning_content, content = self.parse_stream_delta(delta)
                             
-                except (json.JSONDecodeError, KeyError) as e:
-                    continue
-            
+                            if reasoning_content:
+                                yield {"type": "reasoning", "content": reasoning_content}
+                            
+                            if content:
+                                accumulated_content += content
+                                yield {"type": "content", "content": content}
+                                
+                    except (json.JSONDecodeError, KeyError) as e:
+                        continue
+        
         except Exception as e:
             yield {
                 "type": "error",
