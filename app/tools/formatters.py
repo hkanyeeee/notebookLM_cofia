@@ -39,7 +39,7 @@ class OutputFormatter:
     @staticmethod
     def format_tool_results(tool_results: Dict[str, Any]) -> str:
         """
-        格式化工具调用结果，避免提示性词语
+        格式化工具调用结果，避免提示性词语，优先提取原始搜索内容
         
         Args:
             tool_results: 工具调用结果字典
@@ -53,25 +53,91 @@ class OutputFormatter:
         if not tool_results.get("success", False):
             return "工具调用失败，无可用信息"
         
-        # 优先使用完整答案
-        answer = tool_results.get("answer", "")
-        if answer and len(answer.strip()) > 10:  # 确保答案有实际内容
-            return f"获取的信息: {answer}"
+        # 优先检查是否有 knowledge_gaps_search_results（统一搜索路径的召回结果）
+        knowledge_gaps_search_results = tool_results.get("knowledge_gaps_search_results", {})
+        tool_content = []
         
-        # 其次使用步骤中的内容信息
+        if knowledge_gaps_search_results:
+            # 从知识缺口搜索结果中提取召回内容
+            for gap_id, gap_info in knowledge_gaps_search_results.items():
+                recalled_content = gap_info.get("recalled_content", [])
+                for item in recalled_content[:3]:  # 每个缺口限制前3个结果
+                    item_content = item.get("content", "").strip()
+                    if len(item_content) > 30:
+                        # 限制每个片段长度，避免过长
+                        if len(item_content) > 400:
+                            item_content = item_content[:400] + "..."
+                        tool_content.append(item_content)
+        
+        # 其次从步骤中提取工具调用的原始结果（特别是搜索内容）
         steps = tool_results.get("steps", [])
-        content_steps = []
         
+        for step in steps:
+            step_type = step.get("type", "")
+            
+            # 提取工具调用的观察结果（observation）
+            if step_type == "observation":
+                content = step.get("content", "")
+                tool_result = step.get("tool_result", {})
+                
+                # 如果有工具结果，优先使用工具结果中的原始内容
+                if tool_result and isinstance(tool_result, dict):
+                    result_data = tool_result.get("result", "")
+                    if isinstance(result_data, str) and len(result_data.strip()) > 20:
+                        # 尝试解析JSON格式的工具结果
+                        try:
+                            import json
+                            parsed_result = json.loads(result_data)
+                            if isinstance(parsed_result, dict):
+                                # 提取搜索到的内容
+                                retrieved_content = parsed_result.get("retrieved_content", [])
+                                if retrieved_content:
+                                    for item in retrieved_content[:5]:  # 限制前5个结果
+                                        item_content = item.get("content", "").strip()
+                                        if len(item_content) > 30:
+                                            tool_content.append(item_content)
+                                
+                                # 同时提取 top_results 中的 content_preview
+                                top_results = parsed_result.get("top_results", [])
+                                if top_results:
+                                    for item in top_results[:3]:  # 限制前3个结果
+                                        content_preview = item.get("content_preview", "").strip()
+                                        if len(content_preview) > 30:
+                                            tool_content.append(content_preview)
+                        except (json.JSONDecodeError, AttributeError):
+                            # 如果解析失败，直接使用原始结果
+                            if len(result_data.strip()) > 20:
+                                tool_content.append(result_data.strip())
+                
+                # 如果没有提取到工具结果，使用步骤内容
+                elif content and len(content.strip()) > 20:
+                    # 去除"工具执行结果："等前缀
+                    clean_content = content.replace("工具执行结果：", "").replace("Observation: ", "").strip()
+                    if len(clean_content) > 20:
+                        tool_content.append(clean_content)
+        
+        # 如果从步骤中提取到了有用内容，使用这些内容
+        if tool_content:
+            return "获取的具体信息:\n" + "\n\n".join(tool_content)
+        
+        # 其次使用步骤中的其他内容信息
+        content_steps = []
         for step in steps:
             step_type = step.get("type", "")
             content = step.get("content", "")
             
-            # 优先收集包含实际信息的步骤
+            # 收集包含实际信息的步骤（非工具调用和观察）
             if step_type == "content" and content and len(content.strip()) > 10:
                 content_steps.append(content)
         
         if content_steps:
             return "获取的具体信息:\n" + "\n".join(content_steps)
+        
+        # 备选方案：使用完整答案（但不是最优选择）
+        answer = tool_results.get("answer", "")
+        if answer and len(answer.strip()) > 10:
+            # 避免直接返回工具编排器的答案，而是标记为参考信息
+            return f"参考信息: {answer}"
         
         # 最后尝试从所有步骤中提取信息
         if steps:
