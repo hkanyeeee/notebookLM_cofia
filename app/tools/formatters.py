@@ -61,12 +61,9 @@ class OutputFormatter:
             # 从知识缺口搜索结果中提取召回内容
             for gap_id, gap_info in knowledge_gaps_search_results.items():
                 recalled_content = gap_info.get("recalled_content", [])
-                for item in recalled_content[:3]:  # 每个缺口限制前3个结果
+                for item in recalled_content:
                     item_content = item.get("content", "").strip()
-                    if len(item_content) > 30:
-                        # 限制每个片段长度，避免过长
-                        if len(item_content) > 400:
-                            item_content = item_content[:400] + "..."
+                    if item_content:
                         tool_content.append(item_content)
         
         # 其次从步骤中提取工具调用的原始结果（特别是搜索内容）
@@ -92,28 +89,28 @@ class OutputFormatter:
                                 # 提取搜索到的内容
                                 retrieved_content = parsed_result.get("retrieved_content", [])
                                 if retrieved_content:
-                                    for item in retrieved_content[:5]:  # 限制前5个结果
+                                    for item in retrieved_content:
                                         item_content = item.get("content", "").strip()
-                                        if len(item_content) > 30:
+                                        if item_content:
                                             tool_content.append(item_content)
                                 
                                 # 同时提取 top_results 中的 content_preview
                                 top_results = parsed_result.get("top_results", [])
                                 if top_results:
-                                    for item in top_results[:3]:  # 限制前3个结果
+                                    for item in top_results:
                                         content_preview = item.get("content_preview", "").strip()
-                                        if len(content_preview) > 30:
+                                        if content_preview:
                                             tool_content.append(content_preview)
                         except (json.JSONDecodeError, AttributeError):
                             # 如果解析失败，直接使用原始结果
-                            if len(result_data.strip()) > 20:
+                            if result_data.strip():
                                 tool_content.append(result_data.strip())
                 
                 # 如果没有提取到工具结果，使用步骤内容
-                elif content and len(content.strip()) > 20:
+                elif content and content.strip():
                     # 去除"工具执行结果："等前缀
                     clean_content = content.replace("工具执行结果：", "").replace("Observation: ", "").strip()
-                    if len(clean_content) > 20:
+                    if clean_content:
                         tool_content.append(clean_content)
         
         # 如果从步骤中提取到了有用内容，使用这些内容
@@ -127,7 +124,7 @@ class OutputFormatter:
             content = step.get("content", "")
             
             # 收集包含实际信息的步骤（非工具调用和观察）
-            if step_type == "content" and content and len(content.strip()) > 10:
+            if step_type == "content" and content and content.strip():
                 content_steps.append(content)
         
         if content_steps:
@@ -135,7 +132,7 @@ class OutputFormatter:
         
         # 备选方案：使用完整答案（但不是最优选择）
         answer = tool_results.get("answer", "")
-        if answer and len(answer.strip()) > 10:
+        if answer and answer.strip():
             # 避免直接返回工具编排器的答案，而是标记为参考信息
             return f"参考信息: {answer}"
         
@@ -145,11 +142,11 @@ class OutputFormatter:
             for step in steps:
                 step_type = step.get("type", "unknown")
                 content = step.get("content", "")
-                if content and len(content.strip()) > 5:
+                if content and content.strip():
                     step_summaries.append(f"{step_type}: {content}")
             
             if step_summaries:
-                return "工具执行过程:\n" + "\n".join(step_summaries[:3])  # 限制显示前3个
+                return "工具执行过程:\n" + "\n".join(step_summaries)
         
         return "工具调用完成但提取不到具体信息"
     
@@ -182,14 +179,10 @@ class OutputFormatter:
             recalled_content = gap_info["recalled_content"]
             
             # 为每个知识缺口收集内容
-            for idx, content_item in enumerate(recalled_content[:3], 1):  # 只展示前3个最相关的
+            for idx, content_item in enumerate(recalled_content, 1):
                 content = content_item["content"]
                 source_title = content_item.get("source_title", "")
                 source_url = content_item.get("source_url", "")
-                
-                # 限制内容长度
-                if len(content) > 300:
-                    content = content[:300] + "..."
                 
                 all_content.append(content)
                 
@@ -230,14 +223,10 @@ class OutputFormatter:
         # 构建基于搜索结果的答案，自然表达
         content_parts = []
         
-        for i, content in enumerate(retrieved_content[:3], 1):  # 只取前3个最相关的结果
+        for i, content in enumerate(retrieved_content, 1):
             content_text = content.get("content", "").strip()
             
             if content_text:
-                # 限制每个片段的长度
-                if len(content_text) > 300:
-                    content_text = content_text[:300] + "..."
-                
                 content_parts.append(content_text)
         
         if content_parts:

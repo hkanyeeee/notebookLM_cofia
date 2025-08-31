@@ -901,12 +901,7 @@ class IntelligentOrchestrator:
                     if event.get("type") == "final_result":
                         result = event.get("data", {})
                         
-                # 重构 tool_results，提取工具调用的原始内容而不是编排器的最终答案
-                formatted_tool_results = {
-                    "success": result.get("success", False),
-                    "steps": result.get("steps", []),
-                    # 不包含编排器的 answer，让最终答案合成使用原始工具内容
-                }
+
                 
                 return {
                     "answer": result.get("answer", "无法获取信息"),
@@ -916,7 +911,7 @@ class IntelligentOrchestrator:
                         "sub_queries": [{"question": query}]
                     },
                     "reasoning": [{"question": query, "confidence_level": "高"}],
-                    "tool_results": formatted_tool_results,
+                    "tool_results": result,
                     "used_tools": True,
                     "success": result.get("success", False),
                     "fast_route": True  # 标记使用了快速路由
@@ -927,12 +922,7 @@ class IntelligentOrchestrator:
                     query, contexts, run_config, conversation_history
                 )
                 
-                # 重构 tool_results，提取工具调用的原始内容而不是编排器的最终答案
-                formatted_tool_results = {
-                    "success": result.get("success", False),
-                    "steps": result.get("steps", []),
-                    # 不包含编排器的 answer，让最终答案合成使用原始工具内容
-                }
+
                 
                 return {
                     "answer": result.get("answer", "无法获取信息"),
@@ -942,7 +932,7 @@ class IntelligentOrchestrator:
                         "sub_queries": [{"question": query}]
                     },
                     "reasoning": [{"question": query, "confidence_level": "高"}],
-                    "tool_results": formatted_tool_results,
+                    "tool_results": result,
                     "used_tools": True,
                     "success": result.get("success", False),
                     "fast_route": True  # 标记使用了快速路由
