@@ -143,7 +143,7 @@ function isQueryDisabled() {
     <!-- 消息列表 / 欢迎信息 -->
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
-      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto text-gray-700">
+      <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto" style="color: var(--color-text-secondary)">
         <div class="welcomeMessage mt-8 mb-10 text-base leading-relaxed">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</div>
         
         <!-- 课题输入 -->
@@ -172,7 +172,7 @@ function isQueryDisabled() {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
               </svg>
             </div>
-            <h3 class="text-lg font-semibold text-gray-900">候选网址</h3>
+            <h3 class="text-lg font-semibold" style="color: var(--color-text)">候选网址</h3>
             <div class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs font-medium rounded-full">
               {{ candidateUrls.length }}
             </div>
@@ -192,10 +192,10 @@ function isQueryDisabled() {
               
               <!-- 内容区域 -->
               <div class="flex-1 min-w-0">
-                <div class="font-medium text-gray-900 text-sm truncate mb-1 group-hover:text-indigo-700">
+                <div class="font-medium text-sm truncate mb-1 group-hover:text-indigo-700" style="color: var(--color-text)">
                   {{ item.title || '无标题' }}
                 </div>
-                <div class="text-xs text-gray-500 truncate">
+                <div class="text-xs truncate" style="color: var(--color-text-secondary)">
                   {{ item.url }}
                 </div>
               </div>
@@ -209,23 +209,23 @@ function isQueryDisabled() {
             </div>
           </div>
           
-          <div class="mt-4 text-center text-sm text-gray-500">
+          <div class="mt-4 text-center text-sm" style="color: var(--color-text-secondary)">
             点击任意网址卡片将其添加到文档列表
           </div>
         </div>
 
         <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-gray-900 text-sm">💡 智能问答</strong>
-            <p class="text-xs text-gray-500 leading-relaxed">基于您添加的文档内容回答问题</p>
+          <div class="text-left p-5 rounded-lg border feature-card">
+            <strong class="block mb-2 text-sm" style="color: var(--color-text)">💡 智能问答</strong>
+            <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">基于您添加的文档内容回答问题</p>
           </div>
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-gray-900 text-sm">📚 文档总结</strong>
-            <p class="text-xs text-gray-500 leading-relaxed">快速获取文档的核心要点</p>
+          <div class="text-left p-5 rounded-lg border feature-card">
+            <strong class="block mb-2 text-sm" style="color: var(--color-text)">📚 文档总结</strong>
+            <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">快速获取文档的核心要点</p>
           </div>
-          <div class="text-left p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <strong class="block mb-2 text-gray-900 text-sm">🔍 深度分析</strong>
-            <p class="text-xs text-gray-500 leading-relaxed">深入分析文档中的关键信息</p>
+          <div class="text-left p-5 rounded-lg border feature-card">
+            <strong class="block mb-2 text-sm" style="color: var(--color-text)">🔍 深度分析</strong>
+            <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">深入分析文档中的关键信息</p>
           </div>
         </div>
       </div>
@@ -370,6 +370,17 @@ function isQueryDisabled() {
 
 .candidate-item:active {
   transform: scale(0.98);
+}
+
+/* 功能讲解卡片样式 */
+.feature-card {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  transition: all 0.2s ease-in-out;
+}
+
+.feature-card:hover {
+  background-color: var(--color-surface-light);
 }
 
 .welcomeMessage {
