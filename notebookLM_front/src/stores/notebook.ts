@@ -105,6 +105,10 @@ export const useNotebookStore = defineStore('notebook', () => {
         documentStore.candidateUrls.value = []
         documentStore.topicInput.value = ''
       }
+      // 当切换到非Collection模式时，清空选中的collection
+      if (newType !== QueryType.COLLECTION) {
+        collectionStore.selectedCollection.value = ''
+      }
       console.log(`问答类型从 ${oldType} 切换到 ${newType}，已清空聊天历史`)
     }
   })

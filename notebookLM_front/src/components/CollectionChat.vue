@@ -187,18 +187,7 @@ function getInputPlaceholder() {
             <p class="text-gray-600 mb-6">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
             </p>
-            
-            <!-- 向量数据修复按钮 -->
-            <div class="mb-6">
-              <el-button 
-                type="primary" 
-                :icon="Tools" 
-                @click="showVectorFixDialog = true"
-                class="bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700"
-              >
-                向量数据修复
-              </el-button>
-            </div>
+
           </div>
 
           <!-- Collection卡片列表 -->
@@ -272,6 +261,18 @@ function getInputPlaceholder() {
           <div class="text-4xl mb-4">⏳</div>
           <h2 class="text-xl text-gray-600">正在加载Collection...</h2>
         </div>
+
+        <!-- 向量数据修复按钮 -->
+        <div class="mb-6 text-center">
+          <el-button 
+            type="primary" 
+            :icon="Tools" 
+            @click="showVectorFixDialog = true"
+            class="bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700"
+          >
+            向量数据修复
+          </el-button>
+        </div>
       </div>
 
       <!-- 对话消息 -->
@@ -288,7 +289,11 @@ function getInputPlaceholder() {
           <!-- Reasoning Chain (for assistant messages) -->
           <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3 pb-3">
             <el-collapse v-model="activeNames">
-              <el-collapse-item title="思维链（" :name="'reasoning'">
+              <el-collapse-item 
+                :title="`思维链（${message.reasoning.length} 字）`" 
+                :name="'reasoning'"
+                class="text-sm font-medium text-gray-700"
+              >
                 <div class="text-xs text-gray-700 leading-relaxed p-3 rounded-lg border border-gray-200 chat-message-content" v-html="marked(message.reasoning)"></div>
               </el-collapse-item>
             </el-collapse>
