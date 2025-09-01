@@ -64,8 +64,11 @@ fix_status = VectorFixStatus()
 async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
     """获取所有集合信息"""
     try:
+        # 使用固定的session_id，与agenttic_ingest保持一致
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
         # 获取所有Source
-        sources_stmt = select(Source).where(Source.session_id == session_id)
+        sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
         sources_result = await db.execute(sources_stmt)
         sources = sources_result.scalars().all()
 
@@ -74,7 +77,7 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
             # 获取每个source的chunks数量
             chunks_stmt = select(Chunk).where(
                 Chunk.source_id == source.id,
-                Chunk.session_id == session_id
+                Chunk.session_id == FIXED_SESSION_ID
             )
             chunks_result = await db.execute(chunks_stmt)
             chunks_count = len(chunks_result.scalars().all())
@@ -86,7 +89,7 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
                     scroll_filter={
                         "must": [
                             {"key": "source_id", "match": {"value": source.id}},
-                            {"key": "session_id", "match": {"value": session_id}}
+                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
                         ]
                     },
                     limit=1
@@ -118,10 +121,13 @@ async def fix_collection_vectors(
 ) -> bool:
     """修复指定集合的向量数据"""
     try:
+        # 使用固定的session_id，与agenttic_ingest保持一致
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
         # 1. 获取Collection信息
         source_stmt = select(Source).where(
             Source.id == collection_id,
-            Source.session_id == session_id
+            Source.session_id == FIXED_SESSION_ID
         )
         source_result = await db.execute(source_stmt)
         source = source_result.scalar_one_or_none()
@@ -135,7 +141,7 @@ async def fix_collection_vectors(
         # 2. 获取所有chunks
         chunks_stmt = select(Chunk).where(
             Chunk.source_id == source.id,
-            Chunk.session_id == session_id
+            Chunk.session_id == FIXED_SESSION_ID
         )
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
@@ -355,6 +361,9 @@ async def verify_collection(
 ):
     """验证指定集合的向量数据完整性"""
     try:
+        # 使用固定的session_id，与agenttic_ingest保持一致
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
         result = {
             'collection_id': collection_id,
             'db_chunks': 0,
@@ -365,7 +374,7 @@ async def verify_collection(
         # 获取数据库中的chunks数量
         chunks_stmt = select(Chunk).where(
             Chunk.source_id == collection_id,
-            Chunk.session_id == session_id
+            Chunk.session_id == FIXED_SESSION_ID
         )
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
@@ -377,7 +386,7 @@ async def verify_collection(
             scroll_filter={
                 "must": [
                     {"key": "source_id", "match": {"value": collection_id}},
-                    {"key": "session_id", "match": {"value": session_id}}
+                    {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
                 ]
             },
             limit=1000,
