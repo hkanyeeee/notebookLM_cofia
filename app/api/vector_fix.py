@@ -213,7 +213,7 @@ async def stream_fix_progress(task_id: str):
         await asyncio.sleep(1)  # 每秒更新一次
 
 
-@router.get("/collections/status", summary="获取所有集合的向量数据状态")
+@router.get("/vector-fix/collections/status", summary="获取所有集合的向量数据状态")
 async def get_collections_status(
     session_id: str = Depends(get_session_id),
     db: AsyncSession = Depends(get_db)
@@ -242,7 +242,7 @@ async def get_collections_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/collections/{collection_id}/fix", summary="修复指定集合的向量数据")
+@router.post("/vector-fix/collections/{collection_id}/fix", summary="修复指定集合的向量数据")
 async def fix_collection(
     collection_id: int,
     background_tasks: BackgroundTasks,
@@ -276,7 +276,7 @@ async def fix_collection(
     }
 
 
-@router.post("/collections/fix-all", summary="修复所有需要修复的集合")
+@router.post("/vector-fix/collections/fix-all", summary="修复所有需要修复的集合")
 async def fix_all_collections(
     background_tasks: BackgroundTasks,
     session_id: str = Depends(get_session_id),
@@ -321,7 +321,7 @@ async def fix_all_collections(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/fix-progress/{task_id}", summary="获取修复进度（流式）")
+@router.get("/vector-fix/progress/{task_id}", summary="获取修复进度（流式）")
 async def get_fix_progress(task_id: str):
     """获取修复进度的流式响应"""
     return StreamingResponse(
@@ -334,7 +334,7 @@ async def get_fix_progress(task_id: str):
     )
 
 
-@router.get("/fix-status/{task_id}", summary="获取修复任务状态")
+@router.get("/vector-fix/status/{task_id}", summary="获取修复任务状态")
 async def get_fix_status(task_id: str):
     """获取修复任务的当前状态"""
     status = fix_status.get_task_status(task_id)
@@ -347,7 +347,7 @@ async def get_fix_status(task_id: str):
     }
 
 
-@router.post("/collections/{collection_id}/verify", summary="验证集合的向量数据")
+@router.post("/vector-fix/collections/{collection_id}/verify", summary="验证集合的向量数据")
 async def verify_collection(
     collection_id: int,
     session_id: str = Depends(get_session_id),

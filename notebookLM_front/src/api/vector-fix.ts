@@ -103,7 +103,7 @@ export interface VerifyResponse {
  * 获取所有集合的向量数据状态
  */
 export async function getCollectionsStatus(): Promise<CollectionsStatusResponse> {
-  return request('/collections/status', {
+  return request('/vector-fix/collections/status', {
     method: 'GET'
   })
 }
@@ -112,7 +112,7 @@ export async function getCollectionsStatus(): Promise<CollectionsStatusResponse>
  * 修复指定集合的向量数据
  */
 export async function fixCollection(collectionId: number): Promise<FixResponse> {
-  return request(`/collections/${collectionId}/fix`, {
+  return request(`/vector-fix/collections/${collectionId}/fix`, {
     method: 'POST'
   })
 }
@@ -121,7 +121,7 @@ export async function fixCollection(collectionId: number): Promise<FixResponse> 
  * 修复所有需要修复的集合
  */
 export async function fixAllCollections(): Promise<FixResponse> {
-  return request('/collections/fix-all', {
+  return request('/vector-fix/collections/fix-all', {
     method: 'POST'
   })
 }
@@ -130,7 +130,7 @@ export async function fixAllCollections(): Promise<FixResponse> {
  * 获取修复任务状态
  */
 export async function getFixStatus(taskId: string): Promise<{ success: boolean; status: FixTaskStatus }> {
-  return request(`/fix-status/${taskId}`, {
+  return request(`/vector-fix/status/${taskId}`, {
     method: 'GET'
   })
 }
@@ -139,7 +139,7 @@ export async function getFixStatus(taskId: string): Promise<{ success: boolean; 
  * 验证集合的向量数据
  */
 export async function verifyCollection(collectionId: number): Promise<VerifyResponse> {
-  return request(`/collections/${collectionId}/verify`, {
+  return request(`/vector-fix/collections/${collectionId}/verify`, {
     method: 'POST'
   })
 }
@@ -151,7 +151,7 @@ export function createFixProgressStream(taskId: string): EventSource {
   const sessionId = localStorage.getItem('sessionId') || 'default-session'
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
   
-  const eventSource = new EventSource(`${baseUrl}/fix-progress/${taskId}`, {
+  const eventSource = new EventSource(`${baseUrl}/vector-fix/progress/${taskId}`, {
     withCredentials: false
   })
   
