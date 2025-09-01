@@ -39,8 +39,8 @@ const emit = defineEmits<{
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
-// 控制思维链和参考来源的展开状态，默认展开思维链
-const activeNames = ref(['reasoning'])
+// 控制思维链和参考来源的展开状态，默认收起思维链
+const activeNames = ref([])
 // 向量修复对话框
 const showVectorFixDialog = ref(false)
 
@@ -289,7 +289,7 @@ function getInputPlaceholder() {
           <div v-if="message.type === 'assistant' && message.reasoning" class="mb-4 border-t border-gray-200 pt-3 pb-3">
             <el-collapse v-model="activeNames">
               <el-collapse-item title="思维链（" :name="'reasoning'">
-                <div class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200 chat-message-content" v-html="marked(message.reasoning)"></div>
+                <div class="text-xs text-gray-700 leading-relaxed p-3 rounded-lg border border-gray-200 chat-message-content" v-html="marked(message.reasoning)"></div>
               </el-collapse-item>
             </el-collapse>
           </div>

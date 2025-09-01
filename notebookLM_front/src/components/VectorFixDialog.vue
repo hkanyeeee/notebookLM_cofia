@@ -1,9 +1,10 @@
 <template>
   <el-dialog
-    v-model="visible"
+    :model-value="visible"
     title="向量数据修复"
     width="800px"
     :close-on-click-modal="false"
+    @update:model-value="handleVisibleUpdate"
     @close="handleClose"
   >
     <div class="vector-fix-dialog">
@@ -212,6 +213,11 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'refresh-collections'): void
 }>()
+
+// 处理visible状态更新
+const handleVisibleUpdate = (value: boolean) => {
+  emit('update:visible', value)
+}
 
 // 状态管理
 const loading = ref(false)

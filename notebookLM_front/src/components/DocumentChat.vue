@@ -35,8 +35,8 @@ const emit = defineEmits<{
 // 查询输入
 const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
-// 控制思维链和参考来源的展开状态，默认展开思维链
-const activeNames = ref(['reasoning'])
+// 控制思维链和参考来源的展开状态，默认收起思维链
+const activeNames = ref([])
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -251,8 +251,8 @@ function isQueryDisabled() {
                 name="reasoning"
                 class="text-sm font-medium text-gray-700"
               >
-                <div 
-                  class="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-200 chat-message-content"
+                <div
+                  class="text-xs text-gray-700 leading-relaxed p-3 rounded-lg border border-gray-200 chat-message-content"
                   v-html="marked(message.reasoning)"
                 ></div>
               </ElCollapseItem>
