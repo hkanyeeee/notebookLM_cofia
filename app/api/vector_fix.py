@@ -84,18 +84,19 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
 
             # 检查Qdrant中是否已有向量数据
             try:
-                search_result = qdrant_client.scroll(
+                # 使用count API获取精确的向量数量
+                count_result = qdrant_client.count(
                     collection_name=COLLECTION_NAME,
-                    scroll_filter={
+                    count_filter={
                         "must": [
                             {"key": "source_id", "match": {"value": source.id}},
                             {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
                         ]
-                    },
-                    limit=1
+                    }
                 )
-                qdrant_count = len(search_result[0])
-            except Exception:
+                qdrant_count = count_result.count
+            except Exception as e:
+                print(f"获取Qdrant计数失败: {e}")
                 qdrant_count = 0
 
             collections.append({
@@ -381,19 +382,21 @@ async def verify_collection(
         result['db_chunks'] = len(chunks)
 
         # 获取Qdrant中的数据
-        search_result = qdrant_client.scroll(
-            collection_name=COLLECTION_NAME,
-            scroll_filter={
-                "must": [
-                    {"key": "source_id", "match": {"value": collection_id}},
-                    {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
-                ]
-            },
-            limit=1000,
-            with_payload=True
-        )
-
-        result['qdrant_points'] = len(search_result[0])
+        try:
+            # 使用count API获取精确计数
+            count_result = qdrant_client.count(
+                collection_name=COLLECTION_NAME,
+                count_filter={
+                    "must": [
+                        {"key": "source_id", "match": {"value": collection_id}},
+                        {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                    ]
+                }
+            )
+            result['qdrant_points'] = count_result.count
+        except Exception as e:
+            print(f"获取Qdrant计数失败: {e}")
+            result['qdrant_points'] = 0
 
         if result['db_chunks'] == result['qdrant_points']:
             result['status'] = 'complete'
@@ -403,14 +406,30 @@ async def verify_collection(
             result['status'] = 'partial'
 
         # 获取样本数据
-        if search_result[0]:
-            result['samples'] = []
-            for point in search_result[0][:3]:
-                content_preview = point.payload.get('content', '')[:80] + "..."
-                result['samples'].append({
-                    'id': point.id,
-                    'content_preview': content_preview
-                })
+        if result['qdrant_points'] > 0:
+            try:
+                sample_result = qdrant_client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    scroll_filter={
+                        "must": [
+                            {"key": "source_id", "match": {"value": collection_id}},
+                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                        ]
+                    },
+                    limit=3,
+                    with_payload=True
+                )
+                
+                result['samples'] = []
+                for point in sample_result[0]:
+                    content_preview = point.payload.get('content', '')[:80] + "..."
+                    result['samples'].append({
+                        'id': point.id,
+                        'content_preview': content_preview
+                    })
+            except Exception as e:
+                print(f"获取样本数据失败: {e}")
+                result['samples'] = []
 
         return {
             'success': True,
