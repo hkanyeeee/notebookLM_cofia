@@ -211,6 +211,10 @@ export function useMessageStore() {
               }
               // 最终答案标记流式处理结束
               console.log('[Frontend] 最终答案处理完成，结束流式处理');
+
+              // 播放提示音通知用户消息完成
+              playNotificationSound();
+
               break;
             } else if (evt.type === 'status' && typeof evt.message === 'string') {
               // 状态更新
@@ -227,6 +231,10 @@ export function useMessageStore() {
               // 流式处理完成
               console.log('[Frontend] 流式处理完成');
               isToolRunning = false;
+
+              // 播放提示音通知用户消息完成
+              playNotificationSound();
+
               break;
             } else if (evt.type === 'error') {
               throw new Error(evt.message || 'stream error');
@@ -259,6 +267,22 @@ export function useMessageStore() {
       });
     } finally {
       try { if (timeoutId !== undefined) clearTimeout(timeoutId); } catch {}
+    }
+  }
+
+  // 播放消息完成提示音
+  function playNotificationSound() {
+    if (typeof Audio !== 'undefined') {
+      try {
+        const audio = new Audio('/audio/notification.mp3');
+        audio.volume = 0.5; // 设置音量为50%
+        // 尝试播放音频，如果失败则静默处理
+        audio.play().catch(e => {
+          console.log('音频播放失败:', e);
+        });
+      } catch (e) {
+        console.log('创建音频对象失败:', e);
+      }
     }
   }
 
