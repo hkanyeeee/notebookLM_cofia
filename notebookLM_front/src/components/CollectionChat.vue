@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption } from 'element-plus'
-import { Promotion, Plus } from '@element-plus/icons-vue'
+import { Promotion, Plus, Tools } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import type { AgenticCollection, CollectionResult } from '../api/notebook'
+import VectorFixDialog from './VectorFixDialog.vue'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.setOptions({
@@ -40,6 +41,8 @@ const queryInput = ref('')
 const messageContainer = ref<HTMLElement>()
 // 控制思维链和参考来源的展开状态，默认展开思维链
 const activeNames = ref(['reasoning'])
+// 向量修复对话框
+const showVectorFixDialog = ref(false)
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -184,6 +187,18 @@ function getInputPlaceholder() {
             <p class="text-gray-600 mb-6">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
             </p>
+            
+            <!-- 向量数据修复按钮 -->
+            <div class="mb-6">
+              <el-button 
+                type="primary" 
+                :icon="Tools" 
+                @click="showVectorFixDialog = true"
+                class="bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700"
+              >
+                向量数据修复
+              </el-button>
+            </div>
           </div>
 
           <!-- Collection卡片列表 -->
@@ -373,6 +388,12 @@ function getInputPlaceholder() {
         </el-button>
       </div>
     </div>
+
+    <!-- 向量修复对话框 -->
+    <VectorFixDialog 
+      v-model:visible="showVectorFixDialog"
+      @refresh-collections="$emit('clearCollectionResults')"
+    />
   </div>
 </template>
 

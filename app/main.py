@@ -56,6 +56,7 @@ from .api.models import router as models_router
 
 from .api.webhook import router as webhook_router
 from .api.n8n_workflow import router as n8n_workflow_router
+from .api.vector_fix import router as vector_fix_router
 
 app.include_router(ingest_router)
 app.include_router(agenttic_ingest_router)
@@ -68,3 +69,4 @@ app.include_router(models_router)
 
 app.include_router(webhook_router)
 app.include_router(n8n_workflow_router)
+app.include_router(vector_fix_router)
