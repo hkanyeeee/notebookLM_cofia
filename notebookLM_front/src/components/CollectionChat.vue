@@ -195,7 +195,7 @@ function getInputPlaceholder() {
             <div 
               v-for="collection in collections" 
               :key="collection.collection_id"
-              class="p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer"
+              class="p-4 border-2 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer collection-item"
               @click="handleCollectionChange(collection.collection_id)"
             >
               <div class="text-left">
@@ -328,7 +328,7 @@ function getInputPlaceholder() {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-4 border-t border-gray-200 bg-white">
+    <div class="p-4 border-t chat-input-container">
       <!-- Collection与Agentic Ingest 控制区 -->
       <div class="flex items-center mb-3 gap-3 max-w-3xl mx-auto">
         <!-- Collection选择下拉框 -->

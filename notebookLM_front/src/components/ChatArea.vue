@@ -116,12 +116,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-white dark:bg-dark-background">
+  <div class="flex flex-col h-full" style="background-color: var(--color-background)">
     <!-- 头部 -->
     <header class="header-container" :class="{ 'header-collapsed': headerCollapsed }">
       <!-- 第一行：标题和按钮 -->
       <div class="header-row">
-        <h1 class="header-title">对话</h1>
+        <div class="header-title flex items-center">
+          <ThemeToggle :show-dropdown="!isMobile" class="action-btn" />
+          <h1>对话</h1>
+        </div>
         <div class="header-actions">
           <!-- 移动端折叠按钮 -->
           <ElButton text @click="headerCollapsed = !headerCollapsed" class="action-btn collapse-btn">
@@ -130,7 +133,6 @@ onMounted(async () => {
               <ArrowDown v-else />
             </ElIcon>
           </ElButton>
-          <ThemeToggle :show-dropdown="!isMobile" class="action-btn" />
           <ElButton text @click="handleShowWorkflows" class="action-btn" >
             <ElIcon>
               <Bell />

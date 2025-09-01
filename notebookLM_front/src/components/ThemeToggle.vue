@@ -1,21 +1,5 @@
 <template>
   <div class="theme-toggle-container">
-    <ElTooltip
-      :content="getTooltipContent()"
-      placement="bottom"
-      effect="dark"
-    >
-      <ElButton
-        text
-        @click="toggleTheme"
-        class="theme-toggle-btn"
-        :class="{ 'dark-mode': themeStore.isDarkMode }"
-      >
-        <ElIcon :class="{ 'rotating': isToggling }">
-          <component :is="currentIcon" />
-        </ElIcon>
-      </ElButton>
-    </ElTooltip>
     
     <!-- 主题选择下拉菜单 -->
     <ElDropdown
@@ -26,11 +10,12 @@
     >
       <ElButton
         text
-        class="theme-dropdown-btn"
+        @click="toggleTheme"
+        class="theme-toggle-btn"
         :class="{ 'dark-mode': themeStore.isDarkMode }"
       >
-        <ElIcon>
-          <ArrowDown />
+        <ElIcon :class="{ 'rotating': isToggling }">
+          <component :is="currentIcon" />
         </ElIcon>
       </ElButton>
       <template #dropdown>
@@ -60,7 +45,6 @@ import type { Theme } from '../stores/theme'
 import {
   ElButton,
   ElIcon,
-  ElTooltip,
   ElDropdown,
   ElDropdownMenu,
   ElDropdownItem
@@ -69,7 +53,6 @@ import {
   Sunny,
   Moon,
   Monitor,
-  ArrowDown
 } from '@element-plus/icons-vue'
 
 interface Props {
@@ -90,17 +73,6 @@ const currentIcon = computed(() => {
   }
   return themeStore.isDarkMode ? Moon : Sunny
 })
-
-// 工具提示内容
-const getTooltipContent = () => {
-  const themeMap = {
-    light: '浅色模式',
-    dark: '深色模式',
-    auto: '跟随系统'
-  }
-  const current = themeMap[themeStore.theme]
-  return props.showDropdown ? `当前：${current}，点击切换` : `切换到${themeStore.isDarkMode ? '浅色' : '深色'}模式`
-}
 
 // 切换主题
 const toggleTheme = () => {
@@ -130,6 +102,7 @@ const handleThemeChange = (theme: Theme) => {
 .theme-toggle-container {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
 }
 
@@ -139,6 +112,11 @@ const handleThemeChange = (theme: Theme) => {
   border-radius: 8px;
   transition: all 0.3s ease;
   color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .theme-toggle-btn:hover,
@@ -160,6 +138,17 @@ const handleThemeChange = (theme: Theme) => {
 
 .rotating {
   animation: rotate 0.3s ease-in-out;
+}
+
+/* 图标居中对齐 */
+.theme-toggle-btn .el-icon,
+.theme-dropdown-btn .el-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 @keyframes rotate {

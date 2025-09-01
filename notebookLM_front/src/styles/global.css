@@ -676,6 +676,32 @@ html.dark .chat-message-content blockquote {
   color: var(--color-text-secondary) !important;
 }
 
+/* 聊天输入框容器 */
+.chat-input-container {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+/* Collection 项目 */
+.collection-item {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.collection-item:hover {
+  background-color: var(--color-surface-light);
+}
+
+/* 候选 URL 项目 */
+.candidate-item {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.candidate-item:hover {
+  background-color: var(--color-surface-light);
+}
+
 /* 文本省略 */
 .text-ellipsis {
   overflow: hidden;

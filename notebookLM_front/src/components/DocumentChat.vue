@@ -182,7 +182,7 @@ function isQueryDisabled() {
             <div
               v-for="(item, index) in candidateUrls"
               :key="item.url"
-              class="candidate-item group flex items-center p-3 bg-white border border-gray-200 rounded-lg cursor-pointer transition-all duration-200 hover:border-indigo-300 hover:shadow-sm hover:bg-gray-50"
+              class="candidate-item group flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-200 hover:border-indigo-300 hover:shadow-sm"
               @click="handleAddCandidate(item.url)"
             >
               <!-- 序号 -->
@@ -294,7 +294,7 @@ function isQueryDisabled() {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-4 border-t border-gray-200 bg-white">
+    <div class="p-4 border-t chat-input-container">
       <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
