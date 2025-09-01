@@ -416,6 +416,9 @@ async def _handle_collection_query(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid collection_id format")
 
+    # 使用固定的session_id与agenttic_ingest保持一致
+    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+
     query_embedding = (await embed_texts([q], model=embedding_model, dimensions=embedding_dimensions))[0]
 
     # 针对特定collection查询
@@ -427,7 +430,7 @@ async def _handle_collection_query(
                 query_text=q,
                 query_embedding=query_embedding,
                 top_k=top_k,
-                session_id=session_id,
+                session_id=FIXED_SESSION_ID,  # 使用固定session_id
                 source_ids=[collection_source_id],  # 只查询指定的collection
                 hnsw_ef=256,
                 k_dense=min(150, top_k),
@@ -438,7 +441,7 @@ async def _handle_collection_query(
         hits = await query_embeddings(
             query_embedding,
             top_k=top_k,
-            session_id=session_id,
+            session_id=FIXED_SESSION_ID,  # 使用固定session_id
             source_ids=[collection_source_id],  # 只查询指定的collection
         )
 
@@ -482,6 +485,26 @@ async def _handle_collection_query(
         final_hits = hits[:RAG_RERANK_TOP_K]
 
     contexts = [chunk.content for chunk, _ in final_hits]
+    
+    # 检查是否找到相关内容
+    if not contexts:
+        # 没有找到相关内容，返回提示信息
+        error_message = f"在Collection中没有找到与查询 '{q}' 相关的内容。请尝试使用不同的关键词或确认Collection中包含相关数据。"
+        if stream:
+            async def error_event_generator():
+                yield "data: " + json.dumps({
+                    "type": "error",
+                    "message": error_message
+                }, ensure_ascii=False) + "\n\n"
+            return StreamingResponse(error_event_generator(), media_type="text/event-stream")
+        else:
+            return {
+                "answer": error_message,
+                "sources": [],
+                "success": False,
+                "query_type": "collection",
+                "collection_id": collection_id
+            }
     
     # COLLECTION模式不使用工具（不启用web search）
     if stream:
