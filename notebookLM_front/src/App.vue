@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
 import { useSessionStore } from './stores/session'
+import { useThemeStore } from './stores/theme'
 import { cleanupSession } from './api/notebook'
 import { ElButton, ElIcon } from 'element-plus'
 import { Menu } from '@element-plus/icons-vue'
@@ -10,6 +11,7 @@ import { Menu } from '@element-plus/icons-vue'
 const sidebarCollapsed = ref(false)
 const mobileMenuOpen = ref(false) // 移动端侧边栏显示状态
 const sessionStore = useSessionStore()
+const themeStore = useThemeStore()
 
 // 检查是否为移动端
 const isMobile = ref(window.innerWidth <= 768)
@@ -122,13 +124,25 @@ const handleMouseEnd = () => {
   }, 100)
 }
 
+// 主题清理函数
+let themeCleanup: (() => void) | null = null
+
 onMounted(() => {
   sessionStore.initializeSession()
+  
+  // 初始化主题系统
+  themeCleanup = themeStore.initTheme()
+  
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  // 清理主题监听器
+  if (themeCleanup) {
+    themeCleanup()
+  }
+  
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('resize', handleResize)
 })
@@ -201,8 +215,9 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 .app-container {
   display: flex;
   height: 100%;
-  background-color: #fafafa;
+  background-color: var(--color-background);
   position: relative;
+  transition: background-color 0.3s ease;
 }
 
 .main-content {
@@ -258,6 +273,12 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 50;
+  transition: background-color 0.3s ease;
+}
+
+/* 暗色主题下的遮罩层 */
+html.dark .mobile-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
 }
 
 /* 响应式设计 */

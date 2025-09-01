@@ -8,6 +8,7 @@ import NormalChat from './NormalChat.vue'
 import DocumentChat from './DocumentChat.vue'
 import CollectionChat from './CollectionChat.vue'
 import WorkflowDialog from './WorkflowDialog.vue'
+import ThemeToggle from './ThemeToggle.vue'
 
 const store = useNotebookStore()
 const sessionStore = useSessionStore()
@@ -115,7 +116,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-white">
+  <div class="flex flex-col h-full bg-white dark:bg-dark-background">
     <!-- 头部 -->
     <header class="header-container" :class="{ 'header-collapsed': headerCollapsed }">
       <!-- 第一行：标题和按钮 -->
@@ -129,6 +130,7 @@ onMounted(async () => {
               <ArrowDown v-else />
             </ElIcon>
           </ElButton>
+          <ThemeToggle :show-dropdown="!isMobile" class="action-btn" />
           <ElButton text @click="handleShowWorkflows" class="action-btn" >
             <ElIcon>
               <Bell />
@@ -278,9 +280,10 @@ onMounted(async () => {
 /* 头部容器 */
 .header-container {
   padding: 12px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: white;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
   z-index: 10;
+  transition: all 0.3s ease;
 }
 
 /* 第一行：标题和按钮 */
@@ -293,10 +296,11 @@ onMounted(async () => {
 
 .header-title {
   margin: 0;
-  color: #1f2937;
+  color: var(--color-text);
   font-size: 1.125rem;
   font-weight: 600;
   white-space: nowrap;
+  transition: color 0.3s ease;
 }
 
 .header-actions {

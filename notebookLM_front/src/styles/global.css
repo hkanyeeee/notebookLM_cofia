@@ -1,8 +1,58 @@
 @import "tailwindcss";
 
+/* CSS Variables for Theme */
+:root {
+  /* Light theme colors */
+  --color-background: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-light: #f8fafc;
+  --color-surface-lighter: #f1f5f9;
+  --color-text: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+  --color-border: #e5e7eb;
+  --color-border-light: #d1d5db;
+  --color-shadow: rgba(0, 0, 0, 0.1);
+  --color-hover: rgba(0, 0, 0, 0.05);
+  
+  /* Element Plus overrides */
+  --el-bg-color: #ffffff;
+  --el-text-color-primary: #111827;
+  --el-text-color-regular: #6b7280;
+  --el-border-color: #e5e7eb;
+  --el-border-color-light: #d1d5db;
+  --el-fill-color-blank: #ffffff;
+  --el-color-primary: #4f46e5;
+}
+
+/* Dark theme colors */
+html.dark {
+  --color-background: #0f0f23;
+  --color-surface: #1e1e3f;
+  --color-surface-light: #262650;
+  --color-surface-lighter: #2d2d5a;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+  --color-border-light: #475569;
+  --color-shadow: rgba(0, 0, 0, 0.3);
+  --color-hover: rgba(255, 255, 255, 0.1);
+  
+  /* Element Plus dark theme */
+  --el-bg-color: #1e1e3f;
+  --el-text-color-primary: #f1f5f9;
+  --el-text-color-regular: #94a3b8;
+  --el-border-color: #334155;
+  --el-border-color-light: #475569;
+  --el-fill-color-blank: #262650;
+  --el-color-primary: #6366f1;
+}
+
 /* 全局样式 */
 * {
   box-sizing: border-box;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 html,
@@ -11,8 +61,8 @@ body {
   padding: 0;
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  background-color: #fafafa;
-  color: #111827;
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
 #app {
@@ -30,28 +80,64 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--color-border);
   border-radius: 3px;
+  transition: background-color 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--color-text-muted);
+}
+
+/* Dark mode scrollbar */
+html.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-light);
 }
 
 /* Element Plus 组件覆盖样式 */
 .el-button {
   border-radius: 8px;
   font-weight: 500;
+  background-color: var(--el-fill-color-blank);
+  border-color: var(--el-border-color);
+  color: var(--el-text-color-primary);
 }
 
 .el-button--primary {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
+  background-color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  color: #ffffff;
 }
 
 .el-button--primary:hover {
   background-color: #4338ca;
   border-color: #4338ca;
+}
+
+/* Dark mode button styles */
+html.dark .el-button {
+  background-color: var(--color-surface-light);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+html.dark .el-button:hover {
+  background-color: var(--color-surface-lighter);
+}
+
+html.dark .el-button--primary {
+  background-color: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
+html.dark .el-button--primary:hover {
+  background-color: #5855eb;
+  border-color: #5855eb;
 }
 
 /* 主题色相关的 disabled 状态样式 */
@@ -66,100 +152,176 @@ body {
 
 .el-button:disabled,
 .el-button.is-disabled {
-  background-color: #e0e7ff !important;
-  border-color: #c7d2fe !important;
-  color: #6366f1 !important;
+  background-color: var(--color-surface-light) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-muted) !important;
   cursor: not-allowed;
   opacity: 0.7;
 }
 
+/* Input styles */
 .el-input__wrapper {
-  box-shadow: 0 0 0 1px #d1d5db;
-  transition: all 0.2s;
+  background-color: var(--el-fill-color-blank);
+  box-shadow: 0 0 0 1px var(--el-border-color);
+  transition: all 0.3s ease;
 }
 
 .el-input__wrapper:hover {
-  box-shadow: 0 0 0 1px #9ca3af;
+  box-shadow: 0 0 0 1px var(--color-text-muted);
 }
 
 .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px #4f46e5;
+  box-shadow: 0 0 0 1px var(--el-color-primary);
+}
+
+.el-input__inner {
+  color: var(--el-text-color-primary);
+  background-color: transparent;
+}
+
+/* Dark mode input styles */
+html.dark .el-input__wrapper {
+  background-color: var(--color-surface-light);
+}
+
+html.dark .el-textarea__inner {
+  background-color: var(--color-surface-light);
+  border-color: var(--color-border);
+  color: var(--color-text);
 }
 
 /* Element Plus Select 组件样式统一 */
 .el-select {
-  --el-select-input-focus-border-color: #4f46e5;
+  --el-select-input-focus-border-color: var(--el-color-primary);
 }
 
 .el-select .el-input.is-focus .el-input__wrapper {
-  box-shadow: 0 0 0 1px #4f46e5 !important;
+  box-shadow: 0 0 0 1px var(--el-color-primary) !important;
 }
 
 .el-select-dropdown {
-  border-color: #c7d2fe !important;
+  background-color: var(--el-fill-color-blank);
+  border-color: var(--el-border-color) !important;
+}
+
+.el-option {
+  color: var(--el-text-color-regular);
 }
 
 .el-option:hover {
-  background-color: #eef2ff !important;
+  background-color: var(--color-hover) !important;
 }
 
 .el-option.is-selected {
-  background-color: #e0e7ff !important;
-  color: #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+  color: var(--el-color-primary) !important;
   font-weight: 600;
 }
 
 .el-option.is-selected::after {
-  color: #4f46e5 !important;
+  color: var(--el-color-primary) !important;
+}
+
+/* Dark mode select styles */
+html.dark .el-select-dropdown {
+  background-color: var(--color-surface);
+  border-color: var(--color-border) !important;
+}
+
+html.dark .el-option {
+  color: var(--color-text-secondary);
+}
+
+html.dark .el-option:hover {
+  background-color: var(--color-surface-light) !important;
+}
+
+html.dark .el-option.is-selected {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+  color: #6366f1 !important;
 }
 
 /* Element Plus Collapse 组件样式统一 */
 .el-collapse-item__header {
-  color: #3730a3 !important;
-  border-bottom-color: #c7d2fe !important;
+  color: var(--color-text) !important;
+  border-bottom-color: var(--el-border-color) !important;
+  background-color: var(--el-fill-color-blank);
 }
 
 .el-collapse-item__header:hover {
-  color: #4f46e5 !important;
+  color: var(--el-color-primary) !important;
 }
 
 .el-collapse-item.is-active .el-collapse-item__header {
-  color: #4f46e5 !important;
-  border-bottom-color: #4f46e5 !important;
+  color: var(--el-color-primary) !important;
+  border-bottom-color: var(--el-color-primary) !important;
 }
 
 .el-textarea__inner {
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  background-color: var(--el-fill-color-blank);
+  border-color: var(--el-border-color);
+  color: var(--el-text-color-primary);
 }
 
 .el-textarea__inner:hover {
-  border-color: #9ca3af;
+  border-color: var(--color-text-muted);
 }
 
 .el-textarea__inner:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 1px #4f46e5;
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary);
 }
 
+/* Dialog styles */
 .el-dialog {
   border-radius: 12px;
+  background-color: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
 }
 
 .el-dialog__header {
   padding: 20px 24px 16px;
+  background-color: var(--el-bg-color);
+  border-bottom: 1px solid var(--el-border-color);
+}
+
+.el-dialog__title {
+  color: var(--el-text-color-primary);
 }
 
 .el-dialog__body {
   padding: 0 24px 20px;
+  background-color: var(--el-bg-color);
 }
 
 .el-dialog__footer {
   padding: 16px 24px 20px;
+  background-color: var(--el-bg-color);
 }
 
+/* Message styles */
 .el-message {
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  background-color: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
+}
+
+/* Dark mode dialog and message styles */
+html.dark .el-dialog {
+  background-color: var(--color-surface);
+}
+
+html.dark .el-dialog__header,
+html.dark .el-dialog__body,
+html.dark .el-dialog__footer {
+  background-color: var(--color-surface);
+}
+
+html.dark .el-message {
+  background-color: var(--color-surface);
+  color: var(--color-text);
 }
 
 /* 工具提示样式 */
@@ -174,14 +336,16 @@ body {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  background: #111827;
-  color: white;
+  background: var(--color-surface);
+  color: var(--color-text);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 12px;
   white-space: nowrap;
   z-index: 1000;
   margin-bottom: 8px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px var(--color-shadow);
 }
 
 .tooltip:hover::before {
@@ -191,7 +355,7 @@ body {
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: #111827;
+  border-top-color: var(--color-surface);
   z-index: 1000;
   margin-bottom: 4px;
 }
@@ -379,52 +543,82 @@ body {
   border-collapse: collapse !important;
   border-spacing: 0 !important;
   margin: 16px 0 !important;
-  background-color: #fafafa !important; /* 接近白色的背景 */
-  border: 1px solid #e5e7eb !important;
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 8px !important;
   overflow: hidden !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 1px 3px var(--color-shadow) !important;
 }
 
 .chat-message-content thead {
-  background-color: #f3f4f6 !important;
+  background-color: var(--color-surface-light) !important;
 }
 
 .chat-message-content th {
-  background-color: #f3f4f6 !important;
-  border: 1px solid #d1d5db !important;
+  background-color: var(--color-surface-light) !important;
+  border: 1px solid var(--color-border) !important;
   padding: 12px 16px !important;
   text-align: center !important; /* 表头文字居中 */
   vertical-align: middle !important;
   font-weight: 600 !important;
-  color: #374151 !important;
+  color: var(--color-text) !important;
   font-size: 14px !important;
   line-height: 1.4 !important;
 }
 
 .chat-message-content td {
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--color-border) !important;
   padding: 12px 16px !important;
   text-align: center !important; /* 表格内容文字居中 */
   vertical-align: middle !important;
   font-size: 14px !important;
   line-height: 1.5 !important;
-  color: #374151 !important;
-  background-color: #ffffff !important;
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-surface) !important;
 }
 
 .chat-message-content tbody tr:nth-child(even) td {
-  background-color: #f9fafb !important; /* 斑马纹效果 */
+  background-color: var(--color-surface-light) !important; /* 斑马纹效果 */
 }
 
 .chat-message-content tbody tr:hover td {
-  background-color: #f3f4f6 !important; /* 悬停效果 */
+  background-color: var(--color-surface-lighter) !important; /* 悬停效果 */
+}
+
+/* 暗色主题表格样式 */
+html.dark .chat-message-content table {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+}
+
+html.dark .chat-message-content thead {
+  background-color: var(--color-surface-light) !important;
+}
+
+html.dark .chat-message-content th {
+  background-color: var(--color-surface-light) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+html.dark .chat-message-content td {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+}
+
+html.dark .chat-message-content tbody tr:nth-child(even) td {
+  background-color: var(--color-surface-light) !important;
+}
+
+html.dark .chat-message-content tbody tr:hover td {
+  background-color: var(--color-surface-lighter) !important;
 }
 
 /* 代码块样式优化 */
 .chat-message-content pre {
-  background-color: #f3f4f6 !important;
-  border: 1px solid #e5e7eb !important;
+  background-color: var(--color-surface-light) !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 6px !important;
   padding: 16px !important;
   margin: 12px 0 !important;
@@ -433,12 +627,13 @@ body {
 }
 
 .chat-message-content code {
-  background-color: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
+  background-color: var(--color-surface-lighter) !important;
+  border: 1px solid var(--color-border-light) !important;
   border-radius: 4px !important;
   padding: 2px 6px !important;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace !important;
   font-size: 13px !important;
+  color: var(--color-text) !important;
 }
 
 .chat-message-content pre code {
@@ -446,18 +641,39 @@ body {
   border: none !important;
   padding: 0 !important;
   font-size: 13px !important;
+  color: var(--color-text) !important;
+}
+
+/* 暗色主题代码块样式 */
+html.dark .chat-message-content pre {
+  background-color: var(--color-surface-light) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+html.dark .chat-message-content code {
+  background-color: var(--color-surface-lighter) !important;
+  border-color: var(--color-border-light) !important;
+  color: var(--color-text) !important;
 }
 
 /* 引用块样式优化 */
 .chat-message-content blockquote {
-  border-left: 4px solid #4f46e5 !important;
-  background-color: #f1f5f9 !important;
+  border-left: 4px solid var(--el-color-primary) !important;
+  background-color: var(--color-surface-lighter) !important;
   margin: 12px 0 !important;
   padding: 12px 16px !important;
   border-radius: 0 6px 6px 0 !important;
-  color: #3730a3 !important;
+  color: var(--color-text-secondary) !important;
   font-style: italic !important;
   line-height: 1.6 !important;
+}
+
+/* 暗色主题引用块样式 */
+html.dark .chat-message-content blockquote {
+  border-left-color: #6366f1 !important;
+  background-color: var(--color-surface-light) !important;
+  color: var(--color-text-secondary) !important;
 }
 
 /* 文本省略 */

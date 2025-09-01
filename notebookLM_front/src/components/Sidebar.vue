@@ -83,11 +83,11 @@ function handleRemoveFailedUrl(url: string) {
 </script>
 
 <template>
-  <aside class="bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300 overflow-hidden" :class="{ 'w-20': collapsed, 'w-96': !collapsed }">
+  <aside class="bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300 overflow-hidden" :class="{ 'w-20': collapsed, 'w-96': !collapsed }">
     <!-- 头部 -->
-    <div class="p-5 border-b border-gray-200 flex items-center justify-between min-h-[70px]">
+    <div class="p-5 border-b border-gray-200 dark:border-dark-border flex items-center justify-between min-h-[70px]">
       <div v-if="!collapsed" class="flex-1">
-        <h2 class="m-0 text-gray-800 text-xl font-semibold">文档</h2>
+        <h2 class="m-0 text-gray-800 dark:text-dark-text text-xl font-semibold">文档</h2>
       </div>
       <ElButton text @click="$emit('toggle')" class="p-2 rounded-md">
         <ElIcon>
@@ -98,7 +98,7 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 添加文档按钮 - 只在文档问答模式下显示 -->
-    <div v-if="isDocumentQueryMode" class="p-5 border-b border-gray-200">
+    <div v-if="isDocumentQueryMode" class="p-5 border-b border-gray-200 dark:border-dark-border">
       <ElButton
         type="primary"
         :icon="Plus"
@@ -112,12 +112,12 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- Ingestion Progress Section -->
-    <div class="px-5 pb-5 border-gray-200" v-if="!collapsed && store.ingestionStatus.size > 0">
-      <h3 class="my-3 text-gray-700 text-base font-medium">正在处理</h3>
+    <div class="px-5 pb-5 border-gray-200 dark:border-dark-border" v-if="!collapsed && store.ingestionStatus.size > 0">
+      <h3 class="my-3 text-gray-700 dark:text-dark-text-secondary text-base font-medium">正在处理</h3>
       <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="mb-4">
         <div class="flex justify-between items-center mb-1.5 gap-2">
-          <span class="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px]">{{ url }}</span>
-          <span class="text-xs text-gray-500">{{ status.message }}</span>
+          <span class="text-sm font-medium text-gray-700 dark:text-dark-text-secondary whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px]">{{ url }}</span>
+          <span class="text-xs text-gray-500 dark:text-dark-text-muted">{{ status.message }}</span>
           <!-- 进行中或失败时均支持删除/取消，以优化体验 -->
           <ElButton 
             text 
@@ -141,7 +141,7 @@ function handleRemoveFailedUrl(url: string) {
     <!-- 文档列表 -->
     <div class="flex-1 p-5 overflow-y-auto relative" v-if="!collapsed">
       <div class="transition-opacity duration-300" :class="{ 'opacity-30': store.isCollectionQueryMode || isNormalQueryMode }">
-        <h3 class="m-0 mb-4 text-gray-700 text-base font-medium">文档列表</h3>
+        <h3 class="m-0 mb-4 text-gray-700 dark:text-dark-text-secondary text-base font-medium">文档列表</h3>
         <div class="flex flex-col gap-3">
           <ElTooltip
             v-for="doc in store.documents"
@@ -155,13 +155,13 @@ function handleRemoveFailedUrl(url: string) {
                 <div>{{ doc.url }}</div>
               </div>
             </template>
-            <div class="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200 transition-all duration-200 hover:bg-gray-100 hover:border-gray-300 group">
-              <ElIcon class="mr-3 text-gray-500">
+            <div class="flex items-center p-3 bg-gray-50 dark:bg-dark-surface-light rounded-lg border border-gray-200 dark:border-dark-border transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-surface-lighter hover:border-gray-300 dark:hover:border-dark-border-light group">
+              <ElIcon class="mr-3 text-gray-500 dark:text-dark-text-muted">
                 <Document />
               </ElIcon>
               <div class="flex-1 min-w-0">
-                <div class="font-medium text-gray-900 text-sm mb-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.title }}</div>
-                <div class="text-gray-500 text-xs overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.url }}</div>
+                <div class="font-medium text-gray-900 dark:text-dark-text text-sm mb-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.title }}</div>
+                <div class="text-gray-500 dark:text-dark-text-muted text-xs overflow-hidden text-ellipsis whitespace-nowrap">{{ doc.url }}</div>
               </div>
               <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="opacity-0 group-hover:opacity-100 transition-opacity">
                 <ElIcon>
@@ -171,28 +171,28 @@ function handleRemoveFailedUrl(url: string) {
             </div>
           </ElTooltip>
 
-          <div v-if="store.documents.length === 0" class="text-center text-gray-500 mt-10">
+          <div v-if="store.documents.length === 0" class="text-center text-gray-500 dark:text-dark-text-muted mt-10">
             <p class="my-2">还没有添加任何文档</p>
-            <p class="my-2 text-xs text-gray-400">可在右侧输入课题，或点击上方按钮添加网址</p>
+            <p class="my-2 text-xs text-gray-400 dark:text-dark-text-muted">可在右侧输入课题，或点击上方按钮添加网址</p>
           </div>
         </div>
       </div>
 
       <!-- Collection查询模式蒙版 -->
-      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 bg-gray-500/10 backdrop-blur-sm flex items-center justify-center z-10">
-        <div class="bg-white rounded-xl p-6 text-center shadow-lg border border-gray-200 max-w-[280px]">
-          <h4 class="m-0 mb-3 text-gray-900 text-base font-semibold">Collection查询模式</h4>
-          <p class="my-2 text-gray-500 text-sm leading-relaxed">当前正在使用Collection进行查询</p>
-          <p class="text-indigo-600 font-medium bg-indigo-50 py-2 px-3 rounded-md mt-4 text-xs">{{ store.collections.find((c: AgenticCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
+      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 bg-gray-500/10 dark:bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
+        <div class="bg-white dark:bg-dark-surface rounded-xl p-6 text-center shadow-lg border border-gray-200 dark:border-dark-border max-w-[280px]">
+          <h4 class="m-0 mb-3 text-gray-900 dark:text-dark-text text-base font-semibold">Collection查询模式</h4>
+          <p class="my-2 text-gray-500 dark:text-dark-text-secondary text-sm leading-relaxed">当前正在使用Collection进行查询</p>
+          <p class="text-indigo-600 dark:text-primary-400 font-medium bg-indigo-50 dark:bg-primary-900/20 py-2 px-3 rounded-md mt-4 text-xs">{{ store.collections.find((c: AgenticCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
 
       <!-- 普通问答模式蒙版 -->
-      <div v-if="isNormalQueryMode" class="absolute inset-0 bg-gray-500/10 backdrop-blur-sm flex items-center justify-center z-10">
-        <div class="bg-white rounded-xl p-6 text-center shadow-lg border border-gray-200 max-w-[280px]">
-          <h4 class="m-0 mb-3 text-gray-900 text-base font-semibold">普通问答模式</h4>
-          <p class="my-2 text-gray-500 text-sm leading-relaxed">当前正在使用网络搜索进行问答</p>
-          <p class="text-indigo-600 font-medium bg-indigo-50 py-2 px-3 rounded-md mt-4 text-xs">该模式将自动使用工具为您提供最新的信息和答案</p>
+      <div v-if="isNormalQueryMode" class="absolute inset-0 bg-gray-500/10 dark:bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
+        <div class="bg-white dark:bg-dark-surface rounded-xl p-6 text-center shadow-lg border border-gray-200 dark:border-dark-border max-w-[280px]">
+          <h4 class="m-0 mb-3 text-gray-900 dark:text-dark-text text-base font-semibold">普通问答模式</h4>
+          <p class="my-2 text-gray-500 dark:text-dark-text-secondary text-sm leading-relaxed">当前正在使用网络搜索进行问答</p>
+          <p class="text-indigo-600 dark:text-primary-400 font-medium bg-indigo-50 dark:bg-primary-900/20 py-2 px-3 rounded-md mt-4 text-xs">该模式将自动使用工具为您提供最新的信息和答案</p>
         </div>
       </div>
     </div>
