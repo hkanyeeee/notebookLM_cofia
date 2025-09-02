@@ -3,6 +3,7 @@ import { notebookApi, DEFAULT_TOOLS } from '../api/notebook'
 import { useSessionStore } from './session'
 import type { Message, Source } from './types'
 import { QueryType } from './types'
+import { audioManager } from '../utils/audioManager'
 
 export function useMessageStore() {
   const sessionStore = useSessionStore()
@@ -271,23 +272,38 @@ export function useMessageStore() {
   }
 
   // 播放消息完成提示音
-  function playNotificationSound() {
-    if (typeof Audio !== 'undefined') {
-      try {
-        const audio = new Audio('/audio/notification.mp3');
-        audio.volume = 0.5; // 设置音量为50%
-        // 尝试播放音频，如果失败则静默处理
-        audio.play().catch(e => {
-          console.log('音频播放失败:', e);
-        });
-      } catch (e) {
-        console.log('创建音频对象失败:', e);
+  async function playNotificationSound() {
+    try {
+      const success = await audioManager.playNotification()
+      if (success) {
+        console.log('消息完成提示音播放成功')
+      } else {
+        console.log('音频播放失败，但可能已显示通知')
       }
+    } catch (error) {
+      console.warn('播放提示音时发生错误:', error)
     }
   }
 
   function clearMessages() {
     messages.value = []
+  }
+
+  // 音频管理相关方法
+  function initializeAudioManager() {
+    return audioManager.initialize()
+  }
+
+  function setAudioVolume(volume: number) {
+    audioManager.setVolume(volume)
+  }
+
+  function setAudioEnabled(enabled: boolean) {
+    audioManager.setEnabled(enabled)
+  }
+
+  function getAudioStatus() {
+    return audioManager.getStatus()
   }
 
   // 开始编辑消息
@@ -355,5 +371,11 @@ export function useMessageStore() {
     cancelEditMessage,
     updateEditingMessage,
     resendEditedMessage,
+    
+    // 音频管理方法
+    initializeAudioManager,
+    setAudioVolume,
+    setAudioEnabled,
+    getAudioStatus,
   }
 }
