@@ -130,7 +130,7 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
   >
     <div class="workflow-status-container" v-loading="loadingWorkflows">
       <div class="workflow-section">
-        <h3>正在执行的工作流 ({{ runningWorkflows.length }})</h3>
+        <h3 class="mt-4">正在执行的工作流 ({{ runningWorkflows.length }})</h3>
         
         <!-- 桌面端表格显示 -->
         <ElTable 

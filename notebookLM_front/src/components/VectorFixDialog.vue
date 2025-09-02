@@ -2,10 +2,11 @@
   <el-dialog
     :model-value="visible"
     title="向量数据修复"
-    width="800px"
+    :width="isMobile ? '95%' : '800px'"
     :close-on-click-modal="false"
     @update:model-value="handleVisibleUpdate"
     @close="handleClose"
+    class="vector-fix-dialog-wrapper"
   >
     <div class="vector-fix-dialog">
       <!-- 加载状态 -->
@@ -29,7 +30,7 @@
       <div v-else>
         <!-- 统计信息 -->
         <div v-if="collectionsStatus" class="mb-6">
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div class="grid gap-4 mb-4" :class="isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'">
             <div class="bg-blue-50 p-4 rounded-lg text-center">
               <div class="text-2xl font-bold text-blue-600">{{ collectionsStatus.stats.total_collections }}</div>
               <div class="text-sm text-gray-600">总集合数</div>
@@ -49,17 +50,18 @@
           </div>
 
           <!-- 操作按钮 -->
-          <div class="flex gap-3 mb-6">
+          <div class="flex gap-3 mb-6" :class="{ 'flex-col': isMobile }">
             <el-button
               type="primary"
               :disabled="collectionsStatus.stats.needs_fix === 0 || isFixing"
               :loading="isFixing"
               @click="fixAllCollections"
+              :class="{ 'w-full': isMobile }"
             >
               <el-icon><Tools /></el-icon>
               修复所有集合
             </el-button>
-            <el-button @click="loadCollectionsStatus">
+            <el-button @click="loadCollectionsStatus" :class="{ 'w-full': isMobile }">
               <el-icon><Refresh /></el-icon>
               刷新状态
             </el-button>
@@ -108,7 +110,9 @@
         <!-- 集合列表 -->
         <div v-if="collectionsStatus">
           <h4 class="font-semibold mb-3">集合详情</h4>
-          <div class="space-y-3 max-h-96 overflow-y-auto">
+          
+          <!-- 桌面端列表显示 -->
+          <div v-if="!isMobile" class="space-y-3 max-h-96 overflow-y-auto">
             <div
               v-for="collection in collectionsStatus.collections"
               :key="collection.id"
@@ -172,20 +176,90 @@
               </div>
             </div>
           </div>
+
+          <!-- 移动端卡片显示 -->
+          <div v-else class="mobile-collection-list">
+            <div 
+              v-if="collectionsStatus.collections.length === 0" 
+              class="empty-state"
+            >
+              暂无集合数据
+            </div>
+            <div
+              v-for="collection in collectionsStatus.collections"
+              :key="collection.id"
+              class="mobile-collection-card"
+              :class="{
+                'status-missing': collection.status === 'missing',
+                'status-partial': collection.status === 'partial',
+                'status-complete': collection.status === 'complete'
+              }"
+            >
+              <div class="card-header">
+                <div class="collection-info">
+                  <div class="collection-title">
+                    <span class="status-icon">{{ getStatusIcon(collection.status) }}</span>
+                    {{ collection.title }}
+                  </div>
+                  <div class="collection-id">ID: {{ collection.id }}</div>
+                </div>
+                <el-tag 
+                  :type="getStatusTagType(collection.status)" 
+                  size="small"
+                  effect="plain"
+                >
+                  {{ getStatusText(collection.status) }}
+                </el-tag>
+              </div>
+              
+              <div class="card-body">
+                <div class="stats-info">
+                  <div class="stat-item">
+                    <span class="stat-label">文档块数:</span>
+                    <span class="stat-value">{{ collection.chunks_count }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">向量数:</span>
+                    <span class="stat-value">{{ collection.qdrant_count }}</span>
+                  </div>
+                </div>
+                
+                <div class="card-actions">
+                  <el-button
+                    v-if="collection.needs_fix"
+                    size="small"
+                    type="primary"
+                    :disabled="isFixing"
+                    @click="fixSingleCollection(collection.id)"
+                    class="action-button"
+                  >
+                    修复
+                  </el-button>
+                  <el-button
+                    size="small"
+                    @click="verifyCollection(collection.id)"
+                    class="action-button"
+                  >
+                    验证
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <template #footer>
-      <div class="flex justify-end">
-        <el-button @click="handleClose">关闭</el-button>
+      <div class="dialog-footer" :class="{ 'mobile-footer': isMobile }">
+        <el-button @click="handleClose" :class="{ 'w-full': isMobile }">关闭</el-button>
       </div>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { 
   ElDialog, ElButton, ElIcon, ElProgress, ElTag, ElMessage
 } from 'element-plus'
@@ -213,6 +287,23 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'refresh-collections'): void
 }>()
+
+// 响应式检测
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value <= 768)
+
+// 监听窗口大小变化
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 
 // 处理visible状态更新
 const handleVisibleUpdate = (value: boolean) => {
@@ -402,6 +493,214 @@ const handleClose = () => {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mobile-footer {
+  justify-content: center;
+}
+
+/* 移动端集合卡片样式 */
+.mobile-collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.mobile-collection-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.mobile-collection-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-collection-card.status-complete {
+  border-left: 4px solid #10b981;
+  background-color: #f0fdf4;
+}
+
+.mobile-collection-card.status-missing {
+  border-left: 4px solid #ef4444;
+  background-color: #fef2f2;
+}
+
+.mobile-collection-card.status-partial {
+  border-left: 4px solid #f59e0b;
+  background-color: #fffbeb;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.collection-info {
+  flex: 1;
+}
+
+.collection-title {
+  font-weight: 600;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.status-icon {
+  margin-right: 6px;
+}
+
+.collection-id {
+  color: #6b7280;
+  font-size: 11px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.stat-label {
+  color: #6b7280;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  color: #111827;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.action-button {
+  flex: 1;
+  max-width: 80px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #9ca3af;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .vector-fix-dialog-wrapper :deep(.el-dialog) {
+    margin: 5vh auto;
+  }
+  
+  .vector-fix-dialog-wrapper :deep(.el-dialog__header) {
+    padding: 16px 20px;
+  }
+  
+  .vector-fix-dialog-wrapper :deep(.el-dialog__body) {
+    padding: 0 20px 20px;
+  }
+  
+  .vector-fix-dialog-wrapper :deep(.el-dialog__footer) {
+    padding: 16px 20px;
+  }
+
+  .vector-fix-dialog {
+    min-height: 300px;
+  }
+  
+  /* 统计卡片适配 */
+  .vector-fix-dialog .grid > div {
+    padding: 12px;
+  }
+  
+  .vector-fix-dialog .grid > div .text-2xl {
+    font-size: 18px;
+  }
+  
+  .vector-fix-dialog .grid > div .text-sm {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .vector-fix-dialog-wrapper :deep(.el-dialog) {
+    width: 95% !important;
+    margin: 3vh auto;
+  }
+  
+  .mobile-collection-card {
+    padding: 10px;
+  }
+  
+  .collection-title {
+    font-size: 13px;
+  }
+  
+  .collection-id {
+    font-size: 10px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+  }
+  
+  .stat-value {
+    font-size: 13px;
+  }
+  
+  /* 统计信息在小屏幕上堆叠显示 */
+  .vector-fix-dialog .grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .vector-fix-dialog .grid > div {
+    padding: 10px;
+  }
+  
+  .vector-fix-dialog .grid > div .text-2xl {
+    font-size: 16px;
   }
 }
 </style>
