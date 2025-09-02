@@ -160,7 +160,7 @@ function getInputPlaceholder() {
       <div v-if="messages.length === 0" class="max-w-4xl mx-auto p-6">
         
         <!-- 没有任何Collection时 - 引导添加 -->
-        <div v-if="collections.length === 0 && !loadingCollections" class="text-center">
+        <div v-if="collections.length === 0 && !loadingCollections">
           <div class="mb-8">
             <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
             <p class="text-gray-600 mb-8 max-w-lg mx-auto">
@@ -179,7 +179,7 @@ function getInputPlaceholder() {
         </div>
 
         <!-- 有Collection但未选择时 - 显示可选择的Collection -->
-        <div v-else-if="collections.length > 0 && !selectedCollection" class="text-center">
+        <div v-else-if="collections.length > 0 && !selectedCollection">
           <div class="mb-8">
             <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
             <p class="text-gray-600 mb-6">
@@ -419,7 +419,6 @@ function getInputPlaceholder() {
 
 .welcomeMessage {
   padding-left: 16px;
-  width: fit-content;
   border-left: 6px solid #4f46e5;
 }
 </style>
