@@ -9,6 +9,7 @@ import DocumentChat from './DocumentChat.vue'
 import CollectionChat from './CollectionChat.vue'
 import WorkflowDialog from './WorkflowDialog.vue'
 import ThemeToggle from './ThemeToggle.vue'
+import AudioToggle from './AudioToggle.vue'
 
 const store = useNotebookStore()
 const sessionStore = useSessionStore()
@@ -133,6 +134,7 @@ onMounted(async () => {
               <ArrowDown v-else />
             </ElIcon>
           </ElButton>
+          <AudioToggle class="action-btn" />
           <ElButton text @click="handleShowWorkflows" class="action-btn" >
             <ElIcon>
               <Bell />
