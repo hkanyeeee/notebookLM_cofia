@@ -162,7 +162,6 @@ function getInputPlaceholder() {
         <!-- 没有任何Collection时 - 引导添加 -->
         <div v-if="collections.length === 0 && !loadingCollections" class="text-center">
           <div class="mb-8">
-            <div class="text-6xl mb-4">📚</div>
             <h2 class="text-2xl font-bold text-gray-900 mb-4">欢迎使用Collection问答</h2>
             <p class="text-gray-600 mb-8 max-w-lg mx-auto">
               通过添加URL创建您的第一个Collection，或者选择现有的Collection开始对话。
@@ -223,7 +222,6 @@ function getInputPlaceholder() {
         <!-- 已选择Collection时 - 显示Collection信息 -->
         <div v-else-if="selectedCollection" class="text-center">
           <div class="mb-8">
-            <div class="text-5xl mb-4">💡</div>
             <h2 class="text-2xl font-bold text-gray-900 mb-4">
               {{ collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
             </h2>
