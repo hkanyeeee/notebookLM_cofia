@@ -162,7 +162,7 @@ function getInputPlaceholder() {
         <!-- 没有任何Collection时 - 引导添加 -->
         <div v-if="collections.length === 0 && !loadingCollections" class="text-center">
           <div class="mb-8">
-            <h2 class="text-2xl font-bold text-gray-900 mb-4">欢迎使用Collection问答</h2>
+            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
             <p class="text-gray-600 mb-8 max-w-lg mx-auto">
               通过添加URL创建您的第一个Collection，或者选择现有的Collection开始对话。
             </p>
@@ -181,7 +181,7 @@ function getInputPlaceholder() {
         <!-- 有Collection但未选择时 - 显示可选择的Collection -->
         <div v-else-if="collections.length > 0 && !selectedCollection" class="text-center">
           <div class="mb-8">
-            <h2 class="text-2xl font-bold text-gray-900 mb-4">选择一个Collection开始对话</h2>
+            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
             <p class="text-gray-600 mb-6">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
             </p>
@@ -222,9 +222,9 @@ function getInputPlaceholder() {
         <!-- 已选择Collection时 - 显示Collection信息 -->
         <div v-else-if="selectedCollection" class="text-center">
           <div class="mb-8">
-            <h2 class="text-2xl font-bold text-gray-900 mb-4">
+            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">
               {{ collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
-            </h2>
+            </div>
             <div class="max-w-2xl mx-auto">
               <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
                 <div class="text-left space-y-3">
@@ -415,6 +415,12 @@ function getInputPlaceholder() {
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.welcomeMessage {
+  padding-left: 16px;
+  width: fit-content;
+  border-left: 6px solid #4f46e5;
 }
 </style>
 
