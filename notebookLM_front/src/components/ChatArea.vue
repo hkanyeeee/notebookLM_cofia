@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
+import { useMessageStore } from '../stores/useMessageStore'
 import { ElSelect, ElOption, ElButton, ElIcon, ElMessage, ElTooltip } from 'element-plus'
 import { Refresh, Bell, ArrowUp, ArrowDown, Notification, MuteNotification } from '@element-plus/icons-vue'
 import NormalChat from './NormalChat.vue'
@@ -12,9 +13,19 @@ import ThemeToggle from './ThemeToggle.vue'
 
 const store = useNotebookStore()
 const sessionStore = useSessionStore()
+const messageStore = useMessageStore()
 
 // 工作流对话框状态
 const workflowDialogVisible = ref(false)
+
+// 音频状态
+const audioEnabled = ref(true)
+const isToggling = ref(false)
+
+// 当前音频图标
+const currentIcon = computed(() => {
+  return audioEnabled.value ? Bell : MuteNotification
+})
 
 // 移动端顶栏折叠状态
 const headerCollapsed = ref(false)
@@ -94,6 +105,32 @@ async function handleResendEditedMessage(messageId: string) {
   }
 }
 
+// 切换音频开关
+async function toggleAudio() {
+  isToggling.value = true
+  
+  try {
+    audioEnabled.value = !audioEnabled.value
+    messageStore.setAudioEnabled(audioEnabled.value)
+    
+    // 如果开启音频，尝试初始化音频管理器
+    if (audioEnabled.value) {
+      await messageStore.initializeAudioManager()
+    }
+    
+    console.log(`提示音已${audioEnabled.value ? '开启' : '关闭'}`)
+  } catch (error) {
+    console.warn('切换音频状态时发生错误:', error)
+    // 如果出错，恢复到之前的状态
+    audioEnabled.value = !audioEnabled.value
+  } finally {
+    // 动画效果
+    setTimeout(() => {
+      isToggling.value = false
+    }, 300)
+  }
+}
+
 // 组件挂载时加载collection列表和模型列表
 onMounted(async () => {
   try {
@@ -106,6 +143,13 @@ onMounted(async () => {
     
     await Promise.all(loadPromises)
     
+    // 初始化音频状态
+    try {
+      const audioStatus = messageStore.getAudioStatus()
+      audioEnabled.value = audioStatus.isEnabled
+    } catch (error) {
+      console.warn('获取音频状态失败:', error)
+    }
 
   } catch (error) {
     console.warn('初始加载数据失败:', error)
@@ -133,7 +177,23 @@ onMounted(async () => {
               <ArrowDown v-else />
             </ElIcon>
           </ElButton>
-          <AudioToggle class="action-btn" />
+          <ElTooltip
+            :content="audioEnabled ? '关闭提示音' : '开启提示音'"
+            placement="bottom"
+            effect="dark"
+          >
+            <ElButton 
+              text 
+              @click="toggleAudio" 
+              class="action-btn" 
+              :class="{ 'audio-disabled': !audioEnabled }"
+            >
+              <ElIcon :class="{ 'pulsing': isToggling }">
+                <component :is="currentIcon" />
+              </ElIcon>
+              <span class="action-text">{{ audioEnabled ? '提示音' : '提示音' }}</span>
+            </ElButton>
+          </ElTooltip>
           <ElButton text @click="handleShowWorkflows" class="action-btn" >
             <ElIcon>
               <Notification />
@@ -361,6 +421,31 @@ onMounted(async () => {
   border-radius: 4px;
   border: 1px solid #fecaca;
   line-height: 1.4;
+}
+
+/* 音频按钮样式 */
+.audio-disabled {
+  opacity: 0.6;
+}
+
+.audio-disabled:hover {
+  opacity: 0.8;
+}
+
+.pulsing {
+  animation: pulse 0.3s ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 桌面端隐藏折叠按钮 */
