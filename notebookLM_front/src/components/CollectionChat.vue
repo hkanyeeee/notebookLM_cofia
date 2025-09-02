@@ -182,7 +182,6 @@ function getInputPlaceholder() {
         <!-- 有Collection但未选择时 - 显示可选择的Collection -->
         <div v-else-if="collections.length > 0 && !selectedCollection" class="text-center">
           <div class="mb-8">
-            <div class="text-5xl mb-4">🎯</div>
             <h2 class="text-2xl font-bold text-gray-900 mb-4">选择一个Collection开始对话</h2>
             <p class="text-gray-600 mb-6">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
