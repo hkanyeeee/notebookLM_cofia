@@ -28,7 +28,7 @@ import {
   ElTooltip
 } from 'element-plus'
 import {
-  Notification,
+  Bell,
   MuteNotification
 } from '@element-plus/icons-vue'
 
@@ -38,7 +38,7 @@ const isToggling = ref(false)
 
 // 当前图标
 const currentIcon = computed(() => {
-  return audioEnabled.value ? Notification : MuteNotification
+  return audioEnabled.value ? Bell : MuteNotification
 })
 
 // 切换音频开关

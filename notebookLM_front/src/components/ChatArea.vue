@@ -2,14 +2,13 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
-import { ElSelect, ElOption, ElButton, ElIcon, ElMessage } from 'element-plus'
-import { Refresh, Bell, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { ElSelect, ElOption, ElButton, ElIcon, ElMessage, ElTooltip } from 'element-plus'
+import { Refresh, Bell, ArrowUp, ArrowDown, Notification, MuteNotification } from '@element-plus/icons-vue'
 import NormalChat from './NormalChat.vue'
 import DocumentChat from './DocumentChat.vue'
 import CollectionChat from './CollectionChat.vue'
 import WorkflowDialog from './WorkflowDialog.vue'
 import ThemeToggle from './ThemeToggle.vue'
-import AudioToggle from './AudioToggle.vue'
 
 const store = useNotebookStore()
 const sessionStore = useSessionStore()
@@ -137,7 +136,7 @@ onMounted(async () => {
           <AudioToggle class="action-btn" />
           <ElButton text @click="handleShowWorkflows" class="action-btn" >
             <ElIcon>
-              <Bell />
+              <Notification />
             </ElIcon>
             <span class="action-text">工作流状态</span>
           </ElButton>
