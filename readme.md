@@ -46,15 +46,49 @@ pip install -r requirements.txt
 
 在项目根目录创建 `.env` 文件，并根据需要配置环境变量。参考 `app/config.py` 了解所有可用配置项。
 
-关键配置示例:
+#### 必须配置的配置项
+
+以下配置项是项目运行的核心依赖，必须由用户根据实际环境进行配置：
+
+*   `DATABASE_URL` - 数据库连接地址
+*   `EMBEDDING_SERVICE_URL` - 嵌入服务地址
+*   `LLM_SERVICE_URL` - 大语言模型服务地址
+*   `QDRANT_HOST` - Qdrant向量数据库主机地址
+*   `QDRANT_PORT` - Qdrant向量数据库端口
+*   `SEARXNG_QUERY_URL` - Searxng搜索引擎地址
+
+#### 可选配置项
+
+这些配置项都有合理的默认值，用户可根据需要调整：
+
+*   大部分配置项（如并发数、批处理大小、超时时间等）都有默认值
+*   `N8N`相关配置项（API密钥、认证信息等）
+*   `QDRANT_API_KEY` - Qdrant API密钥
+*   `RERANKER_SERVICE_URL` - 重排序服务地址
+
+#### 关键外部服务依赖
+
+以下内容需要用户根据自己的环境进行配置：
+
+*   **API密钥和认证信息** - 所有外部服务的访问地址
+*   **数据库连接字符串** - `DATABASE_URL`
+*   **网络相关配置** - 代理设置等
+*   **功能开关配置** - 各种功能的启用/禁用选项
+
+#### 配置示例
 
 ```env
+# 必需配置项
 DATABASE_URL=sqlite+aiosqlite:///./data/app.db
 EMBEDDING_SERVICE_URL=http://localhost:7998/v1 # 你的嵌入服务地址
 LLM_SERVICE_URL=http://localhost:1234/v1       # 你的大模型服务地址 (如 LM Studio)
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 SEARXNG_QUERY_URL=http://localhost:8080/search # 你的 Searxng 地址
+
+# 可选配置项
+# QDRANT_API_KEY=your_qdrant_api_key
+# RERANKER_SERVICE_URL=http://localhost:7996/v1
 ```
 
 ### 3. 启动服务
