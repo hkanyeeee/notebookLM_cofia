@@ -71,7 +71,7 @@ Python-based backend service using FastAPI for document ingestion, chunking, emb
    - Key variables: `DATABASE_URL`, `EMBEDDING_SERVICE_URL`, `LLM_SERVICE_URL`, `QDRANT_HOST`, `QDRANT_PORT`, `SEARXNG_QUERY_URL`, `WEBHOOK_PREFIX`, `N8N_*` variables
 
 3. **Run the Application:**
-   - Command: `conda activate mlx && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+   - Command: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
    - Starts FastAPI development server on port 8000
 
 ## Docker Deployment
