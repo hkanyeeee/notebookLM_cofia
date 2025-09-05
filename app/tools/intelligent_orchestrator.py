@@ -478,7 +478,8 @@ class IntelligentOrchestrator:
         self,
         knowledge_gaps: List[Dict[str, Any]],
         original_query: str,
-        run_config: RunConfig
+        run_config: RunConfig,
+        is_simple_query: bool = False
     ) -> Dict[str, Any]:
         """
         统一的web搜索和召回实现（流式/非流式共用）
@@ -487,6 +488,7 @@ class IntelligentOrchestrator:
             knowledge_gaps: 知识缺口列表
             original_query: 原始查询
             run_config: 运行配置
+            is_simple_query: 是否为简单查询模式，用于应用不同的搜索配置
             
         Returns:
             包含knowledge_gaps_search_results和统计信息的结果字典
@@ -495,8 +497,10 @@ class IntelligentOrchestrator:
             return {"knowledge_gaps_search_results": {}, "success": False, "message": "没有知识缺口需要搜索"}
         
         try:
-            # 1. 使用搜索规划器生成统一的查询列表
-            final_queries = self.search_planner.plan_search_queries(original_query, knowledge_gaps)
+            # 1. 使用搜索规划器生成统一的查询列表，根据查询类型使用不同配置
+            final_queries = self.search_planner.plan_search_queries(
+                original_query, knowledge_gaps, is_simple_query=is_simple_query
+            )
             
             from ..config import MAX_KNOWLEDGE_GAPS, GAP_RECALL_TOP_K
             from ..tools.web_search_tool import web_search_tool

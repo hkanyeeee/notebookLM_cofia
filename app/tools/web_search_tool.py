@@ -21,7 +21,9 @@ from ..config import (
     ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
     CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K,
     WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE,
-    WEB_SEARCH_LLM_TIMEOUT
+    WEB_SEARCH_LLM_TIMEOUT,
+    # 简单查询专用配置
+    SIMPLE_QUERY_MAX_QUERIES, SIMPLE_QUERY_RESULT_COUNT, SIMPLE_QUERY_MAX_RESULTS
 )
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..chunking import chunk_text
@@ -363,7 +365,8 @@ class WebSearchTool:
     
     async def search_searxng(
         self, 
-        query: str
+        query: str,
+        count: int = WEB_SEARCH_RESULT_COUNT
     ) -> List[Dict[str, str]]:
         """使用 SearxNG 搜索"""
         params = {
@@ -394,7 +397,7 @@ class WebSearchTool:
                 # 按 score 降序排列并限制数量
                 results_sorted = sorted(results, key=lambda x: x.get("score", 0), reverse=True)
                 items = []
-                for r in results_sorted[:WEB_SEARCH_RESULT_COUNT]:
+                for r in results_sorted[:count]:
                     title = r.get("title") or r.get("name") or "Untitled"
                     url = r.get("url") or r.get("link")
                     snippet = r.get("content") or r.get("snippet") or ""
@@ -637,7 +640,10 @@ class WebSearchTool:
         predefined_queries: Optional[List[str]] = None,
         session_id: Optional[str] = None,
         perform_retrieval: bool = True,
-        search_history: Optional[List[Dict[str, Any]]] = None
+        search_history: Optional[List[Dict[str, Any]]] = None,
+        is_simple_query: bool = False,
+        custom_result_count: Optional[int] = None,
+        custom_max_results: Optional[int] = None
     ) -> Dict[str, Any]:
         """执行完整的 Web 搜索流程
         
@@ -654,6 +660,19 @@ class WebSearchTool:
         # 使用提供的session_id或生成新的
         if not session_id:
             session_id = str(uuid.uuid4())
+        
+        # 根据查询类型确定配置参数
+        if is_simple_query:
+            effective_result_count = custom_result_count or SIMPLE_QUERY_RESULT_COUNT
+            effective_max_results = custom_max_results or SIMPLE_QUERY_MAX_RESULTS
+            print(f"[WebSearch] 简单查询模式: result_count={effective_result_count}, max_results={effective_max_results}")
+        else:
+            effective_result_count = custom_result_count or WEB_SEARCH_RESULT_COUNT
+            effective_max_results = custom_max_results or WEB_SEARCH_MAX_RESULTS
+            print(f"[WebSearch] 普通查询模式: result_count={effective_result_count}, max_results={effective_max_results}")
+        
+        print(f"[WebSearch] 开始执行，会话ID: {session_id}")
+        print(f"[WebSearch] 过滤域名列表: {filter_list}")
         
         result = {
             "session_id": session_id,
@@ -723,7 +742,7 @@ class WebSearchTool:
             # 3. 并发搜索
             print(f"[WebSearch] 开始并发搜索...")
             t1 = time.perf_counter()
-            search_tasks = [self.search_searxng(q) for q in queries]
+            search_tasks = [self.search_searxng(q, count=effective_result_count) for q in queries]
             search_results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
             search_time = (time.perf_counter() - t1) * 1000.0
             result["metrics"]["step_durations_ms"]["searxng_search"] = search_time
@@ -748,7 +767,7 @@ class WebSearchTool:
                             all_results.append(item)
             
             # 限制结果数量
-            all_results = all_results[:WEB_SEARCH_MAX_RESULTS]
+            all_results = all_results[:effective_max_results]
             print(f"找到 {len(all_results)} 个搜索结果")
             
             if all_results:
@@ -882,6 +901,7 @@ async def web_search(
     predefined_queries: Optional[List[str]] = None,
     session_id: Optional[str] = None,
     perform_retrieval: bool = True,
+    is_simple_query: bool = False,  # 新增：是否为简单查询模式
     **kwargs  # 接受额外的参数用于向后兼容
 ) -> str:
     """Web 搜索工具函数
@@ -892,17 +912,23 @@ async def web_search(
         model: 用于关键词生成的LLM模型名称，默认使用系统配置
         predefined_queries: 预定义的搜索关键词列表，如果提供则跳过关键词生成
         session_id: 会话ID，如果提供则使用此ID而不是生成新的
+        is_simple_query: 是否为简单查询模式，影响搜索关键词数量和结果数量配置
         **kwargs: 额外参数（用于向后兼容）
     
     Returns:
         搜索和召回结果的 JSON 字符串
     """
-    print(f"[WebSearch] 工具函数被调用，参数: query={query}, filter_list={filter_list}, model={model}, kwargs={kwargs}")
+    print(f"[WebSearch] 工具函数被调用，参数: query={query}, filter_list={filter_list}, model={model}, is_simple_query={is_simple_query}, kwargs={kwargs}")
     
     # 处理向后兼容的参数名映射 - 移除了对source/categories的处理
     if "topn" in kwargs:
         # topn参数目前没有直接映射，可以记录日志或忽略
         print(f"[WebSearch] 注意：topn参数 ({kwargs['topn']}) 当前未使用")
+    
+    # 检查是否通过kwargs传递了简单查询标志（向后兼容）
+    if "is_simple_query" in kwargs and not is_simple_query:
+        is_simple_query = kwargs["is_simple_query"]
+        print(f"[WebSearch] 从kwargs中获取is_simple_query标志: {is_simple_query}")
     
     # 如果有不再支持的参数，记录但不处理
     deprecated_params = ["source", "categories", "language"]
@@ -916,7 +942,8 @@ async def web_search(
         model=model,
         predefined_queries=predefined_queries,
         session_id=session_id,
-        perform_retrieval=perform_retrieval
+        perform_retrieval=perform_retrieval,
+        is_simple_query=is_simple_query
     )
     
     # 构建返回的摘要信息

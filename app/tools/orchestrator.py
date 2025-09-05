@@ -94,7 +94,8 @@ class ToolOrchestrator:
             question=question,
             contexts=contexts,
             run_config=run_config,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            is_simple_query=True  # 工具编排器处理的都是简单查询
         )
         
         strategy = self._select_strategy(context)
@@ -197,7 +198,8 @@ class ToolOrchestrator:
             question=question,
             contexts=contexts,
             run_config=run_config,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            is_simple_query=True  # 工具编排器处理的都是简单查询
         )
         
         strategy = self._select_strategy(context)

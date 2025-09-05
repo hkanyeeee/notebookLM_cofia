@@ -115,6 +115,7 @@ class ToolExecutionContext(BaseModel):
     steps: List[Step] = []
     current_step: int = 0
     conversation_history: Optional[List[Dict[str, str]]] = None
+    is_simple_query: bool = False  # 是否为简单查询模式
     
     def add_step(self, step: Step):
         """添加执行步骤"""

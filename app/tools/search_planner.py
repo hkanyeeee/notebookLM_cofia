@@ -2,27 +2,34 @@
 搜索规划器 - 统一搜索关键词生成和优化
 """
 import re
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 from ..config import (
     WEB_SEARCH_MAX_QUERIES, 
     MAX_KNOWLEDGE_GAPS, 
     MAX_KEYWORDS_PER_GAP,
-    MAX_WORDS_PER_QUERY
+    MAX_WORDS_PER_QUERY,
+    # 简单查询专用配置
+    SIMPLE_QUERY_MAX_QUERIES,
+    SIMPLE_QUERY_MAX_WORDS_PER_QUERY
 )
 
 
 class SearchPlanner:
     """
     搜索规划器：统一处理搜索关键词的生成、优化、去重和上限控制
+    支持不同查询类型的差异化配置
     """
     
     def __init__(self):
-        self.MAX_WORDS_PER_QUERY = MAX_WORDS_PER_QUERY  # 每个查询的最大词数
+        self.MAX_WORDS_PER_QUERY = MAX_WORDS_PER_QUERY  # 每个查询的最大词数（默认配置）
     
     def plan_search_queries(
         self, 
         original_query: str, 
-        knowledge_gaps: List[Dict[str, Any]] = None
+        knowledge_gaps: List[Dict[str, Any]] = None,
+        max_queries: Optional[int] = None,
+        max_words_per_query: Optional[int] = None,
+        is_simple_query: bool = False
     ) -> List[str]:
         """
         规划搜索查询：从原始问题和知识缺口生成最终的搜索查询列表
@@ -30,10 +37,26 @@ class SearchPlanner:
         Args:
             original_query: 原始用户问题
             knowledge_gaps: 知识缺口列表
+            max_queries: 最大查询数量，如果不提供则使用默认配置
+            max_words_per_query: 每个查询的最大词数，如果不提供则使用默认配置
+            is_simple_query: 是否为简单查询模式
         
         Returns:
             去重、优化并限制数量的最终查询列表
         """
+        # 根据查询类型确定配置参数
+        if is_simple_query:
+            effective_max_queries = max_queries or SIMPLE_QUERY_MAX_QUERIES
+            effective_max_words = max_words_per_query or SIMPLE_QUERY_MAX_WORDS_PER_QUERY
+            print(f"[SearchPlanner] 使用简单查询配置: max_queries={effective_max_queries}, max_words_per_query={effective_max_words}")
+        else:
+            effective_max_queries = max_queries or WEB_SEARCH_MAX_QUERIES
+            effective_max_words = max_words_per_query or MAX_WORDS_PER_QUERY
+            print(f"[SearchPlanner] 使用普通查询配置: max_queries={effective_max_queries}, max_words_per_query={effective_max_words}")
+        
+        # 临时更新词数限制配置
+        original_max_words = self.MAX_WORDS_PER_QUERY
+        self.MAX_WORDS_PER_QUERY = effective_max_words
         all_keywords = []
         
         # 1. 从知识缺口中提取关键词
@@ -52,9 +75,13 @@ class SearchPlanner:
         final_queries = self._clean_and_validate_queries(optimized_keywords, original_query)
         
         # 5. 应用配置限制
-        final_queries = final_queries[:WEB_SEARCH_MAX_QUERIES]
+        final_queries = final_queries[:effective_max_queries]
+        
+        # 恢复原始配置
+        self.MAX_WORDS_PER_QUERY = original_max_words
         
         print(f"[SearchPlanner] 搜索规划完成:")
+        print(f"[SearchPlanner]   查询模式: {'简单查询' if is_simple_query else '普通查询'}")
         print(f"[SearchPlanner]   知识缺口: {len(knowledge_gaps) if knowledge_gaps else 0} 个")
         print(f"[SearchPlanner]   原始关键词: {len(all_keywords)} 个") 
         print(f"[SearchPlanner]   最终查询: {len(final_queries)} 个")

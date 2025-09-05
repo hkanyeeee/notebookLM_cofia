@@ -128,13 +128,18 @@ class ToolRegistry:
                 except Exception as ve:
                     # 其他验证异常也不应重试
                     raise ve
-            # 自动注入模型参数
+            # 自动注入模型参数和简单查询标志
             if context and hasattr(handler, '__code__'):
                 param_names = handler.__code__.co_varnames[:handler.__code__.co_argcount]
                 if 'model' in param_names and 'model' not in tool_args:
                     if context.run_config.model:
                         tool_args['model'] = context.run_config.model
                         print(f"[Registry] 自动传递模型参数: {context.run_config.model}")
+                
+                # 为 web_search 工具自动注入简单查询标志
+                if tool_call.name == 'web_search' and 'is_simple_query' in param_names and 'is_simple_query' not in tool_args:
+                    tool_args['is_simple_query'] = context.is_simple_query
+                    print(f"[Registry] 自动传递简单查询标志: {context.is_simple_query}")
             # 执行工具函数
             if asyncio.iscoroutinefunction(handler):
                 return await handler(**tool_args)
@@ -256,6 +261,11 @@ def register_web_search_tool():
                     "type": "string",
                     "description": "用于关键词生成的LLM模型名称，默认使用系统配置。传入此参数可覆盖系统默认模型",
                     "default": ""
+                },
+                "is_simple_query": {
+                    "type": "boolean",
+                    "description": "是否为简单查询模式，简单查询会使用更保守的关键词数量和结果数量配置",
+                    "default": False
                 }
             },
             "required": ["query"]
