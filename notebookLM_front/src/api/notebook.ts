@@ -466,3 +466,107 @@ export function cleanupSession(sessionId: string) {
  * - 文档问答：仅使用已上传文档，不启用工具
  * - Collection问答：仅使用collection内容，不启用工具
  */
+
+// 配置相关接口
+export interface AppConfig {
+  // LLM 相关配置
+  llmServiceUrl: string
+  defaultSearchModel: string
+  defaultIngestModel: string
+  llmDefaultTimeout: number
+  reasoningTimeout: number
+  webSearchLlmTimeout: number
+  
+  // Embedding 相关配置
+  embeddingServiceUrl: string
+  defaultEmbeddingModel: string
+  embeddingMaxConcurrency: number
+  embeddingBatchSize: number
+  embeddingDimensions: number
+  
+  // 重排序相关配置
+  rerankerServiceUrl: string
+  rerankerMaxTokens: number
+  rerankClientMaxConcurrency: number
+  
+  // 搜索相关配置
+  searxngQueryUrl: string
+  webSearchResultCount: number
+  webSearchMaxQueries: number
+  webSearchMaxResults: number
+  webSearchConcurrentRequests: number
+  webSearchTimeout: number
+  
+  // RAG 相关配置
+  ragTopK: number
+  queryTopKBeforeRerank: number
+  ragRerankTopK: number
+  
+  // 工具相关配置
+  defaultToolMode: string
+  maxToolSteps: number
+  
+  // 文档处理配置
+  chunkSize: number
+  chunkOverlap: number
+  
+  // Qdrant 相关配置
+  qdrantHost: string
+  qdrantPort: string
+  qdrantCollectionName: string
+}
+
+export interface ConfigResponse {
+  success: boolean
+  config: AppConfig
+}
+
+export interface ConfigValidationResponse {
+  success: boolean
+  valid: boolean
+  errors: string[]
+}
+
+// 获取当前配置
+export const getAppConfig = async (): Promise<ConfigResponse> => {
+  try {
+    const response = await api.get('/config/')
+    return response.data
+  } catch (error: any) {
+    console.error('获取配置失败:', error)
+    throw error
+  }
+}
+
+// 保存配置
+export const saveAppConfig = async (config: AppConfig): Promise<ConfigResponse> => {
+  try {
+    const response = await api.post('/config/', { config })
+    return response.data
+  } catch (error: any) {
+    console.error('保存配置失败:', error)
+    throw error
+  }
+}
+
+// 重置配置
+export const resetAppConfig = async (): Promise<ConfigResponse> => {
+  try {
+    const response = await api.delete('/config/')
+    return response.data
+  } catch (error: any) {
+    console.error('重置配置失败:', error)
+    throw error
+  }
+}
+
+// 验证配置
+export const validateAppConfig = async (): Promise<ConfigValidationResponse> => {
+  try {
+    const response = await api.get('/config/validate')
+    return response.data
+  } catch (error: any) {
+    console.error('验证配置失败:', error)
+    throw error
+  }
+}
