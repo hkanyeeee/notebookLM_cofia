@@ -518,7 +518,8 @@ class IntelligentOrchestrator:
                 model=run_config.model,
                 predefined_queries=final_queries,
                 session_id=unified_session_id,
-                perform_retrieval=False
+                perform_retrieval=False,
+                is_simple_query=is_simple_query
             )
             
             if not search_result.get("success") or not search_result.get("source_ids"):
@@ -716,7 +717,9 @@ class IntelligentOrchestrator:
             print(f"[IntelligentOrchestrator] 统一工具执行失败: {e}")
             # 回退到原有的工具编排器
             if event_callback:
-                final_queries = self.search_planner.plan_search_queries(original_query, knowledge_gaps)
+                # 从 run_config 中获取 is_simple_query 信息
+                is_simple_query = getattr(run_config, 'is_simple_query', False)
+                final_queries = self.search_planner.plan_search_queries(original_query, knowledge_gaps, is_simple_query=is_simple_query)
                 enhanced_query = f"{original_query} {' '.join(final_queries[:2])}"
                 
                 async for event in self.tool_orchestrator.execute_stream(

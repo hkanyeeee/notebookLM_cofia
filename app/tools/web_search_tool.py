@@ -713,6 +713,11 @@ class WebSearchTool:
                 if history_to_use:
                     print(f"[WebSearch] 使用搜索历史: {len(history_to_use)} 条记录")
             
+            # 根据查询类型对queries数量进行截断
+            if is_simple_query:
+                queries = queries[:SIMPLE_QUERY_MAX_QUERIES]
+                print(f"[WebSearch] 简单查询模式，截断到前 {SIMPLE_QUERY_MAX_QUERIES} 个查询: {queries}")
+            
             # 2. 生成搜索fingerprint并检查缓存和去重
             fingerprint = self._generate_search_fingerprint(queries)
             print(f"[WebSearch] 搜索fingerprint: {fingerprint}")
