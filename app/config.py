@@ -51,7 +51,7 @@ GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "4"))  # 每个知�
 
 # 简单查询专用搜索配置 - 针对"分类为简单查询，需要外部工具，直接获取信息"的场景
 SIMPLE_QUERY_MAX_QUERIES = int(get_config_value("SIMPLE_QUERY_MAX_QUERIES", "2"))  # 简单查询的最大搜索关键词数量，更保守
-SIMPLE_QUERY_RESULT_COUNT = int(get_config_value("SIMPLE_QUERY_RESULT_COUNT", "3"))  # 简单查询每个关键词返回的结果数量
+SIMPLE_QUERY_RESULT_COUNT = int(get_config_value("SIMPLE_QUERY_RESULT_COUNT", "4"))  # 简单查询每个关键词返回的结果数量
 SIMPLE_QUERY_MAX_RESULTS = int(get_config_value("SIMPLE_QUERY_MAX_RESULTS", "10"))  # 简单查询的最大总结果数量，更精简
 SIMPLE_QUERY_MAX_WORDS_PER_QUERY = int(get_config_value("SIMPLE_QUERY_MAX_WORDS_PER_QUERY", "3"))  # 简单查询每个查询的最大词数，更简洁
 
