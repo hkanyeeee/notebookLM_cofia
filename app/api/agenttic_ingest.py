@@ -16,7 +16,7 @@ from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
+from ..config_manager import get_config_value
 from ..vector_db_client import add_embeddings
 
 
@@ -116,7 +116,7 @@ async def process_sub_docs_concurrent(
         return results
     
     # 使用信号量控制并发数量
-    MAX_CONCURRENT_SUB_DOCS = int(EMBEDDING_MAX_CONCURRENCY)
+    MAX_CONCURRENT_SUB_DOCS = int(get_config_value("embedding_max_concurrency", "4"))
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
     
     # 并发处理所有子文档URL
@@ -130,8 +130,8 @@ async def process_sub_docs_concurrent(
                     "url": sub_url,
                     "recursive_depth": recursive_depth - 1,  # 减少递归深度
                     "embedding_model": DEFAULT_EMBEDDING_MODEL,
-                    "embedding_dimensions": EMBEDDING_DIMENSIONS,
-                    "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                    "embedding_dimensions": int(get_config_value("embedding_dimensions", "1024")),
+                    "webhook_url": get_config_value("webhook_prefix", "http://192.168.31.125:5678/webhook") + "/array2array",
                     "is_recursive": True,  # 标记为递归调用
                     "document_name": parent_doc_name,  # 传递父级文档名称
                     "collection_name": parent_collection_name,  # 传递父级collection名称
@@ -358,7 +358,6 @@ async def generate_document_names(url: str) -> dict:
     # 创建一个专门用于文档名称生成的提示模板，避免使用query接口中的generate_answer函数
     # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
     import httpx
-    from ..config import LLM_SERVICE_URL
     
     prompt = f"""
 请为以下URL的文档生成合适的中文名称和英文collection名称：
@@ -375,7 +374,8 @@ URL: {url}
     
     try:
         # 使用LLM服务的底层API直接调用，绕过generate_answer函数
-        url = f"{LLM_SERVICE_URL}/chat/completions"
+        llm_service_url = get_config_value("llm_service_url", "http://localhost:11434/v1")
+        url = f"{llm_service_url}/chat/completions"
         
         payload = {
             "model": "qwen3-30b-a3b-thinking-2507-mlx",
@@ -456,8 +456,8 @@ async def agenttic_ingest(
         raise HTTPException(status_code=400, detail="URL必须提供")
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
-    webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
+    embedding_dimensions = data.get("embedding_dimensions", int(get_config_value("embedding_dimensions", "1024")))
+    webhook_url = data.get("webhook_url", get_config_value("webhook_prefix", "http://192.168.31.125:5678/webhook") + "/array2array")
     recursive_depth = data.get("recursive_depth", 2)  # 默认递归深度为2
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
 
@@ -492,7 +492,9 @@ async def agenttic_ingest(
 
         # 3. 分块处理文本
         print("正在分块处理文本...")
-        chunks = chunk_text(text)
+        chunk_size = int(get_config_value("chunk_size", "1000"))
+        chunk_overlap = int(get_config_value("chunk_overlap", "100"))
+        chunks = chunk_text(text, tokens_per_chunk=chunk_size, overlap_tokens=chunk_overlap)
         raw_html_chunks = chunk_text(raw_html, 4000, 200)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
@@ -570,8 +572,8 @@ async def agenttic_ingest(
         
         # 6. 为所有chunk生成嵌入向量并存储到Qdrant
         print("正在生成嵌入...")
-        MAX_PARALLEL = int(EMBEDDING_MAX_CONCURRENCY)
-        BATCH_SIZE = int(EMBEDDING_BATCH_SIZE)
+        MAX_PARALLEL = int(get_config_value("embedding_max_concurrency", "4"))
+        BATCH_SIZE = int(get_config_value("embedding_batch_size", "4"))
 
         # 分批构造任务：每个任务只发起一次 /embeddings 请求（将 batch_size 传为该批大小）
         chunk_batches = [
@@ -667,7 +669,8 @@ async def agenttic_ingest(
             
             # 直接向指定的webhook URL发送POST请求
             try:
-                async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
+                webhook_timeout = int(get_config_value("webhook_timeout", "30"))
+                async with httpx.AsyncClient(timeout=webhook_timeout) as client:
                     response = await client.post(webhook_url, json=webhook_data)
                     response.raise_for_status()
                     print("Webhook发送成功")

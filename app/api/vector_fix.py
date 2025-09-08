@@ -10,7 +10,8 @@ from ..database import get_db
 from ..models import Source, Chunk
 from ..embedding_client import embed_texts
 from ..vector_db_client import add_embeddings, qdrant_client, COLLECTION_NAME
-from ..config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, DEFAULT_EMBEDDING_MODEL
+from ..config import DEFAULT_EMBEDDING_MODEL
+from ..config_manager import get_config_value
 from . import get_session_id
 
 router = APIRouter()
@@ -154,7 +155,7 @@ async def fix_collection_vectors(
             fix_status.update_task(task_id, total_chunks=fix_status.active_tasks[task_id]['total_chunks'] + len(chunks))
 
         # 3. 分批处理embeddings
-        batch_size = EMBEDDING_BATCH_SIZE
+        batch_size = int(get_config_value("embedding_batch_size", "4"))
         total_batches = (len(chunks) + batch_size - 1) // batch_size
 
         for batch_index in range(total_batches):
@@ -170,8 +171,8 @@ async def fix_collection_vectors(
                 embeddings = await embed_texts(
                     texts=batch_texts,
                     model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=EMBEDDING_BATCH_SIZE,
-                    dimensions=EMBEDDING_DIMENSIONS
+                    batch_size=batch_size,
+                    dimensions=int(get_config_value("embedding_dimensions", "1024"))
                 )
 
                 if not embeddings or len(embeddings) != len(batch_chunks):

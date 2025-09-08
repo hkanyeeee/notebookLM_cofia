@@ -2,10 +2,10 @@ import httpx
 import json
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from app.config import (
-    LLM_SERVICE_URL,
     DEFAULT_SEARCH_MODEL,
     LLM_DEFAULT_TIMEOUT
 )
+from app.config_manager import get_config_value
 from .tools.models import RunConfig, ToolMode
 from .tools.orchestrator import get_orchestrator
 from .tools.selector import StrategySelector
@@ -13,7 +13,7 @@ from .tools.intelligent_orchestrator import IntelligentOrchestrator
 
 async def generate_answer(question: str, contexts: List[str], model: str = DEFAULT_SEARCH_MODEL, conversation_history: List[Dict] = None) -> str:
     """调用 LM Studio OpenAI 兼容 /v1/chat/completions 接口，根据检索到的上下文生成答案。"""
-    url = f"{LLM_SERVICE_URL}/chat/completions"
+    url = f"{get_config_value("llm_service_url", "http://localhost:11434/v1")}/chat/completions"
 
     system_prompt = (
         "你是一位严谨的助手，请仔细阅读对话历史，理解用户问题的完整语境，然后结合提供的参考资料，提取有效信息、排除数据杂音，根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析。\n"
@@ -65,7 +65,7 @@ async def stream_answer(
       data: [DONE]
     本函数会把每个 delta.content 直接 yield 给调用方。
     """
-    url = f"{LLM_SERVICE_URL}/chat/completions"
+    url = f"{get_config_value("llm_service_url", "http://localhost:11434/v1")}/chat/completions"
 
     system_prompt = (
         "你是一位严谨的助手，请仔细阅读对话历史，理解用户问题的完整语境，然后结合提供的参考资料，提取有效信息、排除数据杂音，根据问题进行多角度推理，最终结合你自己的知识提供直击题干的回答和分析。\n"
@@ -171,7 +171,7 @@ async def generate_answer_with_tools(
     # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
     if use_intelligent_orchestrator:
         try:
-            intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
+            intelligent_orchestrator = IntelligentOrchestrator(get_config_value("llm_service_url", "http://localhost:11434/v1"))
             result = await intelligent_orchestrator.process_query_intelligently(
                 question, contexts, run_config, conversation_history
             )
@@ -226,7 +226,7 @@ async def stream_answer_with_tools(
     # 如果启用智能编排器，使用问题拆解-思考-工具调用流程
     if use_intelligent_orchestrator:
         try:
-            intelligent_orchestrator = IntelligentOrchestrator(LLM_SERVICE_URL)
+            intelligent_orchestrator = IntelligentOrchestrator(get_config_value("llm_service_url", "http://localhost:11434/v1"))
             async for event in intelligent_orchestrator.process_query_intelligently_stream(
                 question, contexts, run_config, conversation_history
             ):
@@ -263,7 +263,7 @@ async def chat_complete(
     Returns:
         LLM的回复内容
     """
-    url = f"{LLM_SERVICE_URL}/chat/completions"
+    url = f"{get_config_value("llm_service_url", "http://localhost:11434/v1")}/chat/completions"
     
     # 组合对话历史
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -308,7 +308,7 @@ async def chat_complete_stream(
     Yields:
         流式响应事件，格式: {"type": "reasoning|content", "content": "..."}
     """
-    url = f"{LLM_SERVICE_URL}/chat/completions"
+    url = f"{get_config_value("llm_service_url", "http://localhost:11434/v1")}/chat/completions"
     
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if conversation_history:

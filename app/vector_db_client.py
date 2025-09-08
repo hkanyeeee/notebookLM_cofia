@@ -6,19 +6,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Chunk, Source
-from app.config import QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION_NAME
+from app.config import QDRANT_COLLECTION_NAME
 
 # Qdrant Collection Name
 COLLECTION_NAME = QDRANT_COLLECTION_NAME
 
 # Global Qdrant Client
-# Use a global client to avoid reconnecting on every request
-try:
-    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=300)
-    print("Qdrant client initialized successfully.")
-except Exception as e:
-    print(f"Failed to initialize Qdrant client: {e}")
-    qdrant_client = None
+qdrant_client = None
+
+
+def create_qdrant_client(url: str, api_key: Optional[str] = None):
+    """创建Qdrant客户端实例"""
+    global qdrant_client
+    try:
+        qdrant_client = QdrantClient(url=url, api_key=api_key, timeout=300)
+        print("Qdrant client initialized successfully.")
+        return qdrant_client
+    except Exception as e:
+        print(f"Failed to initialize Qdrant client: {e}")
+        return None
+
+
+# 初始化客户端（使用默认配置）
+from app.config import QDRANT_URL, QDRANT_API_KEY
+create_qdrant_client(QDRANT_URL, QDRANT_API_KEY)
 
 
 async def ensure_collection_exists(vector_size: int):

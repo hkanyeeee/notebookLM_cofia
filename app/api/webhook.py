@@ -3,7 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Body, HTTPException
 
-from ..config import WEBHOOK_TIMEOUT
+from ..config_manager import get_config_value
 
 router = APIRouter()
 
@@ -29,7 +29,8 @@ async def send_webhook(webhook_url: str, data: dict):
     发送webhook到指定URL
     """
     try:
-        async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
+        webhook_timeout = int(get_config_value("webhook_timeout", "30"))
+        async with httpx.AsyncClient(timeout=webhook_timeout) as client:
             response = await client.post(webhook_url, json=data)
             response.raise_for_status()
             return {"status": "success", "status_code": response.status_code}

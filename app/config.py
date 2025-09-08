@@ -9,6 +9,7 @@ def get_config_value(key: str, default: str = None) -> str:
     """Gets value from .env file or falls back to environment variables."""
     return config.get(key) or os.getenv(key, default)
 
+# 这些配置将在应用启动时从数据库读取
 DATABASE_URL = get_config_value("DATABASE_URL")
 EMBEDDING_SERVICE_URL = get_config_value("EMBEDDING_SERVICE_URL")
 LLM_SERVICE_URL = get_config_value("LLM_SERVICE_URL")

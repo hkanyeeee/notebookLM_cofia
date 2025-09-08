@@ -13,18 +13,7 @@ from difflib import SequenceMatcher
 import os
 from concurrent.futures import ProcessPoolExecutor
 
-from ..config import (
-    EMBEDDING_BATCH_SIZE, LLM_SERVICE_URL, SEARXNG_QUERY_URL,
-    WEB_SEARCH_RESULT_COUNT, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS,
-    WEB_SEARCH_CONCURRENT_REQUESTS, WEB_SEARCH_TIMEOUT,
-    WEB_LOADER_ENGINE, PLAYWRIGHT_TIMEOUT,
-    ENABLE_QUERY_GENERATION, QUERY_GENERATION_PROMPT_TEMPLATE,
-    CHUNK_SIZE, CHUNK_OVERLAP, RAG_TOP_K, RAG_RERANK_TOP_K,
-    WEB_CACHE_ENABLED, WEB_CACHE_MAX_SIZE, WEB_CACHE_TTL_SECONDS, WEB_CACHE_MAX_CONTENT_SIZE,
-    WEB_SEARCH_LLM_TIMEOUT,
-    # 简单查询专用配置
-    SIMPLE_QUERY_MAX_QUERIES, SIMPLE_QUERY_RESULT_COUNT, SIMPLE_QUERY_MAX_RESULTS
-)
+from ..config_manager import get_config_value
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
@@ -115,13 +104,17 @@ class WebSearchTool:
         self.description = "搜索网络信息，爬取相关网页内容，并进行向量化索引和智能召回"
         
         # 初始化缓存（如果启用）
-        if WEB_CACHE_ENABLED:
+        web_cache_enabled = get_config_value("web_cache_enabled", "true").lower() == "true"
+        if web_cache_enabled:
             self.cache = get_web_content_cache()
             # 更新缓存配置
-            self.cache.max_cache_size = WEB_CACHE_MAX_SIZE
-            self.cache.default_ttl = WEB_CACHE_TTL_SECONDS
-            self.cache.max_content_size = WEB_CACHE_MAX_CONTENT_SIZE
-            print(f"[WebSearch] 缓存已启用 (max_size={WEB_CACHE_MAX_SIZE}, ttl={WEB_CACHE_TTL_SECONDS}s)")
+            web_cache_max_size = int(get_config_value("web_cache_max_size", "1000"))
+            web_cache_ttl_seconds = int(get_config_value("web_cache_ttl_seconds", "3600"))
+            web_cache_max_content_size = int(get_config_value("web_cache_max_content_size", "1048576"))
+            self.cache.max_cache_size = web_cache_max_size
+            self.cache.default_ttl = web_cache_ttl_seconds
+            self.cache.max_content_size = web_cache_max_content_size
+            print(f"[WebSearch] 缓存已启用 (max_size={web_cache_max_size}, ttl={web_cache_ttl_seconds}s)")
         else:
             self.cache = None
             print("[WebSearch] 缓存已禁用")
@@ -302,7 +295,8 @@ class WebSearchTool:
             model: 模型名称  
             search_history: 历史搜索记录列表，格式: [{"query": "关键词", "result_summary": "结果摘要"}]
         """
-        if not ENABLE_QUERY_GENERATION or not topic.strip():
+        enable_query_generation = get_config_value("enable_query_generation", "true").lower() == "true"
+        if not enable_query_generation or not topic.strip():
             return [topic]
         
         # 构建历史搜索信息
@@ -315,7 +309,16 @@ class WebSearchTool:
                     history_context += f"   获得结果：{record['result_summary'][:200]}...\n"
             history_context += "\n请确保新生成的关键词与上述历史搜索明显不同，避免获取重复信息。"
         
-        prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE + history_context
+        query_generation_prompt_template = get_config_value("query_generation_prompt_template", """你是搜索查询优化专家。基于给定课题，生成适当数量的简洁搜索查询。
+
+**要求：**
+- 生成最多3个搜索查询，根据实际需要判断具体数量
+- 优先使用英文关键词（搜索结果更多）
+- 每个查询聚焦一个特定方面
+- 保持查询简洁有效，不能超过 4 个关键词（刚才说的优先使用英文关键词），使用空格分割
+
+返回JSON：{"queries": ["查询1", "查询2", ...]}""")
+        prompt_system = query_generation_prompt_template + history_context
         user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
         
         payload = {
@@ -327,8 +330,10 @@ class WebSearchTool:
         }
         
         try:
-            async with httpx.AsyncClient(timeout=WEB_SEARCH_LLM_TIMEOUT) as client:
-                resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
+            web_search_llm_timeout = float(get_config_value("web_search_llm_timeout", "1800.0"))
+            async with httpx.AsyncClient(timeout=web_search_llm_timeout) as client:
+                llm_service_url = get_config_value("llm_service_url", "http://localhost:11434/v1")
+                resp = await client.post(f"{llm_service_url}/chat/completions", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
@@ -366,9 +371,12 @@ class WebSearchTool:
     async def search_searxng(
         self, 
         query: str,
-        count: int = WEB_SEARCH_RESULT_COUNT
+        count: int = None
     ) -> List[Dict[str, str]]:
         """使用 SearxNG 搜索"""
+        if count is None:
+            count = int(get_config_value("web_search_result_count", "2"))
+        
         params = {
             "q": query,
             "format": "json",
@@ -388,8 +396,9 @@ class WebSearchTool:
         }
         
         try:
+            searxng_query_url = get_config_value("searxng_query_url", "http://192.168.31.125:8080/search")
             async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.get(SEARXNG_QUERY_URL, params=params, headers=headers)
+                resp = await client.get(searxng_query_url, params=params, headers=headers)
                 resp.raise_for_status()
                 payload = resp.json()
                 results = payload.get("results", [])
@@ -415,7 +424,8 @@ class WebSearchTool:
     async def fetch_web_content(self, url: str) -> Optional[str]:
         """爬取网页内容，支持缓存和自动回退机制"""
         # 如果启用缓存，先检查缓存
-        if self.cache and WEB_CACHE_ENABLED:
+        web_cache_enabled = get_config_value("web_cache_enabled", "true").lower() == "true"
+        if self.cache and web_cache_enabled:
             cached_content = self.cache.get(url)
             if cached_content is not None:
                 return cached_content
@@ -429,15 +439,17 @@ class WebSearchTool:
         # 缓存未命中或未启用缓存，进行实际爬取
         content = None
         
-        if WEB_LOADER_ENGINE == "playwright":
+        web_loader_engine = get_config_value("web_loader_engine", "safe_web")
+        if web_loader_engine == "playwright":
             # 对于PDF等特殊文件，直接使用safe_web模式
             if is_special_file:
                 print(f"[WebSearch] 检测到特殊文件类型 ({url})，直接使用 safe_web 模式...")
                 try:
+                    web_search_timeout = float(get_config_value("web_search_timeout", "10.0"))
                     content = await fetch_then_extract(
                         url, 
                         selector="article", 
-                        timeout=WEB_SEARCH_TIMEOUT
+                        timeout=web_search_timeout
                     )
                     if content:
                         print(f"[WebSearch] safe_web 模式处理特殊文件成功: {url}")
@@ -449,10 +461,11 @@ class WebSearchTool:
             else:
                 # 常规网页，首先尝试 Playwright 渲染模式
                 try:
+                    playwright_timeout = float(get_config_value("playwright_timeout", "10.0"))
                     content = await fetch_rendered_text(
                         url, 
                         selector="article",
-                        timeout=PLAYWRIGHT_TIMEOUT
+                        timeout=playwright_timeout
                     )
                     print(f"[WebSearch] Playwright 模式成功爬取: {url}")
                 except Exception as e:
@@ -461,10 +474,11 @@ class WebSearchTool:
                     
                     # 回退到 safe_web 模式
                     try:
+                        web_search_timeout = float(get_config_value("web_search_timeout", "10.0"))
                         content = await fetch_then_extract(
                             url, 
                             selector="article", 
-                            timeout=WEB_SEARCH_TIMEOUT
+                            timeout=web_search_timeout
                         )
                         if content:
                             print(f"[WebSearch] safe_web 模式回退成功: {url}")
@@ -476,17 +490,19 @@ class WebSearchTool:
         else:
             # 使用安全模式（httpx + BeautifulSoup，失败后回退到 Playwright）
             try:
+                web_search_timeout = float(get_config_value("web_search_timeout", "10.0"))
                 content = await fetch_then_extract(
                     url, 
                     selector="article", 
-                    timeout=WEB_SEARCH_TIMEOUT
+                    timeout=web_search_timeout
                 )
             except Exception as e:
                 print(f"爬取网页内容失败 {url}: {e}")
                 content = None
         
         # 如果成功获取内容且启用缓存，将内容存入缓存
-        if content and self.cache and WEB_CACHE_ENABLED:
+        web_cache_enabled = get_config_value("web_cache_enabled", "true").lower() == "true"
+        if content and self.cache and web_cache_enabled:
             self.cache.put(url, content)
         
         return content
@@ -542,10 +558,12 @@ class WebSearchTool:
                     print(f"[WebSearch] 创建新Source记录: {url}")
                 
                 # 文档切分
+                chunk_size = int(get_config_value("chunk_size", "1000"))
+                chunk_overlap = int(get_config_value("chunk_overlap", "100"))
                 chunks_text = chunk_text(
                     content,
-                    tokens_per_chunk=CHUNK_SIZE,
-                    overlap_tokens=CHUNK_OVERLAP
+                    tokens_per_chunk=chunk_size,
+                    overlap_tokens=chunk_overlap
                 )
                 
                 # 创建 Chunk 记录
@@ -580,7 +598,7 @@ class WebSearchTool:
                 embeddings = await embed_texts(
                     chunk_texts,
                     model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=EMBEDDING_BATCH_SIZE
+                    batch_size=int(get_config_value("embedding_batch_size", "4"))
                 )
                 all_embeddings_flat.extend(embeddings)
             
@@ -611,24 +629,26 @@ class WebSearchTool:
         # 使用数据库会话进行混合检索
         async with AsyncSessionLocal() as db:
             # 混合检索（向量 + BM25）
+            rag_top_k = int(get_config_value("rag_top_k", "12"))
             hits = await query_hybrid(
                 query_text=query,
                 query_embedding=query_embedding,
-                top_k=RAG_TOP_K,
+                top_k=rag_top_k,
                 session_id=session_id,
                 source_ids=source_ids,
                 db=db
             )
             
             # Rerank（如果配置了）
-            if hits and len(hits) > RAG_RERANK_TOP_K:
+            rag_rerank_top_k = int(get_config_value("rag_rerank_top_k", "12"))
+            if hits and len(hits) > rag_rerank_top_k:
                 try:
-                    reranked_hits = await rerank(query, hits[:RAG_TOP_K])
+                    reranked_hits = await rerank(query, hits[:rag_top_k])
                     # 取 top-k
-                    hits = sorted(reranked_hits, key=lambda x: x[1], reverse=True)[:RAG_RERANK_TOP_K]
+                    hits = sorted(reranked_hits, key=lambda x: x[1], reverse=True)[:rag_rerank_top_k]
                 except Exception as e:
                     print(f"Rerank 失败，使用原始结果: {e}")
-                    hits = hits[:RAG_RERANK_TOP_K]
+                    hits = hits[:rag_rerank_top_k]
             
             return hits
     
@@ -663,12 +683,12 @@ class WebSearchTool:
         
         # 根据查询类型确定配置参数
         if is_simple_query:
-            effective_result_count = custom_result_count or SIMPLE_QUERY_RESULT_COUNT
-            effective_max_results = custom_max_results or SIMPLE_QUERY_MAX_RESULTS
+            effective_result_count = custom_result_count or int(get_config_value("simple_query_result_count", "4"))
+            effective_max_results = custom_max_results or int(get_config_value("simple_query_max_results", "20"))
             print(f"[WebSearch] 简单查询模式: result_count={effective_result_count}, max_results={effective_max_results}")
         else:
-            effective_result_count = custom_result_count or WEB_SEARCH_RESULT_COUNT
-            effective_max_results = custom_max_results or WEB_SEARCH_MAX_RESULTS
+            effective_result_count = custom_result_count or int(get_config_value("web_search_result_count", "2"))
+            effective_max_results = custom_max_results or int(get_config_value("web_search_max_results", "40"))
             print(f"[WebSearch] 普通查询模式: result_count={effective_result_count}, max_results={effective_max_results}")
         
         print(f"[WebSearch] 开始执行，会话ID: {session_id}")
@@ -715,8 +735,9 @@ class WebSearchTool:
             
             # 根据查询类型对queries数量进行截断
             if is_simple_query:
-                queries = queries[:SIMPLE_QUERY_MAX_QUERIES]
-                print(f"[WebSearch] 简单查询模式，截断到前 {SIMPLE_QUERY_MAX_QUERIES} 个查询: {queries}")
+                simple_query_max_queries = int(get_config_value("simple_query_max_queries", "4"))
+                queries = queries[:simple_query_max_queries]
+                print(f"[WebSearch] 简单查询模式，截断到前 {simple_query_max_queries} 个查询: {queries}")
             
             # 2. 生成搜索fingerprint并检查缓存和去重
             fingerprint = self._generate_search_fingerprint(queries)
@@ -779,20 +800,21 @@ class WebSearchTool:
                 # 3. 并发爬取网页内容
                 print(f"[WebSearch] 开始并发爬取网页内容...")
                 t2 = time.perf_counter()
+                web_search_concurrent_requests = int(get_config_value("web_search_concurrent_requests", "10"))
                 content_tasks = []
-                for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
+                for item in all_results[:web_search_concurrent_requests]:
                     content_tasks.append(self.fetch_web_content(item["url"]))
                 
                 # 处理剩余的 URL（分批）
-                remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
+                remaining_urls = all_results[web_search_concurrent_requests:]
                 contents = await asyncio.gather(*content_tasks, return_exceptions=True)
                 first_batch_time = (time.perf_counter() - t2) * 1000.0
                 print(f"[WebSearch] 第一批爬取耗时: {first_batch_time/1000.0:.2f}s")
                 
                 # 处理剩余的批次
                 t2b = time.perf_counter()
-                for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
-                    batch = remaining_urls[i:i + WEB_SEARCH_CONCURRENT_REQUESTS]
+                for i in range(0, len(remaining_urls), web_search_concurrent_requests):
+                    batch = remaining_urls[i:i + web_search_concurrent_requests]
                     batch_tasks = [self.fetch_web_content(item["url"]) for item in batch]
                     batch_contents = await asyncio.gather(*batch_tasks, return_exceptions=True)
                     contents.extend(batch_contents)

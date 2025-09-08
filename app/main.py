@@ -1,17 +1,21 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import DATABASE_URL, LLM_SERVICE_URL
-from .database import init_db
+from .config import DATABASE_URL
+from .config_manager import get_config_value
+from .database import init_db, get_db
 from .tools.orchestrator import initialize_orchestrator
+from .config_manager import start_config_monitoring
 
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     print(f"Using DATABASE_URL: {DATABASE_URL}")
-    print(f"Using LLM_SERVICE_URL: {LLM_SERVICE_URL}")
+    llm_service_url = get_config_value("llm_service_url", "http://localhost:11434/v1")
+    print(f"Using LLM_SERVICE_URL: {llm_service_url}")
     
     # 初始化数据库
     try:
@@ -24,13 +28,29 @@ async def app_lifespan(app: FastAPI):
     
     # 初始化工具编排器
     try:
-        initialize_orchestrator(LLM_SERVICE_URL)
+        initialize_orchestrator(llm_service_url)
         print("Tool orchestrator initialized successfully")
     except Exception as e:
         print(f"Tool orchestrator initialization failed: {e}")
         # 继续运行，工具功能会自动退化为普通问答
     
+    # 启动配置监控
+    async def start_config_monitor():
+        from .database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            await start_config_monitoring(db)
+    
+    # 在后台启动配置监控
+    config_task = asyncio.create_task(start_config_monitor())
+    
     yield
+    
+    # 应用关闭时取消任务
+    try:
+        config_task.cancel()
+        await config_task
+    except asyncio.CancelledError:
+        print("配置监控任务已成功取消")
 
 
 app = FastAPI(title="NotebookLM-Py Backend", lifespan=app_lifespan)
@@ -53,6 +73,7 @@ from .api.documents import router as documents_router
 from .api.query import router as query_router
 
 from .api.models import router as models_router
+from .api.config import router as config_router
 
 from .api.webhook import router as webhook_router
 from .api.n8n_workflow import router as n8n_workflow_router
@@ -66,6 +87,7 @@ app.include_router(documents_router)
 app.include_router(query_router)
 
 app.include_router(models_router)
+app.include_router(config_router)
 
 app.include_router(webhook_router)
 app.include_router(n8n_workflow_router)

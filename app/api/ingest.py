@@ -14,7 +14,7 @@ from ..fetch_parse import fetch_then_extract
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..vector_db_client import add_embeddings
-from ..config import EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
+from ..config_manager import get_config_value
 from . import get_session_id
 
 
@@ -32,7 +32,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         return
 
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
+    embedding_dimensions = data.get("embedding_dimensions", int(get_config_value("embedding_dimensions", "1024")))
 
     try:
         # 1. Check if source already exists
@@ -51,7 +51,9 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
 
         # 3. Chunk Text
         yield f"data: {json.dumps({'type': 'status', 'message': 'Chunking text...'})}\n\n"
-        chunks = chunk_text(text)
+        chunk_size = int(get_config_value("chunk_size", "1000"))
+        chunk_overlap = int(get_config_value("chunk_overlap", "100"))
+        chunks = chunk_text(text, tokens_per_chunk=chunk_size, overlap_tokens=chunk_overlap)
         if not chunks:
             raise ValueError("Could not extract any content from the URL.")
 
@@ -82,8 +84,8 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         await db.commit()
 
         # 5. 并发地进行嵌入与落库（按批并发、完成即写入并推送进度）
-        MAX_PARALLEL = int(EMBEDDING_MAX_CONCURRENCY)
-        BATCH_SIZE = int(EMBEDDING_BATCH_SIZE)
+        MAX_PARALLEL = int(get_config_value("embedding_max_concurrency", "4"))
+        BATCH_SIZE = int(get_config_value("embedding_batch_size", "4"))
 
         # 分批构造任务：每个任务只发起一次 /embeddings 请求（将 batch_size 传为该批大小）
         chunk_batches = [

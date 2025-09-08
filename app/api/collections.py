@@ -8,7 +8,7 @@ from sqlalchemy.future import select
 from sqlalchemy import distinct
 import json
 
-from app.config import EMBEDDING_BATCH_SIZE
+from ..config_manager import get_config_value
 
 from ..models import Source, Chunk
 from ..database import get_db
@@ -135,7 +135,7 @@ async def query_collection(
             query_embeddings = await embed_texts(
                 texts=[request.query],
                 model=DEFAULT_EMBEDDING_MODEL,
-                batch_size=EMBEDDING_BATCH_SIZE,
+                batch_size=int(get_config_value("embedding_batch_size", "4")),
                 dimensions=1024
             )
             
@@ -343,7 +343,7 @@ async def query_collection_stream(
                 query_embeddings = await embed_texts(
                     texts=[request.query],
                     model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=EMBEDDING_BATCH_SIZE,
+                    batch_size=int(get_config_value("embedding_batch_size", "4")),
                     dimensions=1024
                 )
                 

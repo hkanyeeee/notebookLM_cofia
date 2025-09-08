@@ -12,11 +12,11 @@ from ..config import (
     RERANKER_MAX_TOKENS,
     RERANK_CLIENT_MAX_CONCURRENCY,
     DEFAULT_SEARCH_MODEL,
-    EMBEDDING_DIMENSIONS,
     QUERY_TOP_K_BEFORE_RERANK,
     MAX_TOOL_STEPS,
     RAG_RERANK_TOP_K,
 )
+from ..config_manager import get_config_value
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..llm_client import (
     generate_answer, stream_answer,
@@ -50,7 +50,7 @@ async def query(
     q = data.get("query", "")
     top_k = data.get("top_k", QUERY_TOP_K_BEFORE_RERANK)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
-    embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
+    embedding_dimensions = data.get("embedding_dimensions", int(get_config_value("embedding_dimensions", "1024")))
     document_ids = data.get("document_ids", [])  # Optional filtering by document
     use_hybrid = data.get("use_hybrid", True)
     stream = bool(data.get("stream", False))

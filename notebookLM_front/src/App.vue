@@ -2,16 +2,18 @@
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
+import SettingsPage from './pages/SettingsPage.vue'
 import { useSessionStore } from './stores/session'
 import { useThemeStore } from './stores/theme'
 import { cleanupSession } from './api/notebook'
 import { ElButton, ElIcon } from 'element-plus'
-import { Menu } from '@element-plus/icons-vue'
+import { Menu, Setting } from '@element-plus/icons-vue'
 
 const sidebarCollapsed = ref(false)
 const mobileMenuOpen = ref(false) // 移动端侧边栏显示状态
 const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
+const showSettings = ref(false) // 控制是否显示设置页面
 
 // 检查是否为移动端
 const isMobile = ref(window.innerWidth <= 768)
@@ -154,6 +156,11 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     cleanupSession(sessionId)
   }
 }
+
+// 切换设置页面显示
+const toggleSettings = () => {
+  showSettings.value = !showSettings.value
+}
 </script>
 
 <template>
@@ -206,10 +213,47 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 
     <!-- 主内容区域 -->
     <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-      <ChatArea />
+      <!-- 设置页面 -->
+      <SettingsPage v-if="showSettings" />
+      
+      <!-- 聊天页面 -->
+      <ChatArea v-else />
     </main>
+    
+    <!-- 侧边栏设置按钮（桌面端） -->
+    <div v-if="!isMobile" class="settings-button-container">
+      <ElButton 
+        @click="toggleSettings"
+        type="primary"
+        circle
+        size="large"
+        class="settings-button"
+      >
+        <ElIcon>
+          <Setting />
+        </ElIcon>
+      </ElButton>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.settings-button-container {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+}
+
+.settings-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.settings-button:hover {
+  transform: scale(1.05);
+}
+</style>
 
 <style scoped>
 .app-container {

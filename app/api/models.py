@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException
 import httpx
-from ..config import LLM_SERVICE_URL
+from ..config_manager import get_config_value
 
 router = APIRouter()
 
@@ -10,11 +10,12 @@ async def get_models() -> Dict[str, Any]:
     """
     从LLM服务获取可用的模型列表
     """
-    if not LLM_SERVICE_URL:
+    llm_service_url = get_config_value("llm_service_url", "http://localhost:11434/v1")
+    if not llm_service_url:
         raise HTTPException(status_code=503, detail="LLM服务URL未配置")
     
     try:
-        url = f"{LLM_SERVICE_URL}/models"
+        url = f"{llm_service_url}/models"
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(url)
             response.raise_for_status()

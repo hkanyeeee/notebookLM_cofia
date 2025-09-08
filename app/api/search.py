@@ -3,7 +3,8 @@ import json
 import re
 from fastapi import APIRouter, Body, HTTPException
 
-from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
+from ..config import DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
+from ..config_manager import get_config_value
 
 
 router = APIRouter()
@@ -39,7 +40,8 @@ async def generate_search_queries(
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
+            llm_service_url = get_config_value("llm_service_url", "http://localhost:11434/v1")
+            resp = await client.post(f"{llm_service_url}/chat/completions", json=payload)
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
@@ -138,7 +140,8 @@ async def search_searxng_api(data: dict = Body(...)):
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(SEARXNG_QUERY_URL, params=params, headers=headers)
+            searxng_query_url = get_config_value("searxng_query_url", "http://192.168.31.125:8080/search")
+            resp = await client.get(searxng_query_url, params=params, headers=headers)
             resp.raise_for_status()
             payload = resp.json()
             results = payload.get("results", [])

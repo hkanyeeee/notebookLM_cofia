@@ -5,37 +5,8 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import (
-    LLM_SERVICE_URL,
-    DEFAULT_TOOL_MODE, 
-    MAX_TOOL_STEPS,
-    WEB_SEARCH_RESULT_COUNT,
-    WEB_SEARCH_MAX_QUERIES,
-    WEB_SEARCH_MAX_RESULTS,
-    WEB_SEARCH_CONCURRENT_REQUESTS,
-    WEB_SEARCH_TIMEOUT,
-    WEB_LOADER_ENGINE,
-    PLAYWRIGHT_TIMEOUT,
-    WEB_CACHE_ENABLED,
-    WEB_CACHE_MAX_SIZE,
-    WEB_CACHE_TTL_SECONDS,
-    WEB_CACHE_MAX_CONTENT_SIZE,
-    CHUNK_SIZE,
-    CHUNK_OVERLAP,
-    RAG_TOP_K,
-    RAG_RERANK_TOP_K,
-    LLM_DEFAULT_TIMEOUT,
-    DEFAULT_SEARCH_MODEL,
-    DEFAULT_INGEST_MODEL,
-    REASONING_TIMEOUT,
-    WEB_SEARCH_LLM_TIMEOUT,
-    PROXY_URL,
-    HTTP_PROXY,
-    HTTPS_PROXY,
-    ENABLE_QUERY_GENERATION,
-    QUERY_GENERATION_PROMPT_TEMPLATE,
-    MAX_WORDS_PER_QUERY
-)
+from ..config import DEFAULT_SEARCH_MODEL
+from ..config_manager import get_config_value
 from .prompts import REASONING_SYSTEM_PROMPT, REASONING_USER_PROMPT_TEMPLATE
 
 
@@ -44,8 +15,8 @@ class ReasoningEngine:
     思考引擎：基于已有知识独立思考每个子问题
     """
     
-    def __init__(self, llm_service_url: str = LLM_SERVICE_URL):
-        self.llm_service_url = llm_service_url
+    def __init__(self, llm_service_url: str = None):
+        self.llm_service_url = llm_service_url or get_config_value("llm_service_url", "http://localhost:11434/v1")
 
     async def think_independently(
         self, 
@@ -97,7 +68,7 @@ class ReasoningEngine:
                         "model": execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
                         "messages": messages,
                     },
-                    timeout=REASONING_TIMEOUT
+                    timeout=float(get_config_value("reasoning_timeout", "3600.0"))
                 )
                 
                 if response.status_code != 200:
@@ -249,7 +220,7 @@ class ReasoningEngine:
                         ],
                         "temperature": 0.0,
                     },
-                    timeout=REASONING_TIMEOUT
+                    timeout=float(get_config_value("reasoning_timeout", "3600.0"))
                 )
 
             if resp.status_code != 200:
@@ -473,7 +444,8 @@ class ReasoningEngine:
         # 限制关键词数量，去重
         final_keywords = []
         seen = set()
-        for kw in keywords[:MAX_WORDS_PER_QUERY]:  # 最多MAX_WORDS_PER_QUERY个关键词
+        max_words_per_query = int(get_config_value("max_words_per_query", "4"))
+        for kw in keywords[:max_words_per_query]:  # 最多max_words_per_query个关键词
             kw_clean = kw.strip()
             if kw_clean and kw_clean not in seen:
                 seen.add(kw_clean)

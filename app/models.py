@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Text, ForeignKey, DateTime
+from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
 import pytz
@@ -51,3 +51,17 @@ class WorkflowExecution(Base):
 
     def __repr__(self) -> str:
         return f"<WorkflowExecution(id={self.id}, execution_id='{self.execution_id}', document_name='{self.document_name}', status='{self.status}')>"
+
+class Config(Base):
+    __tablename__ = "configs"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(200), unique=True, index=True)  # 配置项键名
+    value: Mapped[str] = mapped_column(Text)  # 配置值（字符串存储，便于处理各种类型）
+    type: Mapped[str] = mapped_column(String(50))  # 配置值类型：string, integer, float, boolean
+    description: Mapped[str] = mapped_column(Text, nullable=True)  # 配置项描述
+    default_value: Mapped[str] = mapped_column(Text)  # 默认值
+    is_hot_reload: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否支持热更新
+    
+    def __repr__(self) -> str:
+        return f"<Config(id={self.id}, key='{self.key}', value='{self.value[:50]}...')>"

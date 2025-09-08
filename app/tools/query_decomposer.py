@@ -5,7 +5,8 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, LLM_DEFAULT_TIMEOUT
+from ..config import DEFAULT_SEARCH_MODEL, LLM_DEFAULT_TIMEOUT
+from ..config_manager import get_config_value
 
 
 class QueryDecomposer:
@@ -13,8 +14,8 @@ class QueryDecomposer:
     问题拆解器：将复杂问题分解为可处理的子问题
     """
     
-    def __init__(self, llm_service_url: str = LLM_SERVICE_URL):
-        self.llm_service_url = llm_service_url
+    def __init__(self, llm_service_url: str = None):
+        self.llm_service_url = llm_service_url or get_config_value("llm_service_url", "http://localhost:11434/v1")
         self.decomposition_prompt = """
 你是一个专业的问题分析专家。请将用户的问题拆解为合适数量的独立子问题。
 

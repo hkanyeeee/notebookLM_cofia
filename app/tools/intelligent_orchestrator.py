@@ -10,7 +10,7 @@ from .orchestrator import ToolOrchestrator
 from .selector import StrategySelector
 from .search_planner import SearchPlanner
 from .formatters import OutputFormatter
-from ..config import LLM_SERVICE_URL
+from ..config_manager import get_config_value
 from .prompts import SYNTHESIS_SYSTEM_PROMPT, SYNTHESIS_USER_PROMPT_TEMPLATE
 import httpx
 
@@ -20,8 +20,8 @@ class IntelligentOrchestrator:
     智能编排器：实现"问题拆解-思考-工具调用"的完整流程
     """
     
-    def __init__(self, llm_service_url: str = LLM_SERVICE_URL):
-        self.llm_service_url = llm_service_url
+    def __init__(self, llm_service_url: str = None):
+        self.llm_service_url = llm_service_url or get_config_value("llm_service_url", "http://localhost:11434/v1")
         self.decomposer = QueryDecomposer(llm_service_url)
         self.reasoning_engine = ReasoningEngine(llm_service_url)
         self.tool_orchestrator = ToolOrchestrator(llm_service_url)
