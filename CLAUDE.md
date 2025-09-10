@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## sub agents 相关
+前端：vue-developer
+后端：python-fastapi-developer、database-admin
+每一个 sub agent 结束后都会输出一个markdown 文件，后续工作需要阅读它
+**直接**将相关文档交给sub agents阅读，不需要前置分析
+
 ## Project Overview
 
 This is a Python-based backend service built with FastAPI that provides document processing, retrieval-augmented generation (RAG), and intelligent tool orchestration capabilities for applications similar to NotebookLM.
