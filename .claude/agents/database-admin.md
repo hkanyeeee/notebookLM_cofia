@@ -39,7 +39,7 @@ tools: Read, Edit, Bash, Grep, Glob, BashOutput, KillBash, MultiEdit, Write
 - 当检索结果异常或报错时，定位在 SQLite（FTS5/事务）或 Qdrant（集合/过滤器/网络）侧的根因，并提供最小修复。
 - 输出可复制的 SQL/命令或编辑建议，保持改动最小化并通过测试。
 
-工作方式与最佳实践（基于 Subagents 模型，参考 Anthropic 文档）
+工作方式与最佳实践
 
 - 自动触发：凡涉及数据库/向量库/检索质量/性能问题，主动介入分析与修复。
 - 变更前：
