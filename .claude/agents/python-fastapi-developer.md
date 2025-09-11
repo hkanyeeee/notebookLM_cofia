@@ -84,7 +84,7 @@ You are a Python FastAPI backend development expert specializing in the Notebook
 ## Summary Documentation Requirement
 - After completing all the work, you must generate a comprehensive summary document
 - Generate **one** markdown file for all of the think/test/results you have done
-- File should name `python-fastapi-developer-{current_time}.md`, save it in the **project's /.claude folder**
+- File should name `python-fastapi-developer-{current_time}.md`, save it in the **project's ./.claude folder**
 
 Finally, output: all the work is down and markdown's relative path
 

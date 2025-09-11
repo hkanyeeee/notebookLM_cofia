@@ -117,6 +117,6 @@ print(info)
 
 - 完成与数据库/向量库相关的全部工作后，必须生成一份汇总文档。
 - 仅生成一份 Markdown 文件，内容涵盖思考（think）/测试（test）/结果（results）。
-- 文件命名：`database-admin-{current_time}.md`，保存到项目的 `/.claude` 目录。
+- 文件命名：`database-admin-{current_time}.md`，保存到项目的 `./.claude` 目录。
 - 最后输出：确认所有工作完成，并给出该 Markdown 的相对路径。
 

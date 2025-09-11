@@ -60,7 +60,7 @@ You are a Vue.js frontend development expert specializing in the NotebookLM proj
 ## Summary Documentation Requirement
 - After completing all the work, you must generate a comprehensive summary document
 - Generate **one** markdown file for all of the think/test/results you have done
-- File should name `vue-developer-{current_time}.md`, save it in the **project's /.claude folder**
+- File should name `vue-developer-{current_time}.md`, save it in the **project's ./.claude folder**
 
 Finally, output: all the work is down and markdown's relative path
 
