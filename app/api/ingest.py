@@ -1,12 +1,14 @@
 import asyncio
 import json
 import hashlib
+from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 
 from ..models import Source, Chunk
 from ..database import get_db
@@ -35,13 +37,10 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
     embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
 
     try:
-        # 1. Check if source already exists
+        # 1. Check if source already exists, if so, update it (UPSERT)
         stmt = select(Source).where(Source.url == url, Source.session_id == session_id)
         result = await db.execute(stmt)
         existing_source = result.scalars().first()
-        if existing_source:
-            yield f"data: {json.dumps({'type': 'complete', 'document_id': str(existing_source.id), 'title': existing_source.title, 'message': 'Document already exists.'})}\n\n"
-            return
 
         # 2. Fetch and Parse
         yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching & parsing URL content...'})}\n\n"
@@ -58,10 +57,22 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
         total_chunks = len(chunks)
         yield f"data: {json.dumps({'type': 'total_chunks', 'value': total_chunks})}\n\n"
 
-        # 4. Create Source and Chunk objects in DB
-        source = Source(url=url, title=title, session_id=session_id)
-        db.add(source)
-        await db.flush()
+        # 4. Create or Update Source and Chunk objects in DB (UPSERT)
+        if existing_source:
+            # 更新现有的 Source 记录
+            existing_source.title = title
+            existing_source.created_at = datetime.utcnow()
+            source = existing_source
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Updating existing source...'})}\n\n"
+            
+            # 删除旧的 chunks（如果需要重新处理）
+            await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
+            await db.flush()
+        else:
+            # 创建新的 Source 记录
+            source = Source(url=url, title=title, session_id=session_id)
+            db.add(source)
+            await db.flush()
 
         chunk_objects = []
         for index, text in enumerate(chunks):

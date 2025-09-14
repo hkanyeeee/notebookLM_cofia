@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 
 from ..models import Source, Chunk, WorkflowExecution
 from ..database import get_db
@@ -500,27 +501,51 @@ async def agenttic_ingest(
         total_chunks = len(chunks)
         print(f"总共生成了 {total_chunks} 个文本块")
 
-        # 4. 创建或获取Source对象
+        # 4. 创建或获取Source对象 (支持UPSERT操作)
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
+        # 首先检查是否已存在相同URL的Source记录
+        existing_source_stmt = select(Source).where(Source.url == url, Source.session_id == FIXED_SESSION_ID)
+        existing_source_result = await db.execute(existing_source_stmt)
+        existing_source = existing_source_result.scalars().first()
         
         # 检查是否为递归调用且提供了parent_source_id
         parent_source_id = data.get("parent_source_id")
         if is_recursive and parent_source_id:
-            # 递归调用时，获取父级Source对象而不是创建新的
+            # 递归调用时，优先获取父级Source对象
             print(f"递归调用：尝试获取父级Source ID: {parent_source_id}")
-            stmt = select(Source).where(Source.id == parent_source_id)
-            result = await db.execute(stmt)
-            source = result.scalar_one_or_none()
+            parent_stmt = select(Source).where(Source.id == parent_source_id)
+            parent_result = await db.execute(parent_stmt)
+            parent_source = parent_result.scalar_one_or_none()
             
-            if not source:
+            if parent_source:
+                print(f"成功获取父级Source: {parent_source.title} (ID: {parent_source.id})")
+                source = parent_source
+            elif existing_source:
+                print(f"父级Source不存在，使用现有的Source: {existing_source.title} (ID: {existing_source.id})")
+                # 更新现有记录的信息
+                existing_source.title = document_name
+                existing_source.created_at = datetime.utcnow()
+                source = existing_source
+            else:
                 print(f"警告：未找到父级Source ID {parent_source_id}，创建新的Source")
                 source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
-            else:
-                print(f"成功获取父级Source: {source.title} (ID: {source.id})")
         else:
-            # 非递归调用时，创建新的Source对象
-            print("非递归调用：创建新的Source对象")
-            source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
+            # 非递归调用时，检查是否存在相同URL的Source (UPSERT逻辑)
+            if existing_source:
+                print(f"非递归调用：更新现有Source: {existing_source.title} (ID: {existing_source.id})")
+                # 更新现有记录的信息
+                existing_source.title = document_name
+                existing_source.created_at = datetime.utcnow()
+                source = existing_source
+                
+                # 删除与现有Source相关的旧chunks，准备重新处理
+                print("删除旧的chunks...")
+                await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
+                await db.flush()
+            else:
+                print("非递归调用：创建新的Source对象")
+                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
         
         # 创建Chunk对象列表
         chunk_objects = []
