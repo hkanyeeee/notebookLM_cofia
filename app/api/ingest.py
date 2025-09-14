@@ -37,8 +37,8 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
     embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
 
     try:
-        # 1. Check if source already exists, if so, update it (UPSERT)
-        stmt = select(Source).where(Source.url == url, Source.session_id == session_id)
+        # 1. Check if source already exists by URL (global unique constraint), if so, update it (UPSERT)
+        stmt = select(Source).where(Source.url == url)
         result = await db.execute(stmt)
         existing_source = result.scalars().first()
 
@@ -59,13 +59,14 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
 
         # 4. Create or Update Source and Chunk objects in DB (UPSERT)
         if existing_source:
-            # 更新现有的 Source 记录
+            # 更新现有的 Source 记录（包括 session_id）
             existing_source.title = title
+            existing_source.session_id = session_id  # 更新 session_id 为当前会话
             existing_source.created_at = datetime.utcnow()
             source = existing_source
             yield f"data: {json.dumps({'type': 'status', 'message': 'Updating existing source...'})}\n\n"
             
-            # 删除旧的 chunks（如果需要重新处理）
+            # 删除旧的 chunks（重新处理最新内容）
             await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
             await db.flush()
         else:

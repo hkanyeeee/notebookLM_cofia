@@ -504,8 +504,8 @@ async def agenttic_ingest(
         # 4. 创建或获取Source对象 (支持UPSERT操作)
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         
-        # 首先检查是否已存在相同URL的Source记录
-        existing_source_stmt = select(Source).where(Source.url == url, Source.session_id == FIXED_SESSION_ID)
+        # 首先检查是否已存在相同URL的Source记录（全局唯一约束，不考虑session_id）
+        existing_source_stmt = select(Source).where(Source.url == url)
         existing_source_result = await db.execute(existing_source_stmt)
         existing_source = existing_source_result.scalars().first()
         
@@ -520,13 +520,28 @@ async def agenttic_ingest(
             
             if parent_source:
                 print(f"成功获取父级Source: {parent_source.title} (ID: {parent_source.id})")
+                # 更新父级Source的信息（UPSERT逻辑）
+                parent_source.title = document_name
+                parent_source.session_id = FIXED_SESSION_ID
+                parent_source.created_at = datetime.utcnow()
                 source = parent_source
+                
+                # 删除与父级Source相关的旧chunks，准备重新处理最新内容
+                print("删除旧的chunks...")
+                await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
+                await db.flush()
             elif existing_source:
-                print(f"父级Source不存在，使用现有的Source: {existing_source.title} (ID: {existing_source.id})")
-                # 更新现有记录的信息
+                print(f"父级Source不存在，更新现有的Source: {existing_source.title} (ID: {existing_source.id})")
+                # 更新现有记录的所有信息
                 existing_source.title = document_name
+                existing_source.session_id = FIXED_SESSION_ID
                 existing_source.created_at = datetime.utcnow()
                 source = existing_source
+                
+                # 删除与现有Source相关的旧chunks，准备重新处理最新内容
+                print("删除旧的chunks...")
+                await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
+                await db.flush()
             else:
                 print(f"警告：未找到父级Source ID {parent_source_id}，创建新的Source")
                 source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
@@ -534,12 +549,13 @@ async def agenttic_ingest(
             # 非递归调用时，检查是否存在相同URL的Source (UPSERT逻辑)
             if existing_source:
                 print(f"非递归调用：更新现有Source: {existing_source.title} (ID: {existing_source.id})")
-                # 更新现有记录的信息
+                # 更新现有记录的所有信息
                 existing_source.title = document_name
+                existing_source.session_id = FIXED_SESSION_ID  # 更新 session_id
                 existing_source.created_at = datetime.utcnow()
                 source = existing_source
                 
-                # 删除与现有Source相关的旧chunks，准备重新处理
+                # 删除与现有Source相关的旧chunks，准备重新处理最新内容
                 print("删除旧的chunks...")
                 await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
                 await db.flush()
