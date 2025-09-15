@@ -209,8 +209,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 #### LLM 配置
 
 *   `LLM_DEFAULT_TIMEOUT`: LLM 调用的默认超时时间（秒）。默认为 `3600.0` 秒。
-*   `DEFAULT_SEARCH_MODEL`: 默认用于搜索和工具调用的 LLM 模型名称。默认为 `openai/gpt-oss-20b`。
-*   `DEFAULT_INGEST_MODEL`: 默认用于文档摄取（如生成查询）的 LLM 模型名称。默认为 `qwen/qwen3-coder-30b`。
+*   `DEFAULT_SEARCH_MODEL`: 默认用于搜索和工具调用的 LLM 模型名称。默认为 `gpt-oss-20b`。
+*   `DEFAULT_INGEST_MODEL`: 默认用于文档摄取（如生成查询）的 LLM 模型名称。默认为 `qwen3-coder-30b-a3b-instruct`。
 *   `DEFAULT_EMBEDDING_MODEL`: 默认用于生成嵌入的模型名称。默认为 `Qwen/Qwen3-Embedding-0.6B`。
 
 #### 推理引擎配置
