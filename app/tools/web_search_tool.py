@@ -138,7 +138,7 @@ class WebSearchTool:
             return ""
         s = text.strip().lower()
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\\[\\\]{}]", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\[\]{}]", "", s)
         return s
 
     def _generate_search_fingerprint(self, queries: List[str]) -> str:

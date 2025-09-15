@@ -17,7 +17,8 @@ async def test_agenttic_ingest():
     payload = {
         "url": test_url,
         "embedding_model": "text-embedding-3-small",
-        "embedding_dimensions": 1024
+        "embedding_dimensions": 1024,
+        "recursive_depth": 1
     }
     
     # API端点

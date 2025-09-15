@@ -380,7 +380,7 @@ URL: {url}
         url = f"{LLM_SERVICE_URL}/chat/completions"
         
         payload = {
-            "model": "qwen3-30b-a3b-thinking-2507-mlx",
+            "model": "qwen3-30b-a3b-instruct-2507",
             "messages": [
                 {"role": "system", "content": "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。"},
                 {"role": "user", "content": prompt},
@@ -495,7 +495,7 @@ async def agenttic_ingest(
         # 3. 分块处理文本
         print("正在分块处理文本...")
         chunks = chunk_text(text)
-        raw_html_chunks = chunk_text(raw_html, 4000, 200)
+        raw_html_chunks = chunk_text(raw_html, 8000, 200)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
@@ -512,6 +512,7 @@ async def agenttic_ingest(
         
         # 检查是否为递归调用且提供了parent_source_id
         parent_source_id = data.get("parent_source_id")
+        from datetime import datetime
         if is_recursive and parent_source_id:
             # 递归调用时，优先获取父级Source对象
             print(f"递归调用：尝试获取父级Source ID: {parent_source_id}")

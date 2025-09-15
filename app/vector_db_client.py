@@ -156,7 +156,7 @@ async def query_embeddings(
 def escape_fts5_query(query: str) -> str:
     """
     转义 FTS5 查询中的特殊字符，避免语法错误。
-    FTS5 特殊字符包括: " * : ( ) / \ [ ] $ 等
+    FTS5 特殊字符包括: " * : ( ) / \\ [ ] $ 等
     """
     # 对于包含特殊字符的查询，使用双引号包围进行精确匹配
     # 这样可以避免特殊字符被误解为 FTS5 操作符

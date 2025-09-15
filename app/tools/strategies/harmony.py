@@ -122,7 +122,7 @@ class HarmonyStrategy(BaseStrategy):
         s = text.strip().lower()
         # 基本的空白和标点处理，不使用硬编码的同义词替换
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\\[\]{}]", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\[\]{}]", "", s)
         return s
 
     def _fingerprint_web_search(self, arguments: Dict[str, Any]) -> str:
