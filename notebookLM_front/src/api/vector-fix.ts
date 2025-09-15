@@ -149,14 +149,15 @@ export async function verifyCollection(collectionId: number): Promise<VerifyResp
  */
 export function createFixProgressStream(taskId: string): EventSource {
   const sessionId = localStorage.getItem('sessionId') || 'default-session'
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
   
-  const eventSource = new EventSource(`${baseUrl}/vector-fix/progress/${taskId}`, {
+  // 通过URL参数传递session_id，因为EventSource不支持自定义headers
+  const url = new URL(`${baseUrl}/vector-fix/progress/${taskId}`)
+  url.searchParams.append('session_id', sessionId)
+  
+  const eventSource = new EventSource(url.toString(), {
     withCredentials: false
   })
-  
-  // 手动设置headers（虽然EventSource不支持自定义headers，但我们可以通过URL参数传递）
-  // 注意：这里可能需要后端支持通过URL参数传递session_id
   
   return eventSource
 }

@@ -329,8 +329,16 @@ async def fix_all_collections(
 
 
 @router.get("/vector-fix/progress/{task_id}", summary="获取修复进度（流式）")
-async def get_fix_progress(task_id: str):
+async def get_fix_progress(
+    task_id: str,
+    session_id: Optional[str] = None  # 通过URL参数传递，因为EventSource不支持自定义headers
+):
     """获取修复进度的流式响应"""
+    # EventSource无法传递自定义headers，这里暂时不强制要求session_id
+    # 但建议前端通过URL参数传递用于日志记录和权限验证
+    if session_id:
+        print(f"进度查询 - Session ID: {session_id}, Task ID: {task_id}")
+    
     return StreamingResponse(
         stream_fix_progress(task_id),
         media_type="text/event-stream",
@@ -342,8 +350,13 @@ async def get_fix_progress(task_id: str):
 
 
 @router.get("/vector-fix/status/{task_id}", summary="获取修复任务状态")
-async def get_fix_status(task_id: str):
+async def get_fix_status(
+    task_id: str,
+    session_id: str = Depends(get_session_id)
+):
     """获取修复任务的当前状态"""
+    print(f"状态查询 - Session ID: {session_id}, Task ID: {task_id}")
+    
     status = fix_status.get_task_status(task_id)
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
