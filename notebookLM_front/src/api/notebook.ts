@@ -1,9 +1,10 @@
 import axios from 'axios'
 import { useSessionStore } from '@/stores/session'
 
-// API基础配置：使用相对路径，便于通过 Nginx 反代统一暴露 9001 端口
-// const API_BASE_URL = 'http://127.0.0.1:8000'
-const API_BASE_URL = ''
+// API基础配置：从环境变量读取，支持开发和生产环境的不同配置
+// 开发环境通过 .env.development 文件配置
+// 生产环境可通过 .env.production 文件配置
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 const api = axios.create({
   baseURL: API_BASE_URL,
