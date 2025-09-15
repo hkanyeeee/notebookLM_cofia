@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // API基础URL
 // const API_BASE_URL = 'http://localhost:8000'
-const API_BASE_URL = ''
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 // 工作流执行相关接口
 export const n8nApi = {
