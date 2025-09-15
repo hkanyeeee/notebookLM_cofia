@@ -6,6 +6,7 @@ from typing import List
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import StreamingResponse
+import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete
@@ -62,7 +63,7 @@ async def stream_ingest_progress(data: dict, session_id: str, db: AsyncSession):
             # 更新现有的 Source 记录（包括 session_id）
             existing_source.title = title
             existing_source.session_id = session_id  # 更新 session_id 为当前会话
-            existing_source.created_at = datetime.utcnow()
+            existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
             source = existing_source
             yield f"data: {json.dumps({'type': 'status', 'message': 'Updating existing source...'})}\n\n"
             

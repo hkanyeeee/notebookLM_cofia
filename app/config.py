@@ -91,8 +91,8 @@ RAG_RERANK_TOP_K = int(get_config_value("RAG_RERANK_TOP_K", "12"))
 
 # LLM 调用相关配置
 LLM_DEFAULT_TIMEOUT = float(get_config_value("LLM_DEFAULT_TIMEOUT", "3600.0"))
-DEFAULT_SEARCH_MODEL= get_config_value("DEFAULT_SEARCH_MODEL", "openai/gpt-oss-20b")
-DEFAULT_INGEST_MODEL= get_config_value("DEFAULT_INGEST_MODEL", "qwen/qwen3-coder-30b")
+DEFAULT_SEARCH_MODEL= get_config_value("DEFAULT_SEARCH_MODEL", "gpt-oss-20b")
+DEFAULT_INGEST_MODEL= get_config_value("DEFAULT_INGEST_MODEL", "qwen3-coder-30b-a3b-instruct")
 DEFAULT_EMBEDDING_MODEL = get_config_value("DEFAULT_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 
 # 思考引擎LLM配置

@@ -333,7 +333,7 @@ async def process_webhook_response(
                 WorkflowExecution.execution_id == data.request_id
             ).values(
                 status="success",
-                stopped_at=datetime.utcnow()
+                stopped_at=datetime.now(pytz.timezone('Asia/Shanghai'))
             )
             await db.execute(stmt)
             await db.commit()
@@ -523,7 +523,7 @@ async def agenttic_ingest(
                 # 更新父级Source的信息（UPSERT逻辑）
                 parent_source.title = document_name
                 parent_source.session_id = FIXED_SESSION_ID
-                parent_source.created_at = datetime.utcnow()
+                parent_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 source = parent_source
                 
                 # 删除与父级Source相关的旧chunks，准备重新处理最新内容
@@ -535,7 +535,7 @@ async def agenttic_ingest(
                 # 更新现有记录的所有信息
                 existing_source.title = document_name
                 existing_source.session_id = FIXED_SESSION_ID
-                existing_source.created_at = datetime.utcnow()
+                existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 source = existing_source
                 
                 # 删除与现有Source相关的旧chunks，准备重新处理最新内容
@@ -552,7 +552,7 @@ async def agenttic_ingest(
                 # 更新现有记录的所有信息
                 existing_source.title = document_name
                 existing_source.session_id = FIXED_SESSION_ID  # 更新 session_id
-                existing_source.created_at = datetime.utcnow()
+                existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 source = existing_source
                 
                 # 删除与现有Source相关的旧chunks，准备重新处理最新内容
@@ -721,7 +721,7 @@ async def agenttic_ingest(
                         WorkflowExecution.execution_id == request_id
                     ).values(
                         status="error",
-                        stopped_at=datetime.utcnow()
+                        stopped_at=datetime.now(pytz.timezone('Asia/Shanghai'))
                     )
                     await db.execute(stmt)
                     await db.commit()

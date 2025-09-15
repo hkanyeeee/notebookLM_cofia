@@ -35,10 +35,17 @@ async def app_lifespan(app: FastAPI):
 
 app = FastAPI(title="NotebookLM-Py Backend", lifespan=app_lifespan)
 
-# CORS Middleware
+# 只允许 192.168.31.* 网段的前端调用，动态生成 1-255 的地址
+def generate_lan_origins():
+    base = "http://192.168.31."
+    return [f"{base}{i}" for i in range(1, 256)] + [
+        "http://localhost",
+        "http://127.0.0.1"
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=generate_lan_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
