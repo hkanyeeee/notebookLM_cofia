@@ -430,6 +430,141 @@ export const notebookApi = {
     }
   },
 
+  // 流式文档摄取
+  async ingestDocumentStream(
+    url: string,
+    onData: (data: any) => void,
+    onComplete?: () => void,
+    onError?: (error: any) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ingest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-ID': useSessionStore().getSessionId() || ''
+        },
+        body: JSON.stringify({ url }),
+        signal
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法创建流读取器')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const jsonStr = line.substring(5)
+            if (jsonStr) {
+              try {
+                const data = JSON.parse(jsonStr)
+                onData(data)
+              } catch (e) {
+                console.error('解析流式数据失败:', e)
+              }
+            }
+          }
+        }
+      }
+
+      onComplete?.()
+    } catch (error: any) {
+      console.error('流式摄取失败:', error)
+      onError?.(error)
+    }
+  },
+
+  // 流式查询文档
+  async queryDocumentsStream(
+    query: string,
+    queryParams: any,
+    onData: (data: any) => void,
+    onComplete?: () => void,
+    onError?: (error: any) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-ID': useSessionStore().getSessionId() || ''
+        },
+        body: JSON.stringify(queryParams),
+        signal
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法创建流读取器')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let lastActivity = Date.now()
+      const STREAM_TIMEOUT = 3600000 // 3600秒超时
+      let parseErrors = 0
+
+      while (true) {
+        // 检查流式超时
+        if (Date.now() - lastActivity > STREAM_TIMEOUT) {
+          console.warn('流式响应超时，强制结束')
+          break
+        }
+        
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        lastActivity = Date.now()
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          const jsonStr = line.slice(5).trim()
+          if (!jsonStr) continue
+          try {
+            const evt = JSON.parse(jsonStr)
+            onData(evt)
+          } catch (e) {
+            console.warn('Failed to parse stream line:', line, e)
+            if (++parseErrors > 10) {
+              console.error('流式响应解析错误过多，强制结束')
+              break
+            }
+          }
+        }
+      }
+
+      onComplete?.()
+    } catch (error: any) {
+      console.error('流式查询失败:', error)
+      onError?.(error)
+    }
+  },
+
   // 获取可用的LLM模型列表
   async getModels(): Promise<{ success: boolean; models?: ModelInfo[] }> {
     try {

@@ -35,86 +35,71 @@ export function useDocumentStore(initialModel?: string) {
       controller = new AbortController();
       controllers.set(url, controller);
       timeoutId = window.setTimeout(() => controller?.abort(), 1800000); // 30分钟
-      const response = await fetch(`${notebookApi.getBaseUrl()}/ingest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': sessionStore.getSessionId() || '',
-        },
-        body: JSON.stringify({ url }),
-        signal: controller.signal,
-      });
+      
+      // 使用新的流式API方法
+      await notebookApi.ingestDocumentStream(
+        url,
+        (data) => {
+          // 处理流式数据
+          const status = ingestionStatus.get(url);
+          if (!status) return;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Failed to get response reader');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const jsonStr = line.substring(5);
-            if (jsonStr) {
-              try {
-                const data = JSON.parse(jsonStr);
-                const status = ingestionStatus.get(url);
-                if (!status) continue;
-
-                switch (data.type) {
-                  case 'status':
-                    status.message = data.message;
-                    break;
-                  case 'total_chunks':
-                    status.total = data.value;
-                    status.message = `发现 ${data.value} 个块`;
-                    break;
-                  case 'progress':
-                    status.progress = data.value;
-                    status.message = `正在处理 ${data.value} / ${status.total}`;
-                    break;
-                  case 'complete':
-                    const newDoc: Document = {
-                      id: data.document_id,
-                      title: data.title || url,
-                      url: url,
-                      createdAt: new Date(),
-                    };
-                    if (!documents.value.some(doc => doc.id === newDoc.id)) {
-                      documents.value.push(newDoc);
-                    }
-                    status.message = data.message || '处理完成!';
-                    status.inProgress = false;
-                    setTimeout(() => ingestionStatus.delete(url), 5000);
-                    break;
-                  case 'error':
-                    status.message = `错误: ${data.message}`;
-                    status.inProgress = false;
-                    status.error = true;
-                    break;
-                }
-              } catch (e) {
-                console.error('Failed to parse stream data:', e);
+          switch (data.type) {
+            case 'status':
+              status.message = data.message;
+              break;
+            case 'total_chunks':
+              status.total = data.value;
+              status.message = `发现 ${data.value} 个块`;
+              break;
+            case 'progress':
+              status.progress = data.value;
+              status.message = `正在处理 ${data.value} / ${status.total}`;
+              break;
+            case 'complete':
+              const newDoc: Document = {
+                id: data.document_id,
+                title: data.title || url,
+                url: url,
+                createdAt: new Date(),
+              };
+              if (!documents.value.some(doc => doc.id === newDoc.id)) {
+                documents.value.push(newDoc);
               }
+              status.message = data.message || '处理完成!';
+              status.inProgress = false;
+              setTimeout(() => ingestionStatus.delete(url), 5000);
+              break;
+            case 'error':
+              status.message = `错误: ${data.message}`;
+              status.inProgress = false;
+              status.error = true;
+              break;
+          }
+        },
+        () => {
+          // 完成回调
+          console.log('文档摄取完成');
+        },
+        (err) => {
+          // 错误回调
+          // 若为用户主动取消（AbortError），静默处理，不视为错误
+          const isAbort = (controller?.signal?.aborted === true) ||
+            (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || ''))));
+          if (!isAbort) {
+            console.error('Ingestion failed:', err);
+            const status = ingestionStatus.get(url);
+            if (status) {
+              status.message = err?.message || '与服务器连接失败';
+              status.inProgress = false;
+              status.error = true;
             }
           }
-        }
-      }
+        },
+        controller.signal
+      );
     } catch (err: any) {
-      // 若为用户主动取消（AbortError），静默处理，不视为错误
+      // 处理API调用本身的错误
       const isAbort = (controller?.signal?.aborted === true) ||
         (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || ''))));
       if (!isAbort) {

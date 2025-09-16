@@ -63,20 +63,6 @@ export function useMessageStore() {
         queryParams.conversation_history = conversationHistory
       }
       
-      const response = await fetch(`${notebookApi.getBaseUrl()}/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': sessionStore.getSessionId() || '',
-        },
-        body: JSON.stringify(queryParams),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       // 先插入一个空的 assistant 消息，后续增量填充
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -89,13 +75,6 @@ export function useMessageStore() {
       const messageIndex = messages.value.length;
       messages.value.push(assistantMessage);
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Failed to get response reader');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
       let accumulatedContent = '';
       let accumulatedReasoning = '';
       let isToolRunning = false;
@@ -103,33 +82,15 @@ export function useMessageStore() {
       const STREAM_TIMEOUT = 3600000; // 3600秒无数据自动结束
       let parseErrors = 0; // 解析错误计数
       
-      while (true) {
-        // 检查流式超时
-        if (Date.now() - lastActivity > STREAM_TIMEOUT) {
-          console.warn('流式响应超时，强制结束');
-          // 设置超时消息
-          if (accumulatedContent === '' || accumulatedContent === '正在思考...' || accumulatedContent === '搜索中...') {
-            messages.value[messageIndex] = {
-              ...messages.value[messageIndex],
-              content: '响应超时，请重试。',
-            };
-          }
-          break;
-        }
-        
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        lastActivity = Date.now(); // 更新活动时间
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
-          const jsonStr = line.slice(5).trim();
-          if (!jsonStr) continue;
+      // 使用新的流式API方法
+      await notebookApi.queryDocumentsStream(
+        query,
+        queryParams,
+        (evt) => {
+          // 处理流式数据
+          lastActivity = Date.now(); // 更新活动时间
+          
           try {
-            const evt = JSON.parse(jsonStr);
             if (evt.type === 'reasoning' && typeof evt.content === 'string') {
               accumulatedReasoning += evt.content;
               messages.value[messageIndex] = {
@@ -216,7 +177,6 @@ export function useMessageStore() {
               // 播放提示音通知用户消息完成
               playNotificationSound();
 
-              break;
             } else if (evt.type === 'status' && typeof evt.message === 'string') {
               // 状态更新
               messages.value[messageIndex] = {
@@ -236,12 +196,11 @@ export function useMessageStore() {
               // 播放提示音通知用户消息完成
               playNotificationSound();
 
-              break;
             } else if (evt.type === 'error') {
               throw new Error(evt.message || 'stream error');
             }
           } catch (e) {
-            console.warn('Failed to parse stream line:', line, e);
+            console.warn('Failed to parse stream event:', evt, e);
             // 如果解析失败太多次，可能是响应格式错误，强制结束
             if (++parseErrors > 10) {
               console.error('流式响应解析错误过多，强制结束');
@@ -252,11 +211,21 @@ export function useMessageStore() {
                   content: '响应格式错误，请重试。',
                 };
               }
-              break;
+              return;
             }
           }
-        }
-      }
+        },
+        () => {
+          // 完成回调
+          console.log('查询完成');
+        },
+        (error) => {
+          // 错误回调
+          console.error('查询失败:', error);
+          throw error;
+        },
+        controller.signal
+      );
 
     } catch (error) {
       console.error('查询失败:', error);
