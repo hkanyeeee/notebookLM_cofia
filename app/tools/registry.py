@@ -24,7 +24,6 @@ class ToolRegistry:
         # 简单断路器：当连续失败次数超过阈值时短时间拒绝请求
         self._cb_failures: Dict[str, int] = {}
         self._cb_open_until: Dict[str, float] = {}
-        # 简化日志系统
     
     def register_tool(self, schema: ToolSchema, handler: Callable, metadata: Optional[ToolMetadata] = None):
         """注册工具
@@ -40,9 +39,7 @@ class ToolRegistry:
         self._metadata[schema.name] = meta
         # 为每个工具创建并发限流器
         self._semaphores[schema.name] = asyncio.Semaphore(max(1, meta.max_concurrency))
-        
-        # 缓存功能已简化
-    
+
     def get_tool_schema(self, name: str) -> Optional[ToolSchema]:
         """获取工具 Schema"""
         return self._tools.get(name)

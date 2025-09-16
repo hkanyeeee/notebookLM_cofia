@@ -66,7 +66,12 @@ class BaseStrategy(ABC):
     
     def build_user_content(self, context: ToolExecutionContext) -> str:
         """构建用户内容"""
-        return "参考资料：\n" + "\n".join(context.contexts) + f"\n\n用户问题：{context.question}"
+        if context.contexts:
+            reference_content = "\n".join(context.contexts)
+        else:
+            reference_content = "未找到符合问题的内容"
+        
+        return f"参考资料：\n{reference_content}\n\n用户问题：{context.question}"
     
     def get_allowed_tools(self, context: ToolExecutionContext) -> List[str]:
         """获取允许使用的工具名称列表"""
