@@ -80,7 +80,8 @@ export function useCollectionStore() {
     queryType: QueryType,
     _unused: boolean, // 保持参数兼容，但不再使用
     messages: Message[],
-    onMessageUpdate: (messageIndex: number, message: Partial<Message>) => void
+    onMessageUpdate: (messageIndex: number, message: Partial<Message>) => void,
+    selectedModel?: string  // 添加模型参数
   ) {
     const collectionId = selectedCollection.value || ''
     
@@ -116,7 +117,8 @@ export function useCollectionStore() {
       const request: CollectionQueryRequest = {
         collection_id: collectionId,
         query,
-        top_k: 20
+        top_k: 20,
+        model: selectedModel  // 传递选中的模型
       }
       
       // Collection问答不使用web search工具
@@ -205,7 +207,7 @@ export function useCollectionStore() {
   }
 
   // 基于指定collection进行查询
-  async function queryCollection() {
+  async function queryCollection(selectedModel?: string) {
     const query = collectionQueryInput.value.trim()
     const collectionId = selectedCollection.value
     
@@ -221,7 +223,8 @@ export function useCollectionStore() {
       const request: CollectionQueryRequest = {
         collection_id: collectionId,
         query,
-        top_k: 20
+        top_k: 20,
+        model: selectedModel  // 传递选中的模型
       }
 
       const response = await notebookApi.queryCollection(request)

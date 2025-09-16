@@ -141,6 +141,7 @@ export interface CollectionQueryRequest {
   collection_id: string
   query: string
   top_k?: number
+  model?: string  // 添加模型参数
 }
 
 export interface CollectionQueryResponse {

@@ -60,7 +60,8 @@ export const useNotebookStore = defineStore('notebook', () => {
               ...messageStore.messages.value[messageIndex],
               ...messageUpdate
             }
-          }
+          },
+          modelStore.selectedModel.value  // 传递当前选择的模型
         )
       }
       
@@ -171,7 +172,8 @@ export const useNotebookStore = defineStore('notebook', () => {
               ...messageStore.messages.value[messageIndex],
               ...messageUpdate
             }
-          }
+          },
+          modelStore.selectedModel.value  // 传递当前选择的模型
         )) : undefined
     ),
     

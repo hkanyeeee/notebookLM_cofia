@@ -35,6 +35,7 @@ class CollectionQueryRequest(BaseModel):
     collection_id: str
     query: str
     top_k: int = 20
+    model: Optional[str] = None  # 添加模型参数
 
 
 class CollectionQueryResponse(BaseModel):
@@ -172,7 +173,8 @@ async def query_collection(
             llm_answer = ""
             if contexts:
                 try:
-                    llm_answer = await generate_answer(request.query, contexts)
+                    # 传递模型参数，如果没有指定则使用默认模型
+                    llm_answer = await generate_answer(request.query, contexts, model=request.model)
                 except Exception as llm_error:
                     print(f"LLM生成回答失败: {llm_error}")
                     # LLM失败不影响搜索结果返回
@@ -208,7 +210,8 @@ async def query_collection(
             llm_answer = ""
             if text_contexts:
                 try:
-                    llm_answer = await generate_answer(request.query, text_contexts)
+                    # 传递模型参数，如果没有指定则使用默认模型
+                    llm_answer = await generate_answer(request.query, text_contexts, model=request.model)
                 except Exception as llm_error:
                     print(f"LLM生成回答失败（文本搜索分支）: {llm_error}")
             
@@ -401,8 +404,8 @@ async def query_collection_stream(
                     llm_start_data = {"type": "llm_start", "message": "开始生成智能回答..."}
                     yield f"data: {json.dumps(llm_start_data, ensure_ascii=False)}\n\n"
                     
-                    # 流式获取LLM回答
-                    async for delta in stream_answer(request.query, contexts):
+                    # 流式获取LLM回答，传递模型参数
+                    async for delta in stream_answer(request.query, contexts, model=request.model):
                         delta_data = {
                             "type": delta.get("type", "content"),
                             "content": delta.get("content", "")
