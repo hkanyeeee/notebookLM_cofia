@@ -125,14 +125,34 @@ class IntelligentOrchestrator:
             
             if use_fast_route:
                 if needs_tools:
-                    # 当明确关闭工具时，直接走基于上下文/已有知识回答，避免进入工具编排器
+                    # 工具关闭：走完整分析链路，识别知识缺口并生成“不可搜索”提示下的最佳答案
                     if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
                         if event_callback:
                             await event_callback({
                                 "type": "reasoning",
-                                "content": "工具已关闭，改为直接基于已有知识回答。"
+                                "content": "工具已关闭，将进行完整分析并列出知识缺口，随后基于已有知识生成答案。"
                             })
-                        result = await self._handle_context_only_query_unified(query, contexts, run_config, conversation_history, event_callback)
+                        # 执行完整的拆解与思考
+                        decomposition = await self.decomposer.decompose(query, execution_context, conversation_history)
+                        thoughts = await self.reasoning_engine.think_about_decomposition(
+                            decomposition, contexts, execution_context, conversation_history
+                        )
+                        # 提取知识缺口
+                        _, knowledge_gaps = self._should_invoke_tools(thoughts)
+                        # 生成不使用搜索的最终答案（在答案中显式反映知识缺口）
+                        final_answer = await self._synthesize_gap_aware_answer_without_tools(
+                            query, knowledge_gaps, contexts, run_config, conversation_history
+                        )
+                        result = {
+                            "answer": final_answer,
+                            "decomposition": decomposition,
+                            "reasoning": thoughts,
+                            "tool_results": {},
+                            "used_tools": False,
+                            "success": True,
+                            "knowledge_gaps": knowledge_gaps,
+                            "fast_route": True
+                        }
                         if event_callback:
                             await event_callback({"type": "final_result", "data": result})
                         return result
@@ -221,17 +241,40 @@ class IntelligentOrchestrator:
             
             tool_results = {}
             if need_tools:
-                if event_callback:
-                    await event_callback({
-                        "type": "reasoning",
-                        "content": f"检测到{len(knowledge_gaps)}个知识缺口，开始搜索外部信息..."
-                    })
+                # 工具关闭：不执行搜索，转入“知识缺口感知”的答案综合
+                if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
+                    if event_callback:
+                        await event_callback({
+                            "type": "reasoning",
+                            "content": "工具已关闭，无法进行搜索，将基于已有知识生成答案并列出知识缺口。"
+                        })
+                    final_answer = await self._synthesize_gap_aware_answer_without_tools(
+                        query, knowledge_gaps, contexts, run_config, conversation_history
+                    )
+                    result = {
+                        "answer": final_answer,
+                        "decomposition": decomposition,
+                        "reasoning": thoughts,
+                        "tool_results": {},
+                        "used_tools": False,
+                        "success": True,
+                        "knowledge_gaps": knowledge_gaps
+                    }
+                    if event_callback:
+                        await event_callback({"type": "final_result", "data": result})
+                    return result
                 else:
-                    print("[IntelligentOrchestrator] 检测到知识缺口，开始工具调用...")
-                
-                tool_results = await self._execute_tools_for_gaps_unified(
-                    knowledge_gaps, query, contexts, run_config, event_callback
-                )
+                    if event_callback:
+                        await event_callback({
+                            "type": "reasoning",
+                            "content": f"检测到{len(knowledge_gaps)}个知识缺口，开始搜索外部信息..."
+                        })
+                    else:
+                        print("[IntelligentOrchestrator] 检测到知识缺口，开始工具调用...")
+                    
+                    tool_results = await self._execute_tools_for_gaps_unified(
+                        knowledge_gaps, query, contexts, run_config, event_callback
+                    )
             else:
                 if event_callback:
                     await event_callback({
@@ -321,25 +364,53 @@ class IntelligentOrchestrator:
             
             if use_fast_route:
                 if needs_tools:
-                    # 当明确关闭工具时，直接流式基于上下文回答
+                    # 工具关闭：走完整分析链路（流式），识别知识缺口并在答案中体现
                     if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
                         yield {
                             "type": "reasoning",
-                            "content": "工具已关闭，改为直接基于已有知识回答。"
+                            "content": "工具已关闭，将进行完整分析并列出知识缺口，随后基于已有知识生成答案。"
                         }
-                        # 直接执行流式 context-only 路径
+                        # 流式执行拆解与思考
+                        decomposition = await self.decomposer.decompose(query, execution_context, conversation_history)
+                        sub_queries = decomposition.get('sub_queries', [])
+                        if sub_queries:
+                            yield {
+                                "type": "reasoning",
+                                "content": f"问题拆解完成，识别到{len(sub_queries)}个关键子问题。"
+                            }
+                        thoughts = await self.reasoning_engine.think_about_decomposition(
+                            decomposition, contexts, execution_context, conversation_history
+                        )
+                        # 提取知识缺口并展示
+                        _, knowledge_gaps = self._should_invoke_tools(thoughts)
+                        if knowledge_gaps:
+                            try:
+                                gaps_brief = []
+                                for i, gap in enumerate(knowledge_gaps, 1):
+                                    desc = gap.get("gap_description") or gap.get("question") or str(gap)
+                                    gaps_brief.append(f"{i}. {desc}")
+                                yield {
+                                    "type": "reasoning",
+                                    "content": "已识别的知识缺口：\n" + "\n".join(gaps_brief)
+                                }
+                            except Exception:
+                                pass
+                        # 基于知识缺口进行无搜索综合（流式）
                         context_str = "\n".join(contexts) if contexts else "无特定上下文"
                         system_prompt = (
-                            "你是一个知识渊博的助手。请仔细阅读对话历史，理解用户问题的完整语境，然后基于你的已有知识和提供的上下文来回答用户的问题。\n"
-                            "重要指导原则：\n"
-                            "1. 充分理解对话历史：如果用户的问题是对之前对话的延续或追问（如'那明天呢？'、'还有其他的吗？'），请结合历史对话来理解当前问题的真实意图。\n"
-                            "2. 不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
-                            "**重要要求：必须完全使用中文进行回答。**"
+                            "你是一个知识渊博的助手。当前外部搜索工具不可用，请不要提出需要搜索的建议。\n"
+                            "请充分利用已有知识和提供的上下文，尽力回答用户问题；\n"
+                            "若信息不足，请明确列出待确认点与可能路径，但不要杜撰。\n"
+                            "必须全程使用中文回答。"
                         )
+                        gaps_text = "\n".join([
+                            (gap.get("gap_description") or gap.get("question") or str(gap)) for gap in (knowledge_gaps or [])
+                        ])
                         user_prompt = (
-                            f"上下文信息：\n{context_str}\n\n"
+                            f"上下文：\n{context_str}\n\n"
                             f"用户问题：{query}\n\n"
-                            "请直接回答用户的问题。"
+                            f"已识别的知识缺口：\n{gaps_text if gaps_text else '无'}\n\n"
+                            "请在不进行外部搜索的前提下给出尽力而为的答案，\n并明确指出哪些关键信息缺失、需要进一步确认。"
                         )
                         from ..llm_client import chat_complete_stream
                         async for event in chat_complete_stream(
@@ -454,24 +525,61 @@ class IntelligentOrchestrator:
             
             tool_results = {}
             if need_tools:
-                yield {
-                    "type": "reasoning",
-                    "content": f"检测到{len(knowledge_gaps)}个知识缺口，开始搜索外部信息..."
-                }
-                
-                # 流式执行工具调用，使用统一的工具执行方法
-                tool_results = await self._execute_tools_for_gaps_unified(
-                    knowledge_gaps, query, contexts, run_config, None
-                )
-                
-                # 手动发送工具调用事件（因为统一方法可能不发送流式事件）
-                if tool_results.get("success", False):
+                # 工具关闭：不执行搜索，改为无搜索综合（流式）
+                if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
                     yield {
-                        "type": "tool_result",
-                        "name": "web_search_and_recall",
-                        "result": "搜索和召回完成",
-                        "success": True
+                        "type": "reasoning",
+                        "content": "工具已关闭，无法进行搜索，将基于已有知识生成答案并列出知识缺口。"
                     }
+                    # 列出知识缺口
+                    if knowledge_gaps:
+                        try:
+                            gaps_brief = []
+                            for i, gap in enumerate(knowledge_gaps, 1):
+                                desc = gap.get("gap_description") or gap.get("question") or str(gap)
+                                gaps_brief.append(f"{i}. {desc}")
+                            yield {
+                                "type": "reasoning",
+                                "content": "已识别的知识缺口：\n" + "\n".join(gaps_brief)
+                            }
+                        except Exception:
+                            pass
+                    # 基于知识缺口进行无搜索综合（流式）
+                    context_str = "\n".join(contexts) if contexts else "无特定上下文"
+                    user_prompt = SYNTHESIS_USER_PROMPT_TEMPLATE.format(
+                        original_query=query,
+                        reasoning_summary=OutputFormatter.format_reasoning_summary(thoughts),
+                        tool_results="未进行外部搜索。",
+                        context=context_str
+                    ) + "\n\n注意：外部搜索工具不可用。请：\n- 基于已有信息尽力回答\n- 明确列出关键缺失信息与建议的下一步（但不要杜撰）"
+                    from ..llm_client import chat_complete_stream
+                    async for event in chat_complete_stream(
+                        system_prompt=SYNTHESIS_SYSTEM_PROMPT,
+                        user_prompt=user_prompt,
+                        model=run_config.model,
+                        conversation_history=conversation_history
+                    ):
+                        yield event
+                    return
+                else:
+                    yield {
+                        "type": "reasoning",
+                        "content": f"检测到{len(knowledge_gaps)}个知识缺口，开始搜索外部信息..."
+                    }
+                    
+                    # 流式执行工具调用，使用统一的工具执行方法
+                    tool_results = await self._execute_tools_for_gaps_unified(
+                        knowledge_gaps, query, contexts, run_config, None
+                    )
+                    
+                    # 手动发送工具调用事件（因为统一方法可能不发送流式事件）
+                    if tool_results.get("success", False):
+                        yield {
+                            "type": "tool_result",
+                            "name": "web_search_and_recall",
+                            "result": "搜索和召回完成",
+                            "success": True
+                        }
             else:
                 yield {
                     "type": "reasoning",
@@ -533,6 +641,8 @@ class IntelligentOrchestrator:
         Returns:
             包含knowledge_gaps_search_results和统计信息的结果字典
         """
+        # 不再在此处短路；由上层决定是否调用该方法
+        
         if not knowledge_gaps:
             return {"knowledge_gaps_search_results": {}, "success": False, "message": "没有知识缺口需要搜索"}
         
@@ -906,6 +1016,46 @@ class IntelligentOrchestrator:
                 print(error_msg)
             
             return fallback_answer
+
+    async def _synthesize_gap_aware_answer_without_tools(
+        self,
+        original_query: str,
+        knowledge_gaps: List[Dict[str, Any]],
+        contexts: List[str],
+        run_config: RunConfig,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
+        """
+        在工具关闭时使用：基于已有知识和上下文，显式呈现知识缺口并给出尽力而为的答案。
+        """
+        try:
+            context_str = "\n".join(contexts) if contexts else "无特定上下文"
+            gaps_text = "\n".join([
+                (gap.get("gap_description") or gap.get("question") or str(gap)) for gap in (knowledge_gaps or [])
+            ])
+            system_prompt = (
+                "你是一个严谨的助手。当前外部搜索工具不可用，请不要提出需要搜索的建议。\n"
+                "请充分利用已有知识和提供的上下文，尽力回答用户问题；\n"
+                "若信息不足，请明确列出待确认点与可能路径，但不要杜撰。\n"
+                "必须全程使用中文回答。"
+            )
+            user_prompt = (
+                f"上下文：\n{context_str}\n\n"
+                f"用户问题：{original_query}\n\n"
+                f"已识别的知识缺口：\n{gaps_text if gaps_text else '无'}\n\n"
+                "请在不进行外部搜索的前提下给出尽力而为的答案，并\n"
+                "- 明确指出哪些关键信息缺失、需要进一步确认；\n"
+                "- 给出可行的下一步建议（例如需要哪些信息或数据）"
+            )
+            from ..llm_client import chat_complete
+            return await chat_complete(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=run_config.model,
+                conversation_history=conversation_history
+            )
+        except Exception as e:
+            return f"外部搜索不可用。基于现有信息，我的回答可能不完整。原因：{str(e)}"
 
     async def _handle_simple_query_unified(
         self, 
