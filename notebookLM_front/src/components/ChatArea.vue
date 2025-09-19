@@ -265,11 +265,13 @@ onMounted(async () => {
         :loading="store.loading.querying"
         :query-type="store.queryType"
         :selected-model="store.selectedModel"
+        :tools-enabled="store.toolsEnabled"
         @send-query="handleSendQuery"
         @start-edit-message="store.startEditMessage"
         @cancel-edit-message="store.cancelEditMessage"
         @update-editing-message="store.updateEditingMessage"
         @resend-edited-message="handleResendEditedMessage"
+        @update:tools-enabled="(enabled: boolean) => store.toolsEnabled = enabled"
       />
 
       <!-- 文档问答模式 -->
@@ -447,6 +449,7 @@ onMounted(async () => {
     transform: scale(1);
   }
 }
+
 
 /* 桌面端隐藏折叠按钮 */
 @media (min-width: 769px) {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { ElInput, ElButton, ElMessage, ElIcon } from 'element-plus'
-import { Promotion, Edit, Check, Close, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ElInput, ElButton, ElMessage, ElIcon, ElSwitch, ElTooltip } from 'element-plus'
+import { Promotion, Edit, Check, Close, ArrowDown, ArrowUp, Tools } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import { QueryType } from '../stores/types'
@@ -18,6 +18,7 @@ interface Props {
   loading: boolean
   queryType: QueryType
   selectedModel: string
+  toolsEnabled: boolean
 }
 
 const props = defineProps<Props>()
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   (e: 'cancelEditMessage', messageId: string): void
   (e: 'updateEditingMessage', messageId: string, content: string): void
   (e: 'resendEditedMessage', messageId: string): void
+  (e: 'update:toolsEnabled', enabled: boolean): void
 }>()
 
 // 查询输入
@@ -300,6 +302,26 @@ function isReasoningExpanded(messageId: string) {
 
     <!-- 输入区域 -->
     <div class="p-4 border-t chat-input-container">
+      <!-- 工具开关行 -->
+      <div class="flex justify-center mb-3">
+        <div class="tools-control-container">
+          <ElTooltip
+            :content="props.toolsEnabled ? '点击关闭工具（网络搜索等）' : '点击启用工具（网络搜索等）'"
+            placement="top"
+            effect="dark"
+          >
+            <div class="tools-switch-wrapper" @click="emit('update:toolsEnabled', !props.toolsEnabled)">
+              <ElIcon class="tools-icon" :class="{ 'tools-enabled': props.toolsEnabled }">
+                <Tools />
+              </ElIcon>
+              <span class="tools-label">{{ props.toolsEnabled ? '工具已启用' : '工具已关闭' }}</span>
+              <div class="tools-indicator" :class="{ 'enabled': props.toolsEnabled }"></div>
+            </div>
+          </ElTooltip>
+        </div>
+      </div>
+      
+      <!-- 输入框和发送按钮 -->
       <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter="handleSendQuery">
         <ElInput
           v-model="queryInput"
@@ -361,6 +383,155 @@ function isReasoningExpanded(messageId: string) {
     transparent 100%
   );
   animation: highlightSweep 1.5s ease-in-out infinite;
+}
+
+/* 工具开关样式 */
+.tools-control-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tools-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.tools-switch-wrapper:hover {
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+  transform: translateY(-1px);
+}
+
+.tools-icon {
+  font-size: 16px;
+  color: #6b7280;
+  transition: all 0.3s ease;
+}
+
+.tools-icon.tools-enabled {
+  color: #4f46e5;
+}
+
+.tools-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  transition: color 0.3s ease;
+}
+
+.tools-switch-wrapper:hover .tools-label {
+  color: #1f2937;
+}
+
+.tools-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.tools-indicator.enabled {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.tools-indicator.enabled::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.2);
+  animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* 暗色模式适配 */
+html.dark .tools-switch-wrapper {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+html.dark .tools-switch-wrapper:hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+html.dark .tools-icon {
+  color: #9ca3af;
+}
+
+html.dark .tools-icon.tools-enabled {
+  color: #6366f1;
+}
+
+html.dark .tools-label {
+  color: #d1d5db;
+}
+
+html.dark .tools-switch-wrapper:hover .tools-label {
+  color: #f9fafb;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .tools-control-container {
+    margin: 0 16px;
+  }
+
+  .tools-switch-wrapper {
+    padding: 6px 12px;
+    gap: 6px;
+    border-radius: 10px;
+  }
+
+  .tools-icon {
+    font-size: 14px;
+  }
+
+  .tools-label {
+    font-size: 12px;
+  }
+
+  .tools-indicator {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+/* 超小屏幕适配 */
+@media (max-width: 480px) {
+  .tools-control-container {
+    margin: 0 12px;
+  }
+
+  .tools-switch-wrapper {
+    padding: 4px 8px;
+    gap: 4px;
+    border-radius: 8px;
+  }
+
+  .tools-label {
+    display: none; /* 在很小的屏幕上隐藏文字 */
+  }
 }
 </style>
 

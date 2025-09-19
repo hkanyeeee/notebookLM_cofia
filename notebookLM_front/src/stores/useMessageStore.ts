@@ -15,7 +15,8 @@ export function useMessageStore() {
     queryType: QueryType, 
     selectedModel: string,
     documentIds?: string[],
-    performCollectionQuery?: (query: string) => Promise<any>
+    performCollectionQuery?: (query: string) => Promise<any>,
+    toolsEnabled?: boolean  // 新增工具启用参数，仅对普通问答有效
   ) {
     // 如果问答类型为COLLECTION，执行Collection查询
     if (queryType === QueryType.COLLECTION && performCollectionQuery) {
@@ -50,11 +51,17 @@ export function useMessageStore() {
       if (queryType === QueryType.DOCUMENT) {
         // 文档问答模式：使用已添加的文档，不启用工具，不使用消息历史
         queryParams.document_ids = documentIds || []
-        queryParams.tool_mode = 'off'
+        // 注意：文档问答不传递tool_mode参数，让后端使用专门的文档问答逻辑
       } else if (queryType === QueryType.NORMAL) {
-        // 普通问答模式：不限制文档范围，启用web search工具，使用消息历史
-        queryParams.tool_mode = 'auto'
-        queryParams.tools = DEFAULT_TOOLS
+        // 普通问答模式：不限制文档范围，根据用户设置启用/禁用工具，使用消息历史
+        if (toolsEnabled === true) {
+          queryParams.tool_mode = 'auto'
+          queryParams.tools = DEFAULT_TOOLS
+        } else {
+          // 工具关闭时，显式传递 'off' 模式
+          queryParams.tool_mode = 'off'
+        }
+        
         // 添加消息历史 (排除刚添加的用户消息)
         const conversationHistory = messages.value.slice(0, -1).map(msg => ({
           role: msg.type === 'user' ? 'user' : 'assistant',
@@ -308,7 +315,8 @@ export function useMessageStore() {
     queryType: QueryType, 
     selectedModel: string,
     documentIds?: string[],
-    performCollectionQuery?: (query: string) => Promise<any>
+    performCollectionQuery?: (query: string) => Promise<any>,
+    toolsEnabled?: boolean  // 新增工具启用参数，仅对普通问答有效
   ) {
     const messageIndex = messages.value.findIndex(m => m.id === messageId)
     if (messageIndex === -1) return
@@ -326,7 +334,7 @@ export function useMessageStore() {
     messages.value = messages.value.slice(0, messageIndex)
 
     // 重新发送查询
-    await sendQuery(queryContent, queryType, selectedModel, documentIds, performCollectionQuery)
+    await sendQuery(queryContent, queryType, selectedModel, documentIds, performCollectionQuery, toolsEnabled)
   }
 
   return {

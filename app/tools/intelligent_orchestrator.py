@@ -125,6 +125,17 @@ class IntelligentOrchestrator:
             
             if use_fast_route:
                 if needs_tools:
+                    # 当明确关闭工具时，直接走基于上下文/已有知识回答，避免进入工具编排器
+                    if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
+                        if event_callback:
+                            await event_callback({
+                                "type": "reasoning",
+                                "content": "工具已关闭，改为直接基于已有知识回答。"
+                            })
+                        result = await self._handle_context_only_query_unified(query, contexts, run_config, conversation_history, event_callback)
+                        if event_callback:
+                            await event_callback({"type": "final_result", "data": result})
+                        return result
                     if event_callback:
                         await event_callback({
                             "type": "reasoning",
@@ -310,6 +321,35 @@ class IntelligentOrchestrator:
             
             if use_fast_route:
                 if needs_tools:
+                    # 当明确关闭工具时，直接流式基于上下文回答
+                    if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
+                        yield {
+                            "type": "reasoning",
+                            "content": "工具已关闭，改为直接基于已有知识回答。"
+                        }
+                        # 直接执行流式 context-only 路径
+                        context_str = "\n".join(contexts) if contexts else "无特定上下文"
+                        system_prompt = (
+                            "你是一个知识渊博的助手。请仔细阅读对话历史，理解用户问题的完整语境，然后基于你的已有知识和提供的上下文来回答用户的问题。\n"
+                            "重要指导原则：\n"
+                            "1. 充分理解对话历史：如果用户的问题是对之前对话的延续或追问（如'那明天呢？'、'还有其他的吗？'），请结合历史对话来理解当前问题的真实意图。\n"
+                            "2. 不要提及需要搜索或查找外部信息，直接给出清晰、准确的答案。\n"
+                            "**重要要求：必须完全使用中文进行回答。**"
+                        )
+                        user_prompt = (
+                            f"上下文信息：\n{context_str}\n\n"
+                            f"用户问题：{query}\n\n"
+                            "请直接回答用户的问题。"
+                        )
+                        from ..llm_client import chat_complete_stream
+                        async for event in chat_complete_stream(
+                            system_prompt=system_prompt,
+                            user_prompt=user_prompt,
+                            model=run_config.model,
+                            conversation_history=conversation_history
+                        ):
+                            yield event
+                        return
                     yield {
                         "type": "reasoning",
                         "content": f"分类为简单查询，需要外部工具，直接获取信息... ({reason})"
@@ -889,6 +929,16 @@ class IntelligentOrchestrator:
             处理结果
         """
         try:
+            # 保护：若工具关闭或不应使用工具，则直接走基于上下文回答
+            if run_config.tool_mode == ToolMode.OFF or not StrategySelector.should_use_tools(run_config, run_config.model):
+                if event_callback:
+                    await event_callback({
+                        "type": "reasoning",
+                        "content": "工具已关闭，直接基于已有知识回答。"
+                    })
+                return await self._handle_context_only_query_unified(
+                    query, contexts, run_config, conversation_history, event_callback
+                )
             if event_callback:
                 # 流式处理
                 events_queue = []

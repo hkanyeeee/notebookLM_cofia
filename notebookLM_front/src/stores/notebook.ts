@@ -10,9 +10,36 @@ import { QueryType } from './types'
 export { QueryType } from './types'
 export type { Document, Source, Message, IngestionProgress } from './types'
 
+// 从本地存储读取保存的工具启用状态
+function getStoredToolsEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem('tools_enabled')
+    return stored !== null ? JSON.parse(stored) : true // 默认启用
+  } catch {
+    return true
+  }
+}
+
+// 保存工具启用状态到本地存储
+function storeToolsEnabled(enabled: boolean) {
+  try {
+    localStorage.setItem('tools_enabled', JSON.stringify(enabled))
+  } catch {
+    // 忽略存储错误
+  }
+}
+
 export const useNotebookStore = defineStore('notebook', () => {
   // 问答类型状态
   const queryType = ref<QueryType>(QueryType.NORMAL) // 默认为普通问答
+  
+  // 工具启用状态（仅对普通问答有效）
+  const toolsEnabled = ref<boolean>(getStoredToolsEnabled())
+
+  // 监听工具启用状态变化，自动保存到本地存储
+  watch(toolsEnabled, (newValue) => {
+    storeToolsEnabled(newValue)
+  })
 
   // 初始化各个子store
   const modelStore = useModelStore()
@@ -70,7 +97,9 @@ export const useNotebookStore = defineStore('notebook', () => {
         query,
         queryType.value,
         modelStore.selectedModel.value,
-        documentStore.documents.value.map(doc => doc.id)
+        documentStore.documents.value.map(doc => doc.id),
+        undefined, // performCollectionQuery参数
+        queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined // 仅普通问答传递工具启用状态
       )
     } finally {
       queryingState.value = false
@@ -119,6 +148,9 @@ export const useNotebookStore = defineStore('notebook', () => {
     queryType,
     isCollectionQueryMode,
     shouldUseWebSearch,
+    
+    // 工具配置
+    toolsEnabled,
     
     // 文档相关 (来自 documentStore)
     documents: documentStore.documents,
@@ -174,7 +206,8 @@ export const useNotebookStore = defineStore('notebook', () => {
             }
           },
           modelStore.selectedModel.value  // 传递当前选择的模型
-        )) : undefined
+        )) : undefined,
+      queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined // 仅普通问答传递工具启用状态
     ),
     
     // Collection方法
