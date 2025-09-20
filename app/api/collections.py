@@ -17,6 +17,7 @@ from ..database import get_db
 from ..vector_db_client import query_hybrid
 from ..embedding_client import embed_texts
 from ..llm_client import generate_answer, stream_answer
+from ..utils.session_ids import get_known_auto_ingest_session_ids
 
 DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
@@ -61,9 +62,10 @@ async def get_collections_list(
     返回简化的collection信息，供前端选择使用
     """
     try:
-        # 兼容历史与当前固定会话ID，合并 sources
+        # 统一：合并历史与当前固定会话ID
+        session_ids = get_known_auto_ingest_session_ids()
         sources: List[Source] = []
-        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+        for sid in session_ids:
             stmt = select(Source).where(Source.session_id == sid)
             result = await db.execute(stmt)
             sources.extend(result.scalars().all())
@@ -89,14 +91,20 @@ async def get_collections_list(
         for collection_name, group_data in collection_groups.items():
             # 找到主文档（URL最短的通常是父文档）
             main_source = min(group_data['sources'], key=lambda s: len(s.url))
-            
-            # 计算该collection的总文档数和chunks数
-            total_sources = len(group_data['sources'])
-            
+
+            # 统一：按文档块（chunks）统计，跨会话聚合
+            source_ids = [s.id for s in group_data['sources']]
+            chunks_stmt = select(Chunk).where(
+                Chunk.source_id.in_(source_ids),
+                Chunk.session_id.in_(session_ids)
+            )
+            chunks_result = await db.execute(chunks_stmt)
+            chunks_count = len(chunks_result.scalars().all())
+
             collections.append(AutoCollection(
                 collection_id=collection_name,  # 使用collection_name作为ID
                 collection_name=collection_name,
-                document_title=f"{main_source.title} ({total_sources}个文档)",
+                document_title=f"{main_source.title} ({chunks_count}个文档块)",
                 url=main_source.url,
                 created_at=main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None
             ))
@@ -122,9 +130,10 @@ async def query_collection(
     在指定的collection中进行向量搜索查询
     """
     try:
-        # 兼容多个固定会话ID，汇总 collection 的所有 sources
+        # 统一：跨会话合并
+        session_ids = get_known_auto_ingest_session_ids()
         all_sources: List[Source] = []
-        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+        for sid in session_ids:
             all_sources_stmt = select(Source).where(Source.session_id == sid)
             all_sources_result = await db.execute(all_sources_stmt)
             all_sources.extend(all_sources_result.scalars().all())
@@ -153,11 +162,11 @@ async def query_collection(
                 detail=f"Collection ID {request.collection_id} 不存在"
             )
         
-        # 查询该collection下所有sources的chunks
+        # 查询该collection下所有sources的chunks（跨会话）
         source_ids = [s.id for s in collection_sources]
         chunks_stmt = select(Chunk).where(
             Chunk.source_id.in_(source_ids),
-            Chunk.session_id == FIXED_SESSION_ID
+            Chunk.session_id.in_(session_ids)
         )
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
@@ -191,7 +200,7 @@ async def query_collection(
                 query_text=request.query,
                 query_embedding=query_embedding,
                 top_k=request.top_k,
-                session_id=FIXED_SESSION_ID,
+                session_id="fixed_session_id_for_agenttic_ingest",
                 source_ids=source_ids,  # 限制在collection的所有sources
                 db=db
             )
@@ -292,8 +301,9 @@ async def get_collection_detail(
     """
     try:
         # 获取该collection下的所有sources（合并多会话）
+        session_ids = get_known_auto_ingest_session_ids()
         all_sources: List[Source] = []
-        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+        for sid in session_ids:
             all_sources_stmt = select(Source).where(Source.session_id == sid)
             all_sources_result = await db.execute(all_sources_stmt)
             all_sources.extend(all_sources_result.scalars().all())
@@ -318,7 +328,7 @@ async def get_collection_detail(
         source_ids = [s.id for s in collection_sources]
         chunks_count_stmt = select(Chunk).where(
             Chunk.source_id.in_(source_ids),
-            Chunk.session_id == FIXED_SESSION_ID
+            Chunk.session_id.in_(session_ids)
         )
         chunks_result = await db.execute(chunks_count_stmt)
         chunks = chunks_result.scalars().all()
