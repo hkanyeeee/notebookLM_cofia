@@ -1,10 +1,7 @@
 import httpx
-import json
-import re
 from fastapi import APIRouter, Body, HTTPException
 
-from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
-from ..llm_client import chat_complete
+from ..config import SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
 
 
 router = APIRouter()
@@ -31,6 +28,7 @@ async def generate_search_queries(
     user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
     try:
+        from ..llm_client import chat_complete
         content = await chat_complete(
             system_prompt=prompt_system,
             user_prompt=user_prompt,
@@ -45,7 +43,7 @@ async def generate_search_queries(
                 # 去掉可能的代码块包裹 ```json ... ``` / ``` ... ```
                 content_stripped = content.strip()
                 if content_stripped.startswith("```"):
-                    content_stripped = _re.sub(r"^```(?:json)?\\s*|\\s*```$", "", content_stripped)
+                    content_stripped = _re.sub(r"^```(?:json)?\s*|\s*```$", "", content_stripped)
 
                 # 如果包含 JSON 对象子串，只取第一个对象
                 m = _re.search(r"\{[\s\S]*\}", content_stripped)

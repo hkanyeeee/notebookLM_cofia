@@ -19,7 +19,7 @@ from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..utils.link_extractor import extract_links_from_html
 from ..utils.task_status import ingest_task_manager, TaskStatus
-from app.config import LLM_SERVICE_URL, DEFAULT_INGEST_MODEL, SUBDOC_MAX_CONCURRENCY
+from ..config import DEFAULT_INGEST_MODEL, SUBDOC_MAX_CONCURRENCY
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, SUBDOC_USE_WEBHOOK_FALLBACK
@@ -504,7 +504,6 @@ async def generate_document_names(url: str, model: str = None) -> dict:
     """
     # 创建一个专门用于文档名称生成的提示模板，避免使用query接口中的generate_answer函数
     # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
-    from ..config import DEFAULT_INGEST_MODEL
     from ..llm_client import chat_complete
     
     # 如果没有传入模型，使用默认模型
@@ -613,7 +612,6 @@ async def agenttic_ingest(
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
     # 是否启用 webhook 兜底，可被请求参数覆盖
     use_webhook_fallback = data.get("webhook_fallback", SUBDOC_USE_WEBHOOK_FALLBACK)
-    print(f"模型: {model}")
     try:
         # 1. 使用大模型生成文档名称和collection名称（仅在非递归调用时）
         print("正在生成文档名称...")
