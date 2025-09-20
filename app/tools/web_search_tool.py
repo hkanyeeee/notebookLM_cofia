@@ -138,7 +138,7 @@ class WebSearchTool:
             return ""
         s = text.strip().lower()
         s = re.sub(r"\s+", "", s)
-        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？""\"'`（）()\\[\]{}]", "", s)
+        s = re.sub(r"[\u3000\s\t\r\n\-_,.;:!?，。；：！？\"'`（）()\\[\]{}]", "", s)
         return s
 
     def _generate_search_fingerprint(self, queries: List[str]) -> str:
@@ -318,46 +318,40 @@ class WebSearchTool:
         prompt_system = QUERY_GENERATION_PROMPT_TEMPLATE + history_context
         user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
         
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": prompt_system},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        
         try:
-            async with httpx.AsyncClient(timeout=WEB_SEARCH_LLM_TIMEOUT) as client:
-                resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
+            from ..llm_client import chat_complete
+            content = await chat_complete(
+                system_prompt=prompt_system,
+                user_prompt=user_prompt,
+                model=model,
+                timeout=WEB_SEARCH_LLM_TIMEOUT,
+            )
+            
+            # 尝试解析 JSON
+            try:
+                import re
                 
-                # 尝试解析 JSON
-                try:
-                    import re
-                    
-                    # 去掉可能的代码块包裹
-                    content_stripped = content.strip()
-                    if content_stripped.startswith("```"):
-                        content_stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", content_stripped)
-                    
-                    # 提取 JSON 对象
-                    m = re.search(r"\{[\s\S]*\}", content_stripped)
-                    json_candidate = m.group(0) if m else content_stripped
-                    
-                    parsed = json.loads(json_candidate)
-                    queries = parsed.get("queries") or parsed.get("Queries")
-                    if isinstance(queries, list):
-                        # 清理和验证查询
-                        cleaned_queries = self._clean_and_validate_queries([str(q).strip() for q in queries if str(q).strip()], topic)
-                        if cleaned_queries:
-                            return cleaned_queries
-                except Exception:
-                    pass
+                # 去掉可能的代码块包裹
+                content_stripped = content.strip()
+                if content_stripped.startswith("```"):
+                    content_stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", content_stripped)
                 
-                # 兜底策略：简化的默认查询
-                return [topic]
+                # 提取 JSON 对象
+                m = re.search(r"\{[\s\S]*\}", content_stripped)
+                json_candidate = m.group(0) if m else content_stripped
+                
+                parsed = json.loads(json_candidate)
+                queries = parsed.get("queries") or parsed.get("Queries")
+                if isinstance(queries, list):
+                    # 清理和验证查询
+                    cleaned_queries = self._clean_and_validate_queries([str(q).strip() for q in queries if str(q).strip()], topic)
+                    if cleaned_queries:
+                        return cleaned_queries
+            except Exception:
+                pass
+            
+            # 兜底策略：简化的默认查询
+            return [topic]
                 
         except Exception as e:
             print(f"生成搜索关键词失败: {e}")

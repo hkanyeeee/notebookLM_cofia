@@ -4,6 +4,7 @@ import re
 from fastapi import APIRouter, Body, HTTPException
 
 from ..config import LLM_SERVICE_URL, SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUERIES
+from ..llm_client import chat_complete
 
 
 router = APIRouter()
@@ -29,25 +30,18 @@ async def generate_search_queries(
     )
     user_prompt = f"课题：{topic}\n请直接给出 JSON，如：{{'queries': ['...', '...', '...']}}"
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": prompt_system},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{LLM_SERVICE_URL}/chat/completions", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            # 尝试解析为 JSON
-            import json as _json
-            import re as _re
+        content = await chat_complete(
+            system_prompt=prompt_system,
+            user_prompt=user_prompt,
+            model=model,
+            timeout=120,
+        )
+        # 尝试解析为 JSON
+        import json as _json
+        import re as _re
 
-            try:
+        try:
                 # 去掉可能的代码块包裹 ```json ... ``` / ``` ... ```
                 content_stripped = content.strip()
                 if content_stripped.startswith("```"):
@@ -68,39 +62,39 @@ async def generate_search_queries(
                 if not queries:
                     raise ValueError("Empty queries")
                 return {"queries": queries}
+        except Exception:
+            # 宽松处理：把单引号换成双引号再试一次
+            try:
+                relaxed = json_candidate.replace("'", '"')
+                parsed2 = _json.loads(relaxed)
+                qs = parsed2.get("queries") or parsed2.get("Queries")
+                if isinstance(qs, list):
+                    max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
+                    qs = [str(q).strip() for q in qs if str(q).strip()][:max_queries]
+                    while len(qs) < max_queries:
+                        qs.append(topic)
+                    return {"queries": qs[:max_queries]}
             except Exception:
-                # 宽松处理：把单引号换成双引号再试一次
+                pass
+
+            # 兜底：按行拆分，过滤可能的 JSON 包裹
+            lines = [s.strip() for s in content.split("\n") if s.strip()]
+            # 如果第一行就是一个对象字符串，尝试再解析一次
+            if lines and (lines[0].startswith("{") and lines[0].endswith("}")):
                 try:
-                    relaxed = json_candidate.replace("'", '"')
-                    parsed2 = _json.loads(relaxed)
-                    qs = parsed2.get("queries") or parsed2.get("Queries")
-                    if isinstance(qs, list):
+                    obj = _json.loads(lines[0].replace("'", '"'))
+                    if isinstance(obj.get("queries"), list):
                         max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
-                        qs = [str(q).strip() for q in qs if str(q).strip()][:max_queries]
-                        while len(qs) < max_queries:
-                            qs.append(topic)
-                        return {"queries": qs[:max_queries]}
+                        arr = [str(q).strip() for q in obj["queries"] if str(q).strip()]
+                        return {"queries": (arr + [topic, f"{topic} 相关问题"])[:max_queries]}
                 except Exception:
                     pass
 
-                # 兜底：按行拆分，过滤可能的 JSON 包裹
-                lines = [s.strip() for s in content.split("\n") if s.strip()]
-                # 如果第一行就是一个对象字符串，尝试再解析一次
-                if lines and (lines[0].startswith("{") and lines[0].endswith("}")):
-                    try:
-                        obj = _json.loads(lines[0].replace("'", '"'))
-                        if isinstance(obj.get("queries"), list):
-                            max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
-                            arr = [str(q).strip() for q in obj["queries"] if str(q).strip()]
-                            return {"queries": (arr + [topic, f"{topic} 相关问题"])[:max_queries]}
-                    except Exception:
-                        pass
-
-                max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
-                queries = lines[:max_queries]
-                if not queries:
-                    queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
-                return {"queries": queries[:max_queries]}
+            max_queries = int(WEB_SEARCH_MAX_QUERIES) if isinstance(WEB_SEARCH_MAX_QUERIES, str) else WEB_SEARCH_MAX_QUERIES
+            queries = lines[:max_queries]
+            if not queries:
+                queries = [topic, f"{topic} 关键点", f"{topic} 最新进展"]
+            return {"queries": queries[:max_queries]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generate queries failed: {e}")
 

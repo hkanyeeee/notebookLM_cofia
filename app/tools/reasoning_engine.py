@@ -4,7 +4,6 @@
 import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
-import httpx
 from ..config import (
     LLM_SERVICE_URL,
     DEFAULT_TOOL_MODE, 
@@ -36,6 +35,7 @@ from ..config import (
     MAX_WORDS_PER_QUERY
 )
 from .prompts import REASONING_SYSTEM_PROMPT, REASONING_USER_PROMPT_TEMPLATE
+# 注意：避免顶层导入 chat_complete 以防循环依赖
 
 
 class ReasoningEngine:
@@ -88,49 +88,43 @@ class ReasoningEngine:
             
             messages.append({"role": "user", "content": prompt})
             
-            # 调用LLM进行思考
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.llm_service_url}/chat/completions",
-                    json={
-                        "model": execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
-                        "messages": messages,
-                    },
-                    timeout=REASONING_TIMEOUT
-                )
+            # 延迟导入以避免循环依赖
+            from ..llm_client import chat_complete as _chat_complete
+            # 调用统一 LLM 客户端
+            content = await _chat_complete(
+                system_prompt=REASONING_SYSTEM_PROMPT,
+                user_prompt=prompt,
+                model=execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
+                timeout=REASONING_TIMEOUT,
+                conversation_history=conversation_history,
+            )
+
+            # 尝试解析JSON
+            try:
+                # 清理 markdown 代码块标记
+                cleaned_content = self._clean_json_content(content)
+                thinking_result = json.loads(cleaned_content)
                 
-                if response.status_code != 200:
-                    raise Exception(f"LLM请求失败: {response.status_code}")
+                # 验证必要字段
+                required_fields = ["thought_process", "confidence_level", "knowledge_gaps"]
+                if not all(key in thinking_result for key in required_fields):
+                    raise ValueError("缺少必要字段")
                 
-                result = response.json()
-                content = result["choices"][0]["message"]["content"]
-                
-                # 尝试解析JSON
+                return thinking_result
+            
+            except json.JSONDecodeError as e:
+                print(f"JSON解析失败: {e}, 原内容: {content}")
+                # 尝试修复截断的JSON
                 try:
-                    # 清理 markdown 代码块标记
-                    cleaned_content = self._clean_json_content(content)
-                    thinking_result = json.loads(cleaned_content)
-                    
-                    # 验证必要字段
-                    required_fields = ["thought_process", "confidence_level", "knowledge_gaps"]
-                    if not all(key in thinking_result for key in required_fields):
-                        raise ValueError("缺少必要字段")
-                    
-                    return thinking_result
-                    
-                except json.JSONDecodeError as e:
-                    print(f"JSON解析失败: {e}, 原内容: {content}")
-                    # 尝试修复截断的JSON
-                    try:
-                        repaired_content = self._repair_truncated_json(content)
-                        if repaired_content:
-                            thinking_result = json.loads(repaired_content)
-                            print(f"JSON修复成功")
-                            return thinking_result
-                    except Exception as repair_e:
-                        print(f"JSON修复失败: {repair_e}")
-                    
-                    return await self._create_fallback_thinking(question, context_str, execution_context)
+                    repaired_content = self._repair_truncated_json(content)
+                    if repaired_content:
+                        thinking_result = json.loads(repaired_content)
+                        print(f"JSON修复成功")
+                        return thinking_result
+                except Exception as repair_e:
+                    print(f"JSON修复失败: {repair_e}")
+                
+                return await self._create_fallback_thinking(question, context_str, execution_context)
                     
         except Exception as e:
             print(f"独立思考失败: {e}")
@@ -237,25 +231,14 @@ class ReasoningEngine:
                 "只输出JSON。"
             )
 
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{self.llm_service_url}/chat/completions",
-                    json={
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        "temperature": 0.0,
-                    },
-                    timeout=REASONING_TIMEOUT
-                )
-
-            if resp.status_code != 200:
-                return {"needs_realtime": False, "reason": "分类请求失败"}
-
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
+            # 延迟导入以避免循环依赖
+            from ..llm_client import chat_complete as _chat_complete
+            content = await _chat_complete(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=model_name,
+                timeout=REASONING_TIMEOUT,
+            )
             try:
                 # 复用清理逻辑，剥离可能的代码围栏
                 cleaned = self._clean_json_content(content)

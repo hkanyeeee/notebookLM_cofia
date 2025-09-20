@@ -504,58 +504,57 @@ async def generate_document_names(url: str, model: str = None) -> dict:
     """
     # 创建一个专门用于文档名称生成的提示模板，避免使用query接口中的generate_answer函数
     # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
-    import httpx
-    from ..config import LLM_SERVICE_URL, DEFAULT_INGEST_MODEL
+    from ..config import DEFAULT_INGEST_MODEL
+    from ..llm_client import chat_complete
     
     # 如果没有传入模型，使用默认模型
     if model is None:
         model = DEFAULT_INGEST_MODEL
     
-    prompt = f"""
-请为以下URL的文档生成合适的中文名称和英文collection名称：
-
-URL: {url}
-
-请返回JSON格式，包含：
-1. document_name: 文档的中文名称（简洁明了，适合显示给用户）
-2. collection_name: 向量库collection的英文名称（小写，用下划线连接，适合作为数据库名称）
-
-示例格式：
-{{"document_name": "机器学习入门指南", "collection_name": "machine_learning_guide"}}
-"""
+    system_prompt = (
+        "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。\n"
+        "要求：\n"
+        "- 只输出一个JSON对象，不要包含多余解释或标点。\n"
+        "- document_name 使用简洁准确的中文标题。\n"
+        "- collection_name 全小写、使用下划线连接、只含英文字母数字下划线。"
+    )
+    user_prompt = (
+        f"请为以下URL生成名称：\nURL: {url}\n\n"
+        "返回JSON，包含：\n"
+        "1. document_name: 文档的中文名称\n"
+        "2. collection_name: 英文collection名称（小写+下划线）\n\n"
+        "示例：{\\\"document_name\\\": \\\"机器学习入门指南\\\", \\\"collection_name\\\": \\\"machine_learning_guide\\\"}"
+    )
     
     try:
-        # 使用LLM服务的底层API直接调用，绕过generate_answer函数
-        service_url = f"{LLM_SERVICE_URL}/chat/completions"
-        
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。"},
-                {"role": "user", "content": prompt},
-            ],
-        }
+        # 统一通过 llm_client 调用
+        response_content = await chat_complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model,
+            timeout=300,
+        )
 
-        async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(service_url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            # 获取模型返回的内容
-            message = (data.get("choices") or [{}])[0].get("message", {})
-            response_content = message.get("content") or ""
-            
-            # 尝试解析JSON
-            import re
-            json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
-            if json_match:
+        # 尝试解析JSON
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_content.strip())
+        if json_match:
+            try:
                 result = json.loads(json_match.group())
-                return result
-            else:
-                # 如果无法解析，使用默认名称
-                return {
-                    "document_name": url.split('/')[-1] or "未命名文档",
-                    "collection_name": f"doc_{hashlib.md5(url.encode()).hexdigest()[:8]}"
-                }
+                # 结果基本校验与清理
+                doc_name = str(result.get("document_name") or "").strip() or (url.split('/')[-1] or "未命名文档")
+                coll_name = str(result.get("collection_name") or "").strip()
+                # 规范化 collection_name：小写、下划线、去除非法字符
+                import re as _re
+                coll_name = _re.sub(r"[^a-z0-9_]", "_", coll_name.lower()) or f"doc_{hashlib.md5(url.encode()).hexdigest()[:8]}"
+                return {"document_name": doc_name, "collection_name": coll_name}
+            except Exception:
+                pass
+        # 如果无法解析，使用默认名称
+        return {
+            "document_name": url.split('/')[-1] or "未命名文档",
+            "collection_name": f"doc_{hashlib.md5(url.encode()).hexdigest()[:8]}"
+        }
     except Exception as e:
         print(f"生成文档名称失败: {e}")
         return {
@@ -614,7 +613,7 @@ async def agenttic_ingest(
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
     # 是否启用 webhook 兜底，可被请求参数覆盖
     use_webhook_fallback = data.get("webhook_fallback", SUBDOC_USE_WEBHOOK_FALLBACK)
-
+    print(f"模型: {model}")
     try:
         # 1. 使用大模型生成文档名称和collection名称（仅在非递归调用时）
         print("正在生成文档名称...")
