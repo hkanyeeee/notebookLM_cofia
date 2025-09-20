@@ -1,6 +1,6 @@
 """
 后台任务状态管理器
-用于跟踪 agentic ingest 子文档处理的进度
+用于跟踪 auto ingest 子文档处理的进度
 """
 
 import asyncio

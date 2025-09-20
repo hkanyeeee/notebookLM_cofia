@@ -942,12 +942,12 @@ async def agenttic_ingest(
         raise HTTPException(status_code=500, detail=error_message)
 
 
-@router.get("/documents", summary="获取通过agentic ingest处理的文档列表")
-async def get_agentic_ingest_documents(
+@router.get("/documents", summary="获取通过auto ingest处理的文档列表")
+async def get_auto_ingest_documents(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取通过agentic ingest处理的文档列表
+    获取通过auto ingest处理的文档列表
     返回所有使用固定session_id存储的文档
     """
     try:

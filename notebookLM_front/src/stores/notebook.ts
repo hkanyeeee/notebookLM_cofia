@@ -61,7 +61,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   const loading = computed(() => ({
     querying: false, // 这个状态会在sendQuery中动态管理
     addingDocument: false,
-    triggeringAgenticIngest: collectionStore.loading.triggeringAgenticIngest,
+    triggeringAutoIngest: collectionStore.loading.triggeringAutoIngest,
     loadingCollections: collectionStore.loading.loadingCollections,
     queryingCollection: collectionStore.loading.queryingCollection,
     deletingCollection: collectionStore.loading.deletingCollection,
@@ -164,7 +164,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     messages: messageStore.messages,
     
     // Collection相关 (来自 collectionStore)  
-    agenticIngestUrl: collectionStore.agenticIngestUrl,
+    autoIngestUrl: collectionStore.autoIngestUrl,
     collections: collectionStore.collections,
     selectedCollection: collectionStore.selectedCollection,
     collectionQueryInput: collectionStore.collectionQueryInput,
@@ -212,7 +212,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     ),
     
     // Collection方法
-    triggerAgenticIngest: collectionStore.triggerAgenticIngest,
+    triggerAutoIngest: collectionStore.triggerAutoIngest,
     loadCollections: collectionStore.loadCollections,
     performCollectionQuery: collectionStore.performCollectionQuery,
     queryCollection: collectionStore.queryCollection,

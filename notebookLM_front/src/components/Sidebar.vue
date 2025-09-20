@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip, ElProgress } from 'element-plus'
 import { Plus, Document, Delete, Fold, Expand } from '@element-plus/icons-vue'
-import type { AgenticCollection } from '../api/notebook'
+import type { AutoCollection } from '../api/notebook'
 
 interface Props {
   collapsed: boolean
@@ -183,7 +183,7 @@ function handleRemoveFailedUrl(url: string) {
         <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] sidebar-modal">
           <h4 class="m-0 mb-3 text-base font-semibold sidebar-modal-title">Collection查询模式</h4>
           <p class="my-2 text-sm leading-relaxed sidebar-modal-text">当前正在使用Collection进行查询</p>
-          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs sidebar-modal-collection">{{ store.collections.find((c: AgenticCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
+          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs sidebar-modal-collection">{{ store.collections.find((c: AutoCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
 

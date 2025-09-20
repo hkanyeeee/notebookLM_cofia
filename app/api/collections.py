@@ -59,7 +59,7 @@ def determine_parent_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
 
 
-class AgenticCollection(BaseModel):
+class AutoCollection(BaseModel):
     """Collection信息模型"""
     collection_id: str  # 使用source.id作为唯一标识
     collection_name: str  # 从title提取或生成的collection名称
@@ -126,7 +126,7 @@ async def get_collections_list(
             # 计算该collection的总文档数和chunks数
             total_sources = len(group_data['sources'])
             
-            collections.append(AgenticCollection(
+            collections.append(AutoCollection(
                 collection_id=collection_name,  # 使用collection_name作为ID
                 collection_name=collection_name,
                 document_title=f"{main_source.title} ({total_sources}个文档)",

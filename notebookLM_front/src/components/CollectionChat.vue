@@ -4,7 +4,7 @@ import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSel
 import { Promotion, Plus, Tools, Delete } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
-import type { AgenticCollection, CollectionResult } from '../api/notebook'
+import type { AutoCollection, CollectionResult } from '../api/notebook'
 import VectorFixDialog from './VectorFixDialog.vue'
 import IngestTaskMonitor from './IngestTaskMonitor.vue'
 
@@ -17,12 +17,12 @@ marked.setOptions({
 // Props
 interface Props {
   messages: Message[]
-  collections: AgenticCollection[]
+  collections: AutoCollection[]
   selectedCollection: string | null
   loading: boolean
   loadingCollections: boolean
-  agenticIngestUrl: string
-  triggeringAgenticIngest: boolean
+  autoIngestUrl: string
+  triggeringAutoIngest: boolean
   shouldUseWebSearch: boolean
   deletingCollection: boolean
 }
@@ -33,8 +33,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'sendQuery', query: string): void
   (e: 'update:selectedCollection', value: string | null): void
-  (e: 'update:agenticIngestUrl', value: string): void
-  (e: 'triggerAgenticIngest'): void
+  (e: 'update:autoIngestUrl', value: string): void
+  (e: 'triggerAutoIngest'): void
   (e: 'clearCollectionResults'): void
   (e: 'deleteCollection', collectionId: string): void
 }>()
@@ -124,14 +124,14 @@ function handleCollectionChange(value: string | null) {
   emit('update:selectedCollection', value)
 }
 
-// 处理Agentic Ingest URL变化
-function handleAgenticIngestUrlUpdate(value: string) {
-  emit('update:agenticIngestUrl', value)
+// 处理Auto Ingest URL变化
+function handleAutoIngestUrlUpdate(value: string) {
+  emit('update:autoIngestUrl', value)
 }
 
-// 触发Agentic Ingest
-function handleTriggerAgenticIngest() {
-  emit('triggerAgenticIngest')
+// 触发Auto Ingest
+function handleTriggerAutoIngest() {
+  emit('triggerAutoIngest')
 }
 
 // 清空Collection结果
@@ -311,7 +311,7 @@ async function handleDeleteCollection(collectionId: string) {
           </el-button>
         </div>
 
-        <!-- Agentic Ingest 任务监控 -->
+        <!-- Auto Ingest 任务监控 -->
         <div class="mb-6">
           <IngestTaskMonitor />
         </div>
@@ -371,7 +371,7 @@ async function handleDeleteCollection(collectionId: string) {
 
     <!-- 输入区域 -->
     <div class="p-4 border-t chat-input-container">
-      <!-- Collection与Agentic Ingest 控制区 -->
+      <!-- Collection与Auto Ingest 控制区 -->
       <div class="flex items-center mb-3 gap-3 max-w-3xl mx-auto">
         <!-- Collection选择下拉框和删除按钮 -->
         <div class="flex items-center gap-1 w-58">
@@ -394,9 +394,9 @@ async function handleDeleteCollection(collectionId: string) {
         
         <!-- URL输入框 -->
         <el-input
-          :model-value="agenticIngestUrl"
-          @update:model-value="handleAgenticIngestUrlUpdate"
-          placeholder="输入URL进行Agentic Ingest"
+          :model-value="autoIngestUrl"
+          @update:model-value="handleAutoIngestUrlUpdate"
+          placeholder="输入URL进行Auto Ingest"
           class="flex-1 min-w-[100px]"
           clearable
         />
@@ -404,9 +404,9 @@ async function handleDeleteCollection(collectionId: string) {
         <!-- 提交按钮 -->
         <el-button
           type="primary"
-          @click="handleTriggerAgenticIngest"
-          :loading="triggeringAgenticIngest"
-          :disabled="!agenticIngestUrl.trim() || triggeringAgenticIngest"
+          @click="handleTriggerAutoIngest"
+          :loading="triggeringAutoIngest"
+          :disabled="!autoIngestUrl.trim() || triggeringAutoIngest"
           class="whitespace-nowrap"
         >
           <el-icon>

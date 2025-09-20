@@ -102,7 +102,7 @@ async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[st
 
 async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
     """获取聚合后的集合信息（按父URL聚合）。
-    优先使用请求头中的 session_id，若无结果则回退到固定的 Agentic Ingest 会话ID。
+    优先使用请求头中的 session_id，若无结果则回退到固定的 Auto Ingest 会话ID。
     """
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"

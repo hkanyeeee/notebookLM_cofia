@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Agentic Ingest 预览脚本
+Auto Ingest 预览脚本
 
-这个脚本使用与 agentic ingest 相同的方法拉取页面内容，
+这个脚本使用与 auto ingest 相同的方法拉取页面内容，
 并显示拉取结果供人工确认是否包含子 URL。
 
 使用方法:
-    python preview_agentic_ingest.py <URL>
+    python preview_auto_ingest.py <URL>
     
 或者交互式运行:
-    python preview_agentic_ingest.py
+    python preview_auto_ingest.py
 """
 
 import asyncio
@@ -178,7 +178,7 @@ async def preview_url(url: str) -> None:
     print("="*80)
     
     try:
-        # 1. 获取原始HTML (与agentic ingest相同的方法)
+        # 1. 获取原始HTML (与auto ingest相同的方法)
         print("📥 正在获取HTML内容...")
         html = await fetch_html(url, timeout=10.0)
         
@@ -188,7 +188,7 @@ async def preview_url(url: str) -> None:
             
         print(f"✅ HTML获取成功 (长度: {len(html)} 字符)")
         
-        # 2. 提取文本内容 (与agentic ingest相同的方法)
+        # 2. 提取文本内容 (与auto ingest相同的方法)
         print("📝 正在提取文本内容...")
         try:
             text_content = extract_text(html, selector="article")
@@ -270,9 +270,9 @@ async def preview_url(url: str) -> None:
 
 async def interactive_mode():
     """交互式模式"""
-    print("🚀 Agentic Ingest 预览工具 - 交互模式")
+    print("🚀 Auto Ingest 预览工具 - 交互模式")
     print("="*60)
-    print("此工具使用与 agentic ingest 相同的方法拉取页面内容")
+    print("此工具使用与 auto ingest 相同的方法拉取页面内容")
     print("帮助您确认拉取的内容是否包含所需的子URL")
     print("="*60)
     
@@ -297,23 +297,23 @@ async def interactive_mode():
 def show_help():
     """显示帮助信息"""
     print("""
-🚀 Agentic Ingest 预览工具
+🚀 Auto Ingest 预览工具
 ========================
 
-这个脚本使用与 agentic ingest 相同的方法拉取页面内容，
+这个脚本使用与 auto ingest 相同的方法拉取页面内容，
 并显示拉取结果供人工确认是否包含子 URL。
 
 使用方法:
-  python preview_agentic_ingest.py <URL>        # 直接分析指定URL
-  python preview_agentic_ingest.py              # 交互式模式
-  python preview_agentic_ingest.py --help       # 显示帮助信息
+  python preview_auto_ingest.py <URL>        # 直接分析指定URL
+  python preview_auto_ingest.py              # 交互式模式
+  python preview_auto_ingest.py --help       # 显示帮助信息
 
 示例:
-  python preview_agentic_ingest.py https://lmstudio.ai/docs/python
-  python preview_agentic_ingest.py docs.python.org
+  python preview_auto_ingest.py https://lmstudio.ai/docs/python
+  python preview_auto_ingest.py docs.python.org
 
 功能特性:
-  ✅ 使用与 agentic ingest 相同的页面拉取方法
+  ✅ 使用与 auto ingest 相同的页面拉取方法
   ✅ 显示页面内容预览和HTML结构分析  
   ✅ 自动检测和提取潜在的子文档链接
   ✅ 交互式确认和评价界面

@@ -1,5 +1,5 @@
 import { ref, reactive } from 'vue'
-import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
+import { notebookApi, type AutoIngestRequest, type AutoCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
 import type { Message } from './types'
 import { QueryType } from './types'
 import { useModelStore } from './useModelStore'
@@ -8,31 +8,31 @@ export function useCollectionStore() {
   // 获取模型 store
   const modelStore = useModelStore()
   
-  // Agentic Ingest相关状态
-  const agenticIngestUrl = ref<string>('')
+  // Auto Ingest相关状态
+  const autoIngestUrl = ref<string>('')
   
   // Collection相关状态
-  const collections = ref<AgenticCollection[]>([])
+  const collections = ref<AutoCollection[]>([])
   const selectedCollection = ref<string>('')
   const collectionQueryInput = ref<string>('')
 
   const loading = reactive({
-    triggeringAgenticIngest: false,
+    triggeringAutoIngest: false,
     loadingCollections: false,
     queryingCollection: false,
     deletingCollection: false,
   })
 
-  // 触发agentic ingest
-  async function triggerAgenticIngest() {
-    const url = agenticIngestUrl.value.trim()
+  // 触发auto ingest
+  async function triggerAutoIngest() {
+    const url = autoIngestUrl.value.trim()
     if (!url) {
       throw new Error('请输入要处理的URL')
     }
 
-    loading.triggeringAgenticIngest = true
+    loading.triggeringAutoIngest = true
     try {
-      const request: AgenticIngestRequest = {
+      const request: AutoIngestRequest = {
         url,
         model: modelStore.selectedModel.value,
         embedding_model: 'Qwen/Qwen3-Embedding-0.6B',
@@ -40,10 +40,10 @@ export function useCollectionStore() {
         recursive_depth: 2
       }
 
-      const response = await notebookApi.triggerAgenticIngest(request)
+      const response = await notebookApi.triggerAutoIngest(request)
       if (response.success) {
         // 处理成功，清空输入框并刷新collection列表
-        agenticIngestUrl.value = ''
+        autoIngestUrl.value = ''
         await loadCollections()
         return {
           success: true,
@@ -51,13 +51,13 @@ export function useCollectionStore() {
           document_name: response.document_name
         }
       } else {
-        throw new Error(response.message || 'Agentic ingest失败')
+        throw new Error(response.message || 'Auto ingest失败')
       }
     } catch (error: any) {
-      console.error('触发agentic ingest失败:', error)
+      console.error('触发auto ingest失败:', error)
       throw error
     } finally {
-      loading.triggeringAgenticIngest = false
+      loading.triggeringAutoIngest = false
     }
   }
 
@@ -289,14 +289,14 @@ export function useCollectionStore() {
 
   return {
     // 状态
-    agenticIngestUrl,
+    autoIngestUrl,
     collections,
     selectedCollection,
     collectionQueryInput,
     loading,
     
     // 方法
-    triggerAgenticIngest,
+    triggerAutoIngest,
     loadCollections,
     performCollectionQuery,
     queryCollection,

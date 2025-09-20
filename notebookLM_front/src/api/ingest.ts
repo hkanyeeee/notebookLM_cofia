@@ -1,5 +1,5 @@
 /**
- * Agentic Ingest API 客户端
+ * Auto Ingest API 客户端
  */
 
 import { apiRequest } from './notebook'
@@ -40,8 +40,8 @@ export interface IngestTaskStatus {
   progress_percentage: number
 }
 
-// Agentic Ingest 请求参数
-export interface AgenticIngestRequest {
+// Auto Ingest 请求参数
+export interface AutoIngestRequest {
   url: string
   model?: string
   embedding_model?: string
@@ -51,8 +51,8 @@ export interface AgenticIngestRequest {
   webhook_fallback?: boolean
 }
 
-// Agentic Ingest 响应
-export interface AgenticIngestResponse {
+// Auto Ingest 响应
+export interface AutoIngestResponse {
   success: boolean
   message: string
   document_name: string
@@ -65,9 +65,9 @@ export interface AgenticIngestResponse {
 }
 
 /**
- * 执行 Agentic Ingest
+ * 执行 Auto Ingest
  */
-export async function agenticIngest(params: AgenticIngestRequest): Promise<AgenticIngestResponse> {
+export async function autoIngest(params: AutoIngestRequest): Promise<AutoIngestResponse> {
   const response = await apiRequest('/api/agenttic-ingest', {
     method: 'POST',
     body: JSON.stringify(params)

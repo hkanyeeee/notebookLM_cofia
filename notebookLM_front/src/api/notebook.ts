@@ -109,8 +109,8 @@ export interface SearxResponse {
   items: SearxItem[]
 }
 
-// Agentic Ingest相关接口
-export interface AgenticIngestRequest {
+// Auto Ingest相关接口
+export interface AutoIngestRequest {
   url: string
   model?: string
   embedding_model?: string
@@ -119,7 +119,7 @@ export interface AgenticIngestRequest {
   recursive_depth?: number
 }
 
-export interface AgenticIngestResponse {
+export interface AutoIngestResponse {
   success: boolean
   message: string
   document_name: string
@@ -130,7 +130,7 @@ export interface AgenticIngestResponse {
 
 
 // Collection相关接口
-export interface AgenticCollection {
+export interface AutoCollection {
   collection_id: string
   collection_name: string
   document_title: string
@@ -327,10 +327,10 @@ export const notebookApi = {
 
 
 
-  // 触发agentic ingest
-  async triggerAgenticIngest(request: AgenticIngestRequest): Promise<AgenticIngestResponse> {
+  // 触发auto ingest
+  async triggerAutoIngest(request: AutoIngestRequest): Promise<AutoIngestResponse> {
     try {
-      const response = await api.post<AgenticIngestResponse>('/agenttic-ingest', request)
+      const response = await api.post<AutoIngestResponse>('/agenttic-ingest', request)
       return response.data
     } catch (error: any) {
       return {
@@ -345,7 +345,7 @@ export const notebookApi = {
 
   // Collection相关API
   // 获取所有可用的collection列表
-  async getCollections(): Promise<{ success: boolean; collections: AgenticCollection[]; total: number }> {
+  async getCollections(): Promise<{ success: boolean; collections: AutoCollection[]; total: number }> {
     try {
       const response = await api.get('/collections')
       return response.data

@@ -83,15 +83,15 @@ function handleShowWorkflows() {
   workflowDialogVisible.value = true
 }
 
-// 触发Agentic Ingest - Collection模式使用
-async function handleTriggerAgenticIngest() {
+// 触发Auto Ingest - Collection模式使用
+async function handleTriggerAutoIngest() {
   try {
-    const result = await store.triggerAgenticIngest()
+    const result = await store.triggerAutoIngest()
     if (result.success) {
-      ElMessage.success(`成功触发Agentic Ingest：${result.document_name}`)
+      ElMessage.success(`成功触发Auto Ingest：${result.document_name}`)
     }
   } catch (error: any) {
-    ElMessage.error(error.message || 'Agentic Ingest失败')
+    ElMessage.error(error.message || 'Auto Ingest失败')
   }
 }
 
@@ -310,14 +310,14 @@ onMounted(async () => {
         :selected-collection="store.selectedCollection"
         :loading="store.loading.querying"
         :loading-collections="store.loading.loadingCollections"
-        :agentic-ingest-url="store.agenticIngestUrl"
-        :triggering-agentic-ingest="store.loading.triggeringAgenticIngest"
+        :auto-ingest-url="store.autoIngestUrl"
+        :triggering-auto-ingest="store.loading.triggeringAutoIngest"
         :deleting-collection="store.loading.deletingCollection"
         :should-use-web-search="store.shouldUseWebSearch"
         @send-query="handleSendQuery"
         @update:selected-collection="(value: string | null) => store.selectedCollection = value || ''"
-        @update:agentic-ingest-url="(value) => store.agenticIngestUrl = value"
-        @trigger-agentic-ingest="handleTriggerAgenticIngest"
+        @update:auto-ingest-url="(value) => store.autoIngestUrl = value"
+        @trigger-auto-ingest="handleTriggerAutoIngest"
         @delete-collection="handleDeleteCollection"
         @clear-collection-results="store.clearCollectionResults"
       />
