@@ -2,8 +2,12 @@ import { ref, reactive } from 'vue'
 import { notebookApi, type AgenticIngestRequest, type AgenticCollection, type CollectionQueryRequest, type CollectionResult } from '../api/notebook'
 import type { Message } from './types'
 import { QueryType } from './types'
+import { useModelStore } from './useModelStore'
 
 export function useCollectionStore() {
+  // 获取模型 store
+  const modelStore = useModelStore()
+  
   // Agentic Ingest相关状态
   const agenticIngestUrl = ref<string>('')
   
@@ -30,6 +34,7 @@ export function useCollectionStore() {
     try {
       const request: AgenticIngestRequest = {
         url,
+        model: modelStore.selectedModel.value,
         embedding_model: 'Qwen/Qwen3-Embedding-0.6B',
         embedding_dimensions: 1024,
         recursive_depth: 2

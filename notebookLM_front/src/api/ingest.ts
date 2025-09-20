@@ -43,6 +43,7 @@ export interface IngestTaskStatus {
 // Agentic Ingest 请求参数
 export interface AgenticIngestRequest {
   url: string
+  model?: string
   embedding_model?: string
   embedding_dimensions?: number
   webhook_url?: string

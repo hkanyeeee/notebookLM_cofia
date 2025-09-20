@@ -112,6 +112,7 @@ export interface SearxResponse {
 // Agentic Ingest相关接口
 export interface AgenticIngestRequest {
   url: string
+  model?: string
   embedding_model?: string
   embedding_dimensions?: number
   webhook_url?: string

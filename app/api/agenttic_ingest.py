@@ -498,7 +498,7 @@ async def process_webhook_response(
     }
 
 
-async def generate_document_names(url: str) -> dict:
+async def generate_document_names(url: str, model: str = None) -> dict:
     """
     使用大模型为文档和collection生成名称
     """
@@ -506,6 +506,10 @@ async def generate_document_names(url: str) -> dict:
     # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
     import httpx
     from ..config import LLM_SERVICE_URL, DEFAULT_INGEST_MODEL
+    
+    # 如果没有传入模型，使用默认模型
+    if model is None:
+        model = DEFAULT_INGEST_MODEL
     
     prompt = f"""
 请为以下URL的文档生成合适的中文名称和英文collection名称：
@@ -525,7 +529,7 @@ URL: {url}
         service_url = f"{LLM_SERVICE_URL}/chat/completions"
         
         payload = {
-            "model": DEFAULT_INGEST_MODEL,
+            "model": model,
             "messages": [
                 {"role": "system", "content": "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。"},
                 {"role": "user", "content": prompt},
@@ -602,6 +606,7 @@ async def agenttic_ingest(
     if not url:
         raise HTTPException(status_code=400, detail="URL必须提供")
 
+    model = data.get("model", DEFAULT_INGEST_MODEL)  # 获取模型参数，默认使用 DEFAULT_INGEST_MODEL
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
     embedding_dimensions = data.get("embedding_dimensions", EMBEDDING_DIMENSIONS)
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
@@ -625,7 +630,7 @@ async def agenttic_ingest(
             print(f"检测到递归调用，使用已有的文档名称: {document_name}, collection名称: {collection_name}")
         else:
             # 非递归调用时，正常生成文档名称和collection名称
-            names = await generate_document_names(url)
+            names = await generate_document_names(url, model)
             document_name = names["document_name"]
             # 使用URL的hash生成稳定的collection名称，确保同一URL总是得到相同的collection_name
             url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
