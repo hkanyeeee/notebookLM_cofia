@@ -84,10 +84,9 @@ def determine_parent_url(url: str) -> str:
     return url
 
 
-async def _group_sources_by_parent(db: AsyncSession) -> Dict[str, List[Source]]:
-    """按父URL对Source进行分组，返回 {parent_url: [sources...]}"""
-    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-    sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[str, List[Source]]:
+    """按父URL对Source进行分组，返回 {parent_url: [sources...]}（按给定 session_id 过滤）"""
+    sources_stmt = select(Source).where(Source.session_id == session_id)
     sources_result = await db.execute(sources_stmt)
     sources = sources_result.scalars().all()
 
@@ -99,22 +98,22 @@ async def _group_sources_by_parent(db: AsyncSession) -> Dict[str, List[Source]]:
 
 
 async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
-    """获取聚合后的集合信息（按父URL聚合）。"""
+    """获取聚合后的集合信息（按父URL聚合）。
+    优先使用请求头中的 session_id，若无结果则回退到固定的 Agentic Ingest 会话ID。
+    """
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
-        groups = await _group_sources_by_parent(db)
+        used_session_id = session_id
+        groups = await _group_sources_by_parent(db, used_session_id)
 
-        # 若只有一个入口被创建，选择“文档数量最多”的父集合作为唯一集合返回
-        # 这样即可满足“只创建了一个collection时，只展示一个集合”的期望
-        dominant_parent = None
-        if groups:
-            dominant_parent = max(groups.items(), key=lambda kv: len(kv[1]))[0]
-
-        target_items = [(parent_url, sources) for parent_url, sources in groups.items() if parent_url == dominant_parent] if dominant_parent else list(groups.items())
+        # 如果当前 session 下没有任何集合，回退到固定的摄取会话ID
+        if not groups and used_session_id != FIXED_SESSION_ID:
+            used_session_id = FIXED_SESSION_ID
+            groups = await _group_sources_by_parent(db, used_session_id)
 
         collections: List[Dict[str, Any]] = []
-        for parent_url, sources in target_items:
+        for parent_url, sources in groups.items():
             # 选出主文档（URL最短或等于parent_url）
             main_source = None
             for s in sources:
@@ -128,7 +127,7 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
             source_ids = [s.id for s in sources]
             chunks_stmt = select(Chunk).where(
                 Chunk.source_id.in_(source_ids),
-                Chunk.session_id == FIXED_SESSION_ID
+                Chunk.session_id == used_session_id
             )
             chunks_result = await db.execute(chunks_stmt)
             chunks_count = len(chunks_result.scalars().all())
@@ -142,7 +141,7 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
                         count_filter={
                             "must": [
                                 {"key": "source_id", "match": {"value": sid}},
-                                {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                                {"key": "session_id", "match": {"value": used_session_id}}
                             ]
                         }
                     )
@@ -152,11 +151,10 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
                     qdrant_count += 0
 
             collections.append({
-                'id': main_source.id,  # 使用父文档的source.id作为集合ID（数值类型，前端无需改动）
+                'id': main_source.id,
                 'title': main_source.title,
                 'chunks_count': chunks_count,
                 'qdrant_count': qdrant_count,
-                # 修复条件：只要数量不一致（少了或多了）就需要修复
                 'needs_fix': chunks_count != qdrant_count,
                 'status': 'complete' if chunks_count == qdrant_count else ('missing' if qdrant_count == 0 else 'partial')
             })
@@ -177,17 +175,29 @@ async def fix_collection_vectors(
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
+        # 确定实际使用的 session_id（优先使用请求头，没有则回退到固定ID；若本会话找不到父文档，也回退）
+        used_session_id = session_id or FIXED_SESSION_ID
+
         # 获取父source，推断parent_url
-        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == FIXED_SESSION_ID)
+        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
         src_result = await db.execute(src_stmt)
         parent_source = src_result.scalar_one_or_none()
+        if not parent_source and used_session_id != FIXED_SESSION_ID:
+            used_session_id = FIXED_SESSION_ID
+            src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
+            src_result = await db.execute(src_stmt)
+            parent_source = src_result.scalar_one_or_none()
         if not parent_source:
             return False
 
         parent_url = determine_parent_url(parent_source.url)
 
         # 找到同一父集合内的所有sources
-        groups = await _group_sources_by_parent(db)
+        groups = await _group_sources_by_parent(db, used_session_id)
+        if parent_url not in groups and used_session_id != FIXED_SESSION_ID:
+            # 回退到固定会话分组
+            used_session_id = FIXED_SESSION_ID
+            groups = await _group_sources_by_parent(db, used_session_id)
         sources_in_group = groups.get(parent_url, [parent_source])
 
         if task_id:
@@ -195,7 +205,7 @@ async def fix_collection_vectors(
 
         # 统计总chunks
         source_ids = [s.id for s in sources_in_group]
-        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == FIXED_SESSION_ID)
+        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == used_session_id)
         chunks_result = await db.execute(chunks_stmt)
         all_chunks = chunks_result.scalars().all()
 
@@ -434,15 +444,26 @@ async def verify_collection(
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
+        # 选择使用的 session_id（优先请求头，无则回退固定；若在请求会话找不到，再回退固定）
+        used_session_id = session_id or FIXED_SESSION_ID
+
         # 获取父source与父URL
-        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == FIXED_SESSION_ID)
+        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
         src_result = await db.execute(src_stmt)
         parent_source = src_result.scalar_one_or_none()
+        if not parent_source and used_session_id != FIXED_SESSION_ID:
+            used_session_id = FIXED_SESSION_ID
+            src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
+            src_result = await db.execute(src_stmt)
+            parent_source = src_result.scalar_one_or_none()
         if not parent_source:
             raise HTTPException(status_code=404, detail="父集合不存在")
 
         parent_url = determine_parent_url(parent_source.url)
-        groups = await _group_sources_by_parent(db)
+        groups = await _group_sources_by_parent(db, used_session_id)
+        if parent_url not in groups and used_session_id != FIXED_SESSION_ID:
+            used_session_id = FIXED_SESSION_ID
+            groups = await _group_sources_by_parent(db, used_session_id)
         sources_in_group = groups.get(parent_url, [parent_source])
         source_ids = [s.id for s in sources_in_group]
 
@@ -454,7 +475,7 @@ async def verify_collection(
         }
 
         # DB 统计
-        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == FIXED_SESSION_ID)
+        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == used_session_id)
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
         result['db_chunks'] = len(chunks)
@@ -468,7 +489,7 @@ async def verify_collection(
                     count_filter={
                         "must": [
                             {"key": "source_id", "match": {"value": sid}},
-                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                            {"key": "session_id", "match": {"value": used_session_id}}
                         ]
                     }
                 )
@@ -492,7 +513,7 @@ async def verify_collection(
                     scroll_filter={
                         "must": [
                             {"key": "source_id", "match": {"any": source_ids}},
-                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                            {"key": "session_id", "match": {"value": used_session_id}}
                         ]
                     },
                     limit=3,
