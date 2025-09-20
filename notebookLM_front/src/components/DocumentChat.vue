@@ -151,6 +151,7 @@ function isQueryDisabled() {
           <ElInput
             :model-value="topicInput"
             @update:model-value="handleTopicInputUpdate"
+            @keydown.enter="handleGenerateCandidates"
             placeholder="请输入课题，例如：Sora 2025 能力与限制"
             :disabled="generating"
             class="flex-1"

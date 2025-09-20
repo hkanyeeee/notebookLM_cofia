@@ -323,7 +323,7 @@ class JSONFunctionCallingStrategy(BaseStrategy):
             # 构建强制最终答案的消息
             messages = self.build_messages_for_final_answer(context)
             payload = {
-                "model": context.run_config.model or "gpt-oss-20b",
+                "model": context.run_config.model or "openai/gpt-oss-20b",
                 "messages": messages,
                 "stream": False,
                 "temperature": 0.1,
@@ -356,7 +356,7 @@ class JSONFunctionCallingStrategy(BaseStrategy):
             # 构建强制最终答案的消息
             messages = self.build_messages_for_final_answer(context)
             payload = {
-                "model": context.run_config.model or "gpt-oss-20b",
+                "model": context.run_config.model or "openai/gpt-oss-20b",
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.1,

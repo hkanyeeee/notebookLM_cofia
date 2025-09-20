@@ -2,7 +2,7 @@ import tiktoken
 from typing import List
 
 
-def chunk_text(text: str, tokens_per_chunk: int = 1000, overlap_tokens: int = 10) -> List[str]:
+def chunk_text(text: str, tokens_per_chunk: int = 1000, overlap_tokens: int = 100) -> List[str]:
     """
     使用 tiktoken 将文本编码为 token 后，按固定 token 数量切分为多个重叠块。
 

@@ -5,11 +5,12 @@ import json
 import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlparse
 
 from ..database import get_db
 from ..models import Source, Chunk
 from ..embedding_client import embed_texts
-from ..vector_db_client import add_embeddings, qdrant_client, COLLECTION_NAME
+from ..vector_db_client import add_embeddings, qdrant_client, COLLECTION_NAME, delete_vector_db_data
 from ..config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, DEFAULT_EMBEDDING_MODEL
 from . import get_session_id
 
@@ -61,50 +62,102 @@ class VectorFixStatus:
 fix_status = VectorFixStatus()
 
 
-async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
-    """获取所有集合信息"""
-    try:
-        # 使用固定的session_id，与agenttic_ingest保持一致
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-        
-        # 获取所有Source
-        sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
-        sources_result = await db.execute(sources_stmt)
-        sources = sources_result.scalars().all()
+def determine_parent_url(url: str) -> str:
+    """
+    按文档站点的父路径归属集合：
+    - https://lmstudio.ai/docs/python/* -> https://lmstudio.ai/docs/python
+    - 其它站点：保留前两级路径作为父级（若有）
+    """
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
 
-        collections = []
-        for source in sources:
-            # 获取每个source的chunks数量
+    if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
+        if len(path_parts) >= 2 and path_parts[0] == 'docs' and path_parts[1] == 'python':
+            return f"{parsed.scheme}://{parsed.netloc}/docs/python"
+        elif len(path_parts) >= 2 and path_parts[0] == 'docs':
+            return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
+
+    if len(path_parts) > 2:
+        parent_path = '/' + '/'.join(path_parts[:2])
+        return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
+
+    return url
+
+
+async def _group_sources_by_parent(db: AsyncSession) -> Dict[str, List[Source]]:
+    """按父URL对Source进行分组，返回 {parent_url: [sources...]}"""
+    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+    sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+    sources_result = await db.execute(sources_stmt)
+    sources = sources_result.scalars().all()
+
+    groups: Dict[str, List[Source]] = {}
+    for src in sources:
+        parent_url = determine_parent_url(src.url)
+        groups.setdefault(parent_url, []).append(src)
+    return groups
+
+
+async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
+    """获取聚合后的集合信息（按父URL聚合）。"""
+    try:
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+
+        groups = await _group_sources_by_parent(db)
+
+        # 若只有一个入口被创建，选择“文档数量最多”的父集合作为唯一集合返回
+        # 这样即可满足“只创建了一个collection时，只展示一个集合”的期望
+        dominant_parent = None
+        if groups:
+            dominant_parent = max(groups.items(), key=lambda kv: len(kv[1]))[0]
+
+        target_items = [(parent_url, sources) for parent_url, sources in groups.items() if parent_url == dominant_parent] if dominant_parent else list(groups.items())
+
+        collections: List[Dict[str, Any]] = []
+        for parent_url, sources in target_items:
+            # 选出主文档（URL最短或等于parent_url）
+            main_source = None
+            for s in sources:
+                if s.url == parent_url:
+                    main_source = s
+                    break
+            if not main_source:
+                main_source = min(sources, key=lambda s: len(s.url))
+
+            # 聚合 chunks 数
+            source_ids = [s.id for s in sources]
             chunks_stmt = select(Chunk).where(
-                Chunk.source_id == source.id,
+                Chunk.source_id.in_(source_ids),
                 Chunk.session_id == FIXED_SESSION_ID
             )
             chunks_result = await db.execute(chunks_stmt)
             chunks_count = len(chunks_result.scalars().all())
 
-            # 检查Qdrant中是否已有向量数据
-            try:
-                # 使用count API获取精确的向量数量
-                count_result = qdrant_client.count(
-                    collection_name=COLLECTION_NAME,
-                    count_filter={
-                        "must": [
-                            {"key": "source_id", "match": {"value": source.id}},
-                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
-                        ]
-                    }
-                )
-                qdrant_count = count_result.count
-            except Exception as e:
-                print(f"获取Qdrant计数失败: {e}")
-                qdrant_count = 0
+            # 聚合 Qdrant 向量数
+            qdrant_count = 0
+            for sid in source_ids:
+                try:
+                    count_result = qdrant_client.count(
+                        collection_name=COLLECTION_NAME,
+                        count_filter={
+                            "must": [
+                                {"key": "source_id", "match": {"value": sid}},
+                                {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                            ]
+                        }
+                    )
+                    qdrant_count += count_result.count
+                except Exception as e:
+                    print(f"获取Qdrant计数失败: {e}")
+                    qdrant_count += 0
 
             collections.append({
-                'id': source.id,
-                'title': source.title,
+                'id': main_source.id,  # 使用父文档的source.id作为集合ID（数值类型，前端无需改动）
+                'title': main_source.title,
                 'chunks_count': chunks_count,
                 'qdrant_count': qdrant_count,
-                'needs_fix': chunks_count > 0 and qdrant_count == 0,
+                # 修复条件：只要数量不一致（少了或多了）就需要修复
+                'needs_fix': chunks_count != qdrant_count,
                 'status': 'complete' if chunks_count == qdrant_count else ('missing' if qdrant_count == 0 else 'partial')
             })
 
@@ -115,81 +168,85 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
 
 
 async def fix_collection_vectors(
-    collection_id: int, 
-    session_id: str, 
+    collection_id: int,
+    session_id: str,
     db: AsyncSession,
     task_id: str = None
 ) -> bool:
-    """修复指定集合的向量数据"""
+    """修复按父集合（collection_id为父source.id）内所有子文档的向量数据。"""
     try:
-        # 使用固定的session_id，与agenttic_ingest保持一致
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-        
-        # 1. 获取Collection信息
-        source_stmt = select(Source).where(
-            Source.id == collection_id,
-            Source.session_id == FIXED_SESSION_ID
-        )
-        source_result = await db.execute(source_stmt)
-        source = source_result.scalar_one_or_none()
 
-        if not source:
+        # 获取父source，推断parent_url
+        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == FIXED_SESSION_ID)
+        src_result = await db.execute(src_stmt)
+        parent_source = src_result.scalar_one_or_none()
+        if not parent_source:
             return False
 
-        if task_id:
-            fix_status.update_task(task_id, current_collection=source.title)
+        parent_url = determine_parent_url(parent_source.url)
 
-        # 2. 获取所有chunks
-        chunks_stmt = select(Chunk).where(
-            Chunk.source_id == source.id,
-            Chunk.session_id == FIXED_SESSION_ID
-        )
+        # 找到同一父集合内的所有sources
+        groups = await _group_sources_by_parent(db)
+        sources_in_group = groups.get(parent_url, [parent_source])
+
+        if task_id:
+            fix_status.update_task(task_id, current_collection=parent_source.title)
+
+        # 统计总chunks
+        source_ids = [s.id for s in sources_in_group]
+        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == FIXED_SESSION_ID)
         chunks_result = await db.execute(chunks_stmt)
-        chunks = chunks_result.scalars().all()
+        all_chunks = chunks_result.scalars().all()
 
-        if not chunks:
+        if not all_chunks:
             return False
 
         if task_id:
-            fix_status.update_task(task_id, total_chunks=fix_status.active_tasks[task_id]['total_chunks'] + len(chunks))
+            fix_status.update_task(task_id, total_chunks=len(all_chunks))
 
-        # 3. 分批处理embeddings
+        # 在重建前清理该父集合在 Qdrant 的历史向量，避免旧数据残留造成“部分缺失”无法收敛
+        try:
+            await delete_vector_db_data(source_ids)
+        except Exception as e:
+            print(f"清理旧向量失败（跳过继续）: {e}")
+
+        # 逐source分批处理，便于记录source_id
         batch_size = EMBEDDING_BATCH_SIZE
-        total_batches = (len(chunks) + batch_size - 1) // batch_size
+        for src in sources_in_group:
+            src_chunks = [c for c in all_chunks if c.source_id == src.id]
+            if not src_chunks:
+                continue
 
-        for batch_index in range(total_batches):
-            start_idx = batch_index * batch_size
-            end_idx = min((batch_index + 1) * batch_size, len(chunks))
-            batch_chunks = chunks[start_idx:end_idx]
+            total_batches = (len(src_chunks) + batch_size - 1) // batch_size
+            for batch_index in range(total_batches):
+                start_idx = batch_index * batch_size
+                end_idx = min((batch_index + 1) * batch_size, len(src_chunks))
+                batch_chunks = src_chunks[start_idx:end_idx]
 
-            # 提取文本内容
-            batch_texts = [chunk.content for chunk in batch_chunks]
+                batch_texts = [chunk.content for chunk in batch_chunks]
+                try:
+                    embeddings = await embed_texts(
+                        texts=batch_texts,
+                        model=DEFAULT_EMBEDDING_MODEL,
+                        batch_size=EMBEDDING_BATCH_SIZE,
+                        dimensions=EMBEDDING_DIMENSIONS
+                    )
 
-            try:
-                # 生成embeddings
-                embeddings = await embed_texts(
-                    texts=batch_texts,
-                    model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=EMBEDDING_BATCH_SIZE,
-                    dimensions=EMBEDDING_DIMENSIONS
-                )
+                    if not embeddings or len(embeddings) != len(batch_chunks):
+                        if task_id:
+                            fix_status.update_task(task_id, errors=fix_status.active_tasks[task_id]['errors'] + 1)
+                        continue
 
-                if not embeddings or len(embeddings) != len(batch_chunks):
+                    await add_embeddings(src.id, batch_chunks, embeddings)
+
+                    if task_id:
+                        current_processed = fix_status.active_tasks[task_id]['processed_chunks'] + len(batch_chunks)
+                        fix_status.update_task(task_id, processed_chunks=current_processed)
+                except Exception:
                     if task_id:
                         fix_status.update_task(task_id, errors=fix_status.active_tasks[task_id]['errors'] + 1)
                     continue
-
-                # 存储到Qdrant
-                await add_embeddings(source.id, batch_chunks, embeddings)
-                
-                if task_id:
-                    current_processed = fix_status.active_tasks[task_id]['processed_chunks'] + len(batch_chunks)
-                    fix_status.update_task(task_id, processed_chunks=current_processed)
-
-            except Exception as e:
-                if task_id:
-                    fix_status.update_task(task_id, errors=fix_status.active_tasks[task_id]['errors'] + 1)
-                continue
 
         if task_id:
             completed = fix_status.active_tasks[task_id]['completed_collections'] + 1
@@ -197,7 +254,7 @@ async def fix_collection_vectors(
 
         return True
 
-    except Exception as e:
+    except Exception:
         if task_id:
             fix_status.update_task(task_id, errors=fix_status.active_tasks[task_id]['errors'] + 1)
         return False
@@ -294,7 +351,7 @@ async def fix_all_collections(
     task_id = str(uuid.uuid4())
     
     try:
-        # 获取需要修复的集合
+        # 获取需要修复的父集合
         collections = await get_collections_info(session_id, db)
         need_fix = [c for c in collections if c['needs_fix']]
         
@@ -373,11 +430,22 @@ async def verify_collection(
     session_id: str = Depends(get_session_id),
     db: AsyncSession = Depends(get_db)
 ):
-    """验证指定集合的向量数据完整性"""
+    """按父集合聚合验证：collection_id 是父source.id，聚合其所有子文档。"""
     try:
-        # 使用固定的session_id，与agenttic_ingest保持一致
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-        
+
+        # 获取父source与父URL
+        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == FIXED_SESSION_ID)
+        src_result = await db.execute(src_stmt)
+        parent_source = src_result.scalar_one_or_none()
+        if not parent_source:
+            raise HTTPException(status_code=404, detail="父集合不存在")
+
+        parent_url = determine_parent_url(parent_source.url)
+        groups = await _group_sources_by_parent(db)
+        sources_in_group = groups.get(parent_url, [parent_source])
+        source_ids = [s.id for s in sources_in_group]
+
         result = {
             'collection_id': collection_id,
             'db_chunks': 0,
@@ -385,69 +453,60 @@ async def verify_collection(
             'status': 'unknown'
         }
 
-        # 获取数据库中的chunks数量
-        chunks_stmt = select(Chunk).where(
-            Chunk.source_id == collection_id,
-            Chunk.session_id == FIXED_SESSION_ID
-        )
+        # DB 统计
+        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == FIXED_SESSION_ID)
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
         result['db_chunks'] = len(chunks)
 
-        # 获取Qdrant中的数据
-        try:
-            # 使用count API获取精确计数
-            count_result = qdrant_client.count(
-                collection_name=COLLECTION_NAME,
-                count_filter={
-                    "must": [
-                        {"key": "source_id", "match": {"value": collection_id}},
-                        {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
-                    ]
-                }
-            )
-            result['qdrant_points'] = count_result.count
-        except Exception as e:
-            print(f"获取Qdrant计数失败: {e}")
-            result['qdrant_points'] = 0
+        # Qdrant 统计
+        qcount = 0
+        for sid in source_ids:
+            try:
+                count_result = qdrant_client.count(
+                    collection_name=COLLECTION_NAME,
+                    count_filter={
+                        "must": [
+                            {"key": "source_id", "match": {"value": sid}},
+                            {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
+                        ]
+                    }
+                )
+                qcount += count_result.count
+            except Exception as e:
+                print(f"获取Qdrant计数失败: {e}")
+        result['qdrant_points'] = qcount
 
-        if result['db_chunks'] == result['qdrant_points']:
+        if result['db_chunks'] == result['qdrant_points'] and result['db_chunks'] > 0:
             result['status'] = 'complete'
         elif result['qdrant_points'] == 0:
             result['status'] = 'missing'
         else:
             result['status'] = 'partial'
 
-        # 获取样本数据
+        # 样本
         if result['qdrant_points'] > 0:
             try:
                 sample_result = qdrant_client.scroll(
                     collection_name=COLLECTION_NAME,
                     scroll_filter={
                         "must": [
-                            {"key": "source_id", "match": {"value": collection_id}},
+                            {"key": "source_id", "match": {"any": source_ids}},
                             {"key": "session_id", "match": {"value": FIXED_SESSION_ID}}
                         ]
                     },
                     limit=3,
                     with_payload=True
                 )
-                
                 result['samples'] = []
                 for point in sample_result[0]:
                     content_preview = point.payload.get('content', '')[:80] + "..."
-                    result['samples'].append({
-                        'id': point.id,
-                        'content_preview': content_preview
-                    })
+                    result['samples'].append({'id': point.id, 'content_preview': content_preview})
             except Exception as e:
                 print(f"获取样本数据失败: {e}")
                 result['samples'] = []
 
-        return {
-            'success': True,
-            'result': result
-        }
+        return {'success': True, 'result': result}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"验证失败: {str(e)}")

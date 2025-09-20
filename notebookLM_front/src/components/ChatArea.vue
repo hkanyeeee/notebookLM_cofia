@@ -95,6 +95,18 @@ async function handleTriggerAgenticIngest() {
   }
 }
 
+// 删除Collection - Collection模式使用
+async function handleDeleteCollection(collectionId: string) {
+  try {
+    const result = await store.deleteCollection(collectionId)
+    if (result.success) {
+      ElMessage.success(`${result.message}`)
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除Collection失败')
+  }
+}
+
 // 处理编辑消息重新发送
 async function handleResendEditedMessage(messageId: string) {
   try {
@@ -300,11 +312,13 @@ onMounted(async () => {
         :loading-collections="store.loading.loadingCollections"
         :agentic-ingest-url="store.agenticIngestUrl"
         :triggering-agentic-ingest="store.loading.triggeringAgenticIngest"
+        :deleting-collection="store.loading.deletingCollection"
         :should-use-web-search="store.shouldUseWebSearch"
         @send-query="handleSendQuery"
         @update:selected-collection="(value: string | null) => store.selectedCollection = value || ''"
         @update:agentic-ingest-url="(value) => store.agenticIngestUrl = value"
         @trigger-agentic-ingest="handleTriggerAgenticIngest"
+        @delete-collection="handleDeleteCollection"
         @clear-collection-results="store.clearCollectionResults"
       />
     </div>

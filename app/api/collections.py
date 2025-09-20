@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import distinct
 import json
+from urllib.parse import urlparse
 
 from app.config import EMBEDDING_BATCH_SIZE
 
@@ -19,6 +20,42 @@ from ..llm_client import generate_answer, stream_answer
 DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
 router = APIRouter()
+
+
+def determine_parent_url(url: str) -> str:
+    """
+    确定URL的父级collection归属
+    
+    对于文档网站的子页面，归属到其父级路径：
+    - https://lmstudio.ai/docs/python/* -> https://lmstudio.ai/docs/python
+    - https://example.com/docs/guide/* -> https://example.com/docs/guide
+    
+    Args:
+        url: 要分析的URL
+        
+    Returns:
+        str: 父级URL
+    """
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    # 特殊处理已知的文档站点结构
+    if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
+        # 对于 lmstudio.ai/docs/python/* -> lmstudio.ai/docs/python
+        if len(path_parts) >= 2 and path_parts[0] == 'docs' and path_parts[1] == 'python':
+            return f"{parsed.scheme}://{parsed.netloc}/docs/python"
+        # 对于其他docs子页面，归属到各自的子section
+        elif len(path_parts) >= 2 and path_parts[0] == 'docs':
+            return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
+    
+    # 通用逻辑：多级路径归属到其父级（至少保留2级路径）
+    if len(path_parts) > 2:
+        # 保留前两级路径作为父级
+        parent_path = '/' + '/'.join(path_parts[:2])
+        return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
+    
+    # 默认返回原URL（根级文档）
+    return url
 
 
 class AgenticCollection(BaseModel):
@@ -63,18 +100,37 @@ async def get_collections_list(
         result = await db.execute(stmt)
         sources = result.scalars().all()
         
-        collections = []
+        # 按collection进行分组：子文档归属到父文档的collection
+        collection_groups = {}
+        
         for source in sources:
-            # 使用URL的hash生成稳定的collection名称，与agenttic_ingest.py保持一致
-            url_hash = hashlib.md5(source.url.encode()).hexdigest()[:8]
-            collection_name = f"collection_{url_hash}"
+            # 为每个source确定其所属的collection
+            parent_url = determine_parent_url(source.url)
+            parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+            collection_name = f"collection_{parent_url_hash}"
+            
+            if collection_name not in collection_groups:
+                collection_groups[collection_name] = {
+                    'parent_url': parent_url,
+                    'sources': []
+                }
+            
+            collection_groups[collection_name]['sources'].append(source)
+        
+        collections = []
+        for collection_name, group_data in collection_groups.items():
+            # 找到主文档（URL最短的通常是父文档）
+            main_source = min(group_data['sources'], key=lambda s: len(s.url))
+            
+            # 计算该collection的总文档数和chunks数
+            total_sources = len(group_data['sources'])
             
             collections.append(AgenticCollection(
-                collection_id=str(source.id),
+                collection_id=collection_name,  # 使用collection_name作为ID
                 collection_name=collection_name,
-                document_title=source.title,
-                url=source.url,
-                created_at=source.created_at.isoformat() if hasattr(source, 'created_at') and source.created_at else None
+                document_title=f"{main_source.title} ({total_sources}个文档)",
+                url=main_source.url,
+                created_at=main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None
             ))
         
         return {
@@ -100,34 +156,51 @@ async def query_collection(
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         
-        # 验证collection_id是否存在
-        source_stmt = select(Source).where(
-            Source.id == int(request.collection_id),
-            Source.session_id == FIXED_SESSION_ID
-        )
-        source_result = await db.execute(source_stmt)
-        source = source_result.scalar_one_or_none()
+        # 验证collection_id并获取该collection下的所有sources
+        all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+        all_sources_result = await db.execute(all_sources_stmt)
+        all_sources = all_sources_result.scalars().all()
         
-        if not source:
+        # 找到属于指定collection的所有sources（兼容数值ID）
+        collection_sources = []
+        if request.collection_id.isdigit():
+            # 视作父source.id，找到其父分组
+            parent_source = next((s for s in all_sources if str(s.id) == request.collection_id), None)
+            if parent_source:
+                parent_url = determine_parent_url(parent_source.url)
+                for s in all_sources:
+                    if determine_parent_url(s.url) == parent_url:
+                        collection_sources.append(s)
+        else:
+            for source in all_sources:
+                parent_url = determine_parent_url(source.url)
+                parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+                collection_name = f"collection_{parent_url_hash}"
+                if collection_name == request.collection_id:
+                    collection_sources.append(source)
+        
+        if not collection_sources:
             raise HTTPException(
                 status_code=404, 
                 detail=f"Collection ID {request.collection_id} 不存在"
             )
         
-        # 查询该source下的所有chunks
+        # 查询该collection下所有sources的chunks
+        source_ids = [s.id for s in collection_sources]
         chunks_stmt = select(Chunk).where(
-            Chunk.source_id == source.id,
+            Chunk.source_id.in_(source_ids),
             Chunk.session_id == FIXED_SESSION_ID
         )
         chunks_result = await db.execute(chunks_stmt)
         chunks = chunks_result.scalars().all()
         
         if not chunks:
+            main_source = min(collection_sources, key=lambda s: len(s.url))
             return CollectionQueryResponse(
                 success=True,
                 results=[],
                 total_found=0,
-                message=f"Collection '{source.title}' 中没有找到任何内容块"
+                message=f"Collection '{main_source.title}' 中没有找到任何内容块"
             )
         
         # 使用向量搜索
@@ -145,27 +218,30 @@ async def query_collection(
             
             query_embedding = query_embeddings[0]
             
-            # 调用混合搜索，限制在该source的chunks中
-            FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+            # 调用混合搜索，限制在该collection的所有sources中
             search_hits = await query_hybrid(
                 query_text=request.query,
                 query_embedding=query_embedding,
                 top_k=request.top_k,
                 session_id=FIXED_SESSION_ID,
-                source_ids=[source.id],  # 限制在特定source
+                source_ids=source_ids,  # 限制在collection的所有sources
                 db=db
             )
+            
+            # 创建source映射，用于快速查找
+            source_map = {s.id: s for s in collection_sources}
             
             # 格式化搜索结果
             results = []
             contexts = []  # 收集上下文用于LLM生成回答
             for chunk, score in search_hits:
+                source = source_map.get(chunk.source_id)
                 results.append({
                     "chunk_id": chunk.chunk_id,
                     "content": chunk.content,
                     "score": float(score),
-                    "source_url": source.url,
-                    "source_title": source.title
+                    "source_url": source.url if source else "Unknown",
+                    "source_title": source.title if source else "Unknown"
                 })
                 contexts.append(chunk.content)
             
@@ -179,11 +255,13 @@ async def query_collection(
                     print(f"LLM生成回答失败: {llm_error}")
                     # LLM失败不影响搜索结果返回
             
+            # 选择主文档用于UI展示
+            main_source = min(collection_sources, key=lambda s: len(s.url))
             return CollectionQueryResponse(
                 success=True,
                 results=results,
                 total_found=len(results),
-                message=f"在Collection '{source.title}' 中找到 {len(results)} 个相关结果",
+                message=f"在Collection '{main_source.title}' 中找到 {len(results)} 个相关结果",
                 llm_answer=llm_answer
             )
             
@@ -194,15 +272,17 @@ async def query_collection(
             text_results = []
             text_contexts = []  # 收集文本搜索的上下文
             query_lower = request.query.lower()
+            main_source = min(collection_sources, key=lambda s: len(s.url))
             
             for chunk in chunks[:request.top_k]:  # 限制返回数量
                 if query_lower in chunk.content.lower():
+                    source = source_map.get(chunk.source_id)
                     text_results.append({
                         "chunk_id": chunk.chunk_id,
                         "content": chunk.content[:500] + "..." if len(chunk.content) > 500 else chunk.content,
                         "score": 0.5,  # 文本匹配的默认分数
-                        "source_url": source.url,
-                        "source_title": source.title
+                        "source_url": source.url if source else "Unknown",
+                        "source_title": source.title if source else "Unknown"
                     })
                     text_contexts.append(chunk.content)
             
@@ -219,7 +299,7 @@ async def query_collection(
                 success=True,
                 results=text_results,
                 total_found=len(text_results),
-                message=f"在Collection '{source.title}' 中通过文本匹配找到 {len(text_results)} 个结果（向量搜索不可用）",
+                message=f"在Collection '{main_source.title}' 中通过文本匹配找到 {len(text_results)} 个结果（向量搜索不可用）",
                 llm_answer=llm_answer
             )
     
@@ -242,42 +322,50 @@ async def get_collection_detail(
     try:
         FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
         
-        # 查询指定的source
-        source_stmt = select(Source).where(
-            Source.id == int(collection_id),
-            Source.session_id == FIXED_SESSION_ID
-        )
-        source_result = await db.execute(source_stmt)
-        source = source_result.scalar_one_or_none()
+        # 获取该collection下的所有sources
+        all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+        all_sources_result = await db.execute(all_sources_stmt)
+        all_sources = all_sources_result.scalars().all()
         
-        if not source:
+        # 找到属于指定collection的所有sources
+        collection_sources = []
+        for source in all_sources:
+            parent_url = determine_parent_url(source.url)
+            parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+            collection_name = f"collection_{parent_url_hash}"
+            
+            if collection_name == collection_id:
+                collection_sources.append(source)
+        
+        if not collection_sources:
             raise HTTPException(
                 status_code=404, 
                 detail=f"Collection ID {collection_id} 不存在"
             )
         
-        # 统计该source的chunks数量
+        # 统计该collection所有sources的chunks数量
+        source_ids = [s.id for s in collection_sources]
         chunks_count_stmt = select(Chunk).where(
-            Chunk.source_id == source.id,
+            Chunk.source_id.in_(source_ids),
             Chunk.session_id == FIXED_SESSION_ID
         )
         chunks_result = await db.execute(chunks_count_stmt)
         chunks = chunks_result.scalars().all()
         chunks_count = len(chunks)
         
-        # 使用URL的hash生成稳定的collection名称，与agenttic_ingest.py保持一致
-        url_hash = hashlib.md5(source.url.encode()).hexdigest()[:8]
-        collection_name = f"collection_{url_hash}"
+        # 找到主文档（URL最短的通常是父文档）
+        main_source = min(collection_sources, key=lambda s: len(s.url))
         
         return {
             "success": True,
             "collection": {
-                "collection_id": str(source.id),
-                "collection_name": collection_name,
-                "document_title": source.title,
-                "url": source.url,
+                "collection_id": collection_id,
+                "collection_name": collection_id,
+                "document_title": f"{main_source.title} ({len(collection_sources)}个文档)",
+                "url": main_source.url,
                 "chunks_count": chunks_count,
-                "created_at": source.created_at.isoformat() if hasattr(source, 'created_at') and source.created_at else None
+                "source_count": len(collection_sources),
+                "created_at": main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None
             }
         }
     
@@ -285,6 +373,90 @@ async def get_collection_detail(
         raise
     except Exception as e:
         error_message = f"获取Collection详情失败: {e.__class__.__name__}: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+@router.delete("/collections/{collection_id}", summary="删除指定的Collection")
+async def delete_collection(
+    collection_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    删除指定的collection，包括相关的source和chunks数据
+    """
+    try:
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        
+        # 根据ID类型删除：
+        # - 如果是数值（老格式）：删除该source
+        # - 如果是分组ID（如 collection_xxx）：删除该分组下所有sources
+        sources_to_delete = []
+        if collection_id.isdigit():
+            source_stmt = select(Source).where(
+                Source.id == int(collection_id),
+                Source.session_id == FIXED_SESSION_ID
+            )
+            source_result = await db.execute(source_stmt)
+            source = source_result.scalar_one_or_none()
+            if not source:
+                raise HTTPException(status_code=404, detail=f"Collection ID {collection_id} 不存在")
+            sources_to_delete = [source]
+        else:
+            # 分组删除：找到所有属于该collection_id的sources
+            all_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+            all_result = await db.execute(all_stmt)
+            all_sources = all_result.scalars().all()
+
+            from urllib.parse import urlparse
+            def determine_parent_url(url: str) -> str:
+                parsed = urlparse(url)
+                parts = [p for p in parsed.path.split('/') if p]
+                if 'docs' in parts and len(parts) >= 2:
+                    return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                if len(parts) > 2:
+                    return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                return url
+
+            import hashlib
+            for s in all_sources:
+                parent = determine_parent_url(s.url)
+                parent_hash = hashlib.md5(parent.encode()).hexdigest()[:8]
+                name = f"collection_{parent_hash}"
+                if name == collection_id:
+                    sources_to_delete.append(s)
+
+            if not sources_to_delete:
+                raise HTTPException(status_code=404, detail=f"Collection ID {collection_id} 不存在")
+
+        # 删除相关chunks与sources
+        deleted_chunks = 0
+        for src in sources_to_delete:
+            chunks_stmt = select(Chunk).where(
+                Chunk.source_id == src.id,
+                Chunk.session_id == FIXED_SESSION_ID
+            )
+            chunks_result = await db.execute(chunks_stmt)
+            chunks = chunks_result.scalars().all()
+            for chunk in chunks:
+                await db.delete(chunk)
+            deleted_chunks += len(chunks)
+            await db.delete(src)
+        
+        # 提交事务
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Collection '{collection_id}' 已成功删除",
+            "deleted_chunks_count": deleted_chunks
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        error_message = f"删除Collection失败: {e.__class__.__name__}: {str(e)}"
         print(error_message)
         raise HTTPException(status_code=500, detail=error_message)
 
@@ -302,34 +474,58 @@ async def query_collection_stream(
             FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
             
             # 验证collection_id是否存在
-            source_stmt = select(Source).where(
-                Source.id == int(request.collection_id),
-                Source.session_id == FIXED_SESSION_ID
-            )
-            source_result = await db.execute(source_stmt)
-            source = source_result.scalar_one_or_none()
-            
-            if not source:
-                error_data = {
-                    "error": f"Collection ID {request.collection_id} 不存在",
-                    "type": "error"
-                }
+            # 兼容字符串型分组ID（collection_xxx）与数值ID
+            from urllib.parse import urlparse
+            import hashlib
+            if request.collection_id.isdigit():
+                source_stmt = select(Source).where(
+                    Source.id == int(request.collection_id),
+                    Source.session_id == FIXED_SESSION_ID
+                )
+                source_result = await db.execute(source_stmt)
+                sources = [s for s in [source_result.scalar_one_or_none()] if s]
+            else:
+                # 根据分组ID收集sources
+                all_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
+                all_result = await db.execute(all_stmt)
+                all_sources = all_result.scalars().all()
+
+                def determine_parent_url(url: str) -> str:
+                    parsed = urlparse(url)
+                    parts = [p for p in parsed.path.split('/') if p]
+                    if 'docs' in parts and len(parts) >= 2:
+                        return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                    if len(parts) > 2:
+                        return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                    return url
+
+                sources = []
+                for s in all_sources:
+                    parent = determine_parent_url(s.url)
+                    parent_hash = hashlib.md5(parent.encode()).hexdigest()[:8]
+                    name = f"collection_{parent_hash}"
+                    if name == request.collection_id:
+                        sources.append(s)
+
+            # 统一命名，避免后续与事件payload的'sources'键冲突
+            collection_sources = sources
+
+            if not collection_sources:
+                error_data = {"error": f"Collection ID {request.collection_id} 不存在", "type": "error"}
                 yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
                 return
             
-            # 查询该source下的所有chunks
+            # 查询该集合下的所有chunks
+            source_ids = [s.id for s in collection_sources]
             chunks_stmt = select(Chunk).where(
-                Chunk.source_id == source.id,
+                Chunk.source_id.in_(source_ids),
                 Chunk.session_id == FIXED_SESSION_ID
             )
             chunks_result = await db.execute(chunks_stmt)
             chunks = chunks_result.scalars().all()
             
             if not chunks:
-                no_content_data = {
-                    "message": f"Collection '{source.title}' 中没有找到任何内容块",
-                    "type": "message"
-                }
+                no_content_data = {"message": f"Collection '{request.collection_id}' 中没有找到任何内容块", "type": "message"}
                 yield f"data: {json.dumps(no_content_data, ensure_ascii=False)}\n\n"
                 return
             
@@ -359,7 +555,7 @@ async def query_collection_stream(
                         query_embedding=query_embedding,
                         top_k=request.top_k,
                         session_id=FIXED_SESSION_ID,
-                        source_ids=[source.id],
+                        source_ids=source_ids,
                         db=db
                     )
                     
@@ -369,8 +565,8 @@ async def query_collection_stream(
                             "chunk_id": chunk.chunk_id,
                             "content": chunk.content[:300] + "..." if len(chunk.content) > 300 else chunk.content,
                             "score": float(score),
-                            "source_url": source.url,
-                            "source_title": source.title
+                            "source_url": next((s.url for s in collection_sources if s.id == chunk.source_id), "Unknown"),
+                            "source_title": next((s.title for s in collection_sources if s.id == chunk.source_id), "Unknown")
                         })
                         contexts.append(chunk.content)
                 
@@ -384,8 +580,8 @@ async def query_collection_stream(
                             "chunk_id": chunk.chunk_id,
                             "content": chunk.content[:300] + "..." if len(chunk.content) > 300 else chunk.content,
                             "score": 0.5,
-                            "source_url": source.url,
-                            "source_title": source.title
+                            "source_url": next((s.url for s in collection_sources if s.id == chunk.source_id), "Unknown"),
+                            "source_title": next((s.title for s in collection_sources if s.id == chunk.source_id), "Unknown")
                         })
                         contexts.append(chunk.content)
             
@@ -413,16 +609,15 @@ async def query_collection_stream(
                         yield f"data: {json.dumps(delta_data, ensure_ascii=False)}\n\n"
                     
                     # 发送参考来源数据
-                    sources = [
-                        {
-                            "url": source.url,
-                            "title": source.title,
+                    event_sources = []
+                    for result in search_results:
+                        event_sources.append({
+                            "url": result.get("source_url", ""),
+                            "title": result.get("source_title", ""),
                             "content": result["content"] if len(result["content"]) <= 300 else result["content"][:300] + "...",
                             "score": result["score"]
-                        }
-                        for result in search_results
-                    ]
-                    yield f"data: {json.dumps({'type': 'sources', 'sources': sources}, ensure_ascii=False)}\n\n"
+                        })
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': event_sources}, ensure_ascii=False)}\n\n"
                     
                     # 发送完成状态
                     complete_data = {"type": "complete", "message": "回答生成完成"}

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption } from 'element-plus'
-import { Promotion, Plus, Tools } from '@element-plus/icons-vue'
+import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption, ElMessageBox } from 'element-plus'
+import { Promotion, Plus, Tools, Delete } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import type { AgenticCollection, CollectionResult } from '../api/notebook'
 import VectorFixDialog from './VectorFixDialog.vue'
+import IngestTaskMonitor from './IngestTaskMonitor.vue'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.setOptions({
@@ -23,6 +24,7 @@ interface Props {
   agenticIngestUrl: string
   triggeringAgenticIngest: boolean
   shouldUseWebSearch: boolean
+  deletingCollection: boolean
 }
 
 const props = defineProps<Props>()
@@ -34,6 +36,7 @@ const emit = defineEmits<{
   (e: 'update:agenticIngestUrl', value: string): void
   (e: 'triggerAgenticIngest'): void
   (e: 'clearCollectionResults'): void
+  (e: 'deleteCollection', collectionId: string): void
 }>()
 
 // 查询输入
@@ -149,6 +152,29 @@ function getInputPlaceholder() {
     ? `在 '${props.collections.find(c => c.collection_id === props.selectedCollection)?.document_title}' 中查询...`
     : '请先选择Collection，然后输入问题...'
 }
+
+// 处理删除Collection
+async function handleDeleteCollection(collectionId: string) {
+  const collection = props.collections.find(c => c.collection_id === collectionId)
+  if (!collection) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除Collection "${collection.document_title}" 吗？此操作不可撤销！`,
+      '确认删除',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+    
+    emit('deleteCollection', collectionId)
+  } catch {
+    // 用户取消删除
+  }
+}
 </script>
 
 <template>
@@ -247,6 +273,20 @@ function getInputPlaceholder() {
                     <span class="text-gray-600 font-mono text-sm">{{ selectedCollection }}</span>
                   </div>
                 </div>
+                
+                <!-- Collection操作按钮 -->
+                <div class="flex justify-end mt-4 space-x-2">
+                  <el-button 
+                    type="danger" 
+                    :icon="Delete"
+                    size="small"
+                    :loading="deletingCollection"
+                    :disabled="deletingCollection"
+                    @click="handleDeleteCollection(selectedCollection!)"
+                  >
+                    删除Collection
+                  </el-button>
+                </div>
               </div>
 
             </div>
@@ -269,6 +309,11 @@ function getInputPlaceholder() {
           >
             向量数据修复
           </el-button>
+        </div>
+
+        <!-- Agentic Ingest 任务监控 -->
+        <div class="mb-6">
+          <IngestTaskMonitor />
         </div>
       </div>
 
@@ -328,22 +373,24 @@ function getInputPlaceholder() {
     <div class="p-4 border-t chat-input-container">
       <!-- Collection与Agentic Ingest 控制区 -->
       <div class="flex items-center mb-3 gap-3 max-w-3xl mx-auto">
-        <!-- Collection选择下拉框 -->
-        <el-select
-          :model-value="selectedCollection"
-          @update:model-value="handleCollectionChange"
-          placeholder="选择Collection"
-          class="w-48"
-          :loading="loadingCollections"
-          clearable
-        >
-          <el-option
-            v-for="collection in collections"
-            :key="collection.collection_id"
-            :label="collection.document_title"
-            :value="collection.collection_id"
-          />
-        </el-select>
+        <!-- Collection选择下拉框和删除按钮 -->
+        <div class="flex items-center gap-1 w-58">
+          <el-select
+            :model-value="selectedCollection"
+            @update:model-value="handleCollectionChange"
+            placeholder="选择Collection"
+            class="w-48"
+            :loading="loadingCollections"
+            clearable
+          >
+            <el-option
+              v-for="collection in collections"
+              :key="collection.collection_id"
+              :label="collection.document_title"
+              :value="collection.collection_id"
+            />
+          </el-select>
+        </div>
         
         <!-- URL输入框 -->
         <el-input

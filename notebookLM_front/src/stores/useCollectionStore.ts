@@ -16,6 +16,7 @@ export function useCollectionStore() {
     triggeringAgenticIngest: false,
     loadingCollections: false,
     queryingCollection: false,
+    deletingCollection: false,
   })
 
   // 触发agentic ingest
@@ -251,6 +252,36 @@ export function useCollectionStore() {
     collectionQueryInput.value = ''
   }
 
+  // 删除collection
+  async function deleteCollection(collectionId: string) {
+    loading.deletingCollection = true
+    try {
+      const response = await notebookApi.deleteCollection(collectionId)
+      if (response.success) {
+        // 删除成功后刷新collection列表
+        await loadCollections()
+        
+        // 如果删除的是当前选中的collection，则清空选择
+        if (selectedCollection.value === collectionId) {
+          selectedCollection.value = ''
+        }
+        
+        return {
+          success: true,
+          message: response.message,
+          deleted_chunks_count: response.deleted_chunks_count
+        }
+      } else {
+        throw new Error(response.message || 'Collection删除失败')
+      }
+    } catch (error: any) {
+      console.error('删除Collection失败:', error)
+      throw error
+    } finally {
+      loading.deletingCollection = false
+    }
+  }
+
   return {
     // 状态
     agenticIngestUrl,
@@ -265,5 +296,6 @@ export function useCollectionStore() {
     performCollectionQuery,
     queryCollection,
     clearCollectionResults,
+    deleteCollection,
   }
 }

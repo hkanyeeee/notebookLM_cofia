@@ -193,6 +193,34 @@ export const DEFAULT_TOOLS: ToolSchema[] = [
   }
 ]
 
+// 通用API请求函数，返回原生fetch Response对象
+export async function apiRequest(url: string, options: RequestInit = {}): Promise<Response> {
+  const sessionStore = useSessionStore()
+  const sessionId = sessionStore.getSessionId()
+  
+  const headers = new Headers(options.headers)
+  headers.set('Content-Type', 'application/json')
+  
+  if (sessionId) {
+    headers.set('X-Session-ID', sessionId)
+  }
+  
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers
+  }
+  
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`
+  
+  console.log('API请求:', fetchOptions.method || 'GET', fullUrl, options.body)
+  
+  const response = await fetch(fullUrl, fetchOptions)
+  
+  console.log('API响应:', response.status)
+  
+  return response
+}
+
 // API方法
 export const notebookApi = {
   // 获取API基础URL
@@ -427,6 +455,20 @@ export const notebookApi = {
       return {
         success: false,
         collection: null
+      }
+    }
+  },
+
+  // 删除指定collection
+  async deleteCollection(collectionId: string): Promise<{ success: boolean; message: string; deleted_chunks_count?: number }> {
+    try {
+      const response = await api.delete(`/collections/${collectionId}`)
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message,
+        deleted_chunks_count: 0
       }
     }
   },

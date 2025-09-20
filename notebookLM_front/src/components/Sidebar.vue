@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
-import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip } from 'element-plus'
+import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip, ElProgress } from 'element-plus'
 import { Plus, Document, Delete, Fold, Expand } from '@element-plus/icons-vue'
 import type { AgenticCollection } from '../api/notebook'
 

@@ -7,6 +7,7 @@ import httpx
 import asyncio
 
 from fastapi import APIRouter, Body, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,9 +17,11 @@ from sqlalchemy import delete
 from ..models import Source, Chunk, WorkflowExecution
 from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
+from ..utils.link_extractor import extract_links_from_html
+from ..utils.task_status import ingest_task_manager, TaskStatus
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
-from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
+from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, SUBDOC_USE_WEBHOOK_FALLBACK
 from ..vector_db_client import add_embeddings
 
 
@@ -117,8 +120,8 @@ async def process_sub_docs_concurrent(
         print(f"达到递归深度限制，跳过 {len(sub_docs_urls)} 个子文档的处理")
         return results
     
-    # 使用信号量控制并发数量
-    MAX_CONCURRENT_SUB_DOCS = int(EMBEDDING_MAX_CONCURRENCY)
+    # 使用信号量控制并发数量 - 子文档处理使用更高的并发数
+    MAX_CONCURRENT_SUB_DOCS = min(16, len(sub_docs_urls))  # 最多16个并发，但不超过子文档总数
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
     
     # 并发处理所有子文档URL
@@ -177,13 +180,116 @@ async def process_sub_docs_concurrent(
     return results
 
 
+async def process_sub_docs_concurrent_with_tracking(
+    sub_docs_urls: List[str],
+    recursive_depth: int,
+    db: AsyncSession,
+    parent_doc_name: Optional[str] = None,
+    parent_collection_name: Optional[str] = None,
+    parent_source_id: Optional[int] = None,
+    task_id: Optional[str] = None
+) -> List[dict]:
+    """
+    并发处理子文档的递归摄取函数（带状态追踪）
+    """
+    results = []
+    
+    # 检查递归深度限制
+    if recursive_depth <= 0:
+        print(f"达到递归深度限制，跳过 {len(sub_docs_urls)} 个子文档的处理")
+        return results
+    
+    # 使用信号量控制并发数量 - 子文档处理使用更高的并发数
+    MAX_CONCURRENT_SUB_DOCS = min(16, len(sub_docs_urls))  # 最多16个并发，但不超过子文档总数
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
+    
+    # 并发处理所有子文档URL
+    async def process_single_sub_doc_with_tracking(sub_url: str) -> dict:
+        async with semaphore:
+            # 更新状态为运行中
+            if task_id:
+                await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.RUNNING)
+            
+            # 🔥 修复：为每个子文档创建独立的数据库会话，避免事务冲突
+            from ..database import AsyncSessionLocal
+            async with AsyncSessionLocal() as sub_db:
+                try:
+                    print(f"开始递归摄取子文档: {sub_url}")
+
+                    # 构造递归调用的请求数据
+                    sub_request_data = {
+                        "url": sub_url,
+                        "recursive_depth": recursive_depth - 1,  # 减少递归深度
+                        "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                        "embedding_dimensions": EMBEDDING_DIMENSIONS,
+                        "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                        "is_recursive": True,  # 标记为递归调用
+                        "document_name": parent_doc_name,  # 传递父级文档名称
+                        "collection_name": parent_collection_name,  # 传递父级collection名称
+                        "parent_source_id": parent_source_id  # 传递父级Source ID
+                    }
+                    
+                    # 创建一个虚拟的BackgroundTasks实例用于递归调用
+                    dummy_background_tasks = BackgroundTasks()
+                    
+                    # 🔥 修复：使用独立的数据库会话进行递归调用
+                    result = await agenttic_ingest(dummy_background_tasks, sub_request_data, sub_db)
+                    
+                    print(f"子文档摄取成功: {sub_url}")
+                    
+                    # 更新状态为完成
+                    if task_id:
+                        await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.COMPLETED)
+                    
+                    return {
+                        "url": sub_url,
+                        "success": True,
+                        "result": result
+                    }
+                    
+                except Exception as e:
+                    error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
+                    print(error_msg)
+                    
+                    # 确保出错时也回滚子文档的数据库会话
+                    try:
+                        await sub_db.rollback()
+                    except:
+                        pass
+                    
+                    # 更新状态为失败
+                    if task_id:
+                        await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.FAILED, error_msg)
+                    
+                    return {
+                        "url": sub_url,
+                        "success": False,
+                        "error": error_msg
+                    }
+    
+    # 使用asyncio.gather进行并发处理，但通过信号量控制最大并发数
+    try:
+        tasks = [process_single_sub_doc_with_tracking(url) for url in sub_docs_urls]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+    except Exception as e:
+        print(f"并发处理子文档时出现异常: {str(e)}")
+        # 降级到串行处理
+        results = []
+        for sub_url in sub_docs_urls:
+            result = await process_single_sub_doc_with_tracking(sub_url)
+            results.append(result)
+    
+    return results
+
+
 async def process_sub_docs_background(
     sub_docs_urls: List[str],
     recursive_depth: int,
     request_id: Optional[str] = None,
     parent_doc_name: Optional[str] = None,
     parent_collection_name: Optional[str] = None,
-    parent_source_id: Optional[int] = None
+    parent_source_id: Optional[int] = None,
+    parent_url: Optional[str] = None  # 新增：父文档URL，用于任务追踪
 ):
     """
     后台异步处理子文档的函数 - 不阻塞主响应
@@ -195,20 +301,42 @@ async def process_sub_docs_background(
         parent_doc_name: 父级文档名称
         parent_collection_name: 父级collection名称
         parent_source_id: 父级Source ID，用于将子文档内容添加到同一个collection
+        parent_url: 父文档URL，用于任务追踪
     """
+    task_id = request_id or f"subdoc_{hash(str(sub_docs_urls))}"
+    
     try:
-        # 创建新的数据库会话
-        from ..database import AsyncSessionLocal
-        async with AsyncSessionLocal() as db:
-            print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，request_id: {request_id}")
+        # 创建任务状态追踪
+        if parent_url and parent_doc_name and parent_collection_name:
+            await ingest_task_manager.create_task(
+                task_id=task_id,
+                parent_url=parent_url,
+                document_name=parent_doc_name,
+                collection_name=parent_collection_name,
+                sub_doc_urls=sub_docs_urls
+            )
+            await ingest_task_manager.start_task(task_id)
+        
+        print(f"[后台任务] 开始处理 {len(sub_docs_urls)} 个子文档，task_id: {task_id}")
 
-            results = await process_sub_docs_concurrent(sub_docs_urls, recursive_depth, db, parent_doc_name, parent_collection_name, parent_source_id)
+        # 🔥 修复：不再需要共享数据库会话，每个子文档使用独立会话
+        results = await process_sub_docs_concurrent_with_tracking(
+            sub_docs_urls, recursive_depth, None, parent_doc_name, 
+            parent_collection_name, parent_source_id, task_id
+        )
 
-            success_count = len([r for r in results if r.get('success')])
-            print(f"[后台任务] 子文档处理完成，成功: {success_count}/{len(results)}, request_id: {request_id}")
-            
+        success_count = len([r for r in results if r.get('success')])
+        print(f"[后台任务] 子文档处理完成，成功: {success_count}/{len(results)}, task_id: {task_id}")
+        
+        # 🔥 修复：不再需要统一提交，每个子文档会话已独立提交
+        print(f"[后台任务] 所有子文档已独立处理和提交，处理了 {success_count} 个子文档")
+                
     except Exception as e:
-        print(f"[后台任务] 子文档处理异常: {str(e)}, request_id: {request_id}")
+        error_msg = f"子文档处理异常: {str(e)}"
+        print(f"[后台任务] {error_msg}, task_id: {task_id}")
+        await ingest_task_manager.fail_task(task_id, error_msg)
+        
+        # 🔥 修复：不再需要统一回滚，每个子文档会话会自动管理事务
 
 
 async def process_webhook_response(
@@ -253,10 +381,26 @@ async def process_webhook_response(
                         total_sub_docs += len(sub_docs)
 
                         # 逐个检查并添加URL，避免重复
+                        from urllib.parse import urlparse
+                        def is_strict_child(child: str, base: str) -> bool:
+                            try:
+                                cu = urlparse(child)
+                                bu = urlparse(base)
+                                if cu.netloc != bu.netloc:
+                                    return False
+                                base_path = bu.path.rstrip('/')
+                                url_path = cu.path.rstrip('/')
+                                # 仅允许严格子路径，如 /docs/python/*
+                                return url_path.startswith(base_path + '/')
+                            except Exception:
+                                return False
+
                         for url in sub_docs:
-                            if url and url not in seen_urls:
+                            if url and is_strict_child(url, data.url) and url not in seen_urls:
                                 all_sub_docs.append(url)
                                 seen_urls.add(url)
+                            elif url and not is_strict_child(url, data.url):
+                                print(f"跳过兄弟/非子路径URL: {url}")
                             elif url in seen_urls:
                                 print(f"跳过重复的子文档URL: {url}")
                     else:
@@ -462,6 +606,8 @@ async def agenttic_ingest(
     webhook_url = data.get("webhook_url", WEBHOOK_PREFIX + "/array2array")
     recursive_depth = data.get("recursive_depth", 2)  # 默认递归深度为2
     is_recursive = data.get("is_recursive", False)  # 检测是否为递归调用
+    # 是否启用 webhook 兜底，可被请求参数覆盖
+    use_webhook_fallback = data.get("webhook_fallback", SUBDOC_USE_WEBHOOK_FALLBACK)
 
     try:
         # 1. 使用大模型生成文档名称和collection名称（仅在非递归调用时）
@@ -490,12 +636,12 @@ async def agenttic_ingest(
         # 2. 拉取并解析内容
         print("正在拉取网页内容...")
         text = await fetch_then_extract(url)
+        # 仅获取HTML用于子文档链接提取，不用于分块存储
         raw_html = await fetch_html(url)
 
-        # 3. 分块处理文本
+        # 3. 分块处理文本（仅处理plaintext）
         print("正在分块处理文本...")
         chunks = chunk_text(text)
-        raw_html_chunks = chunk_text(raw_html, 8000, 200)
         if not chunks:
             raise ValueError("无法从URL中提取任何内容")
 
@@ -514,27 +660,13 @@ async def agenttic_ingest(
         parent_source_id = data.get("parent_source_id")
         from datetime import datetime
         if is_recursive and parent_source_id:
-            # 递归调用时，优先获取父级Source对象
-            print(f"递归调用：尝试获取父级Source ID: {parent_source_id}")
-            parent_stmt = select(Source).where(Source.id == parent_source_id)
-            parent_result = await db.execute(parent_stmt)
-            parent_source = parent_result.scalar_one_or_none()
+            # 递归调用时，为每个子文档创建独立的Source记录
+            print(f"递归调用：为子文档创建独立的Source记录，父级ID: {parent_source_id}")
             
-            if parent_source:
-                print(f"成功获取父级Source: {parent_source.title} (ID: {parent_source.id})")
-                # 更新父级Source的信息（UPSERT逻辑）
-                parent_source.title = document_name
-                parent_source.session_id = FIXED_SESSION_ID
-                parent_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
-                source = parent_source
-                
-                # 删除与父级Source相关的旧chunks，准备重新处理最新内容
-                print("删除旧的chunks...")
-                await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
-                await db.flush()
-            elif existing_source:
-                print(f"父级Source不存在，更新现有的Source: {existing_source.title} (ID: {existing_source.id})")
-                # 更新现有记录的所有信息
+            # 检查是否已存在相同URL的Source记录
+            if existing_source:
+                print(f"子文档已存在，更新现有的Source: {existing_source.title} (ID: {existing_source.id})")
+                # 更新现有记录的信息
                 existing_source.title = document_name
                 existing_source.session_id = FIXED_SESSION_ID
                 existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
@@ -545,7 +677,7 @@ async def agenttic_ingest(
                 await db.execute(delete(Chunk).where(Chunk.source_id == source.id))
                 await db.flush()
             else:
-                print(f"警告：未找到父级Source ID {parent_source_id}，创建新的Source")
+                print(f"为子文档创建新的Source记录: {document_name}")
                 source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
         else:
             # 非递归调用时，检查是否存在相同URL的Source (UPSERT逻辑)
@@ -579,23 +711,10 @@ async def agenttic_ingest(
             )
             chunk_objects.append(chunk_obj)
         
-        # 创建raw_html_chunk对象列表
-        raw_html_chunk_objects = []
-        for index, html in enumerate(raw_html_chunks):
-            # 生成唯一的chunk_id (添加'html'前缀以区分普通文本chunk)
-            raw = f"{FIXED_SESSION_ID}|{url}|html|{index}".encode("utf-8", errors="ignore")
-            generated_chunk_id = hashlib.md5(raw).hexdigest()
-            raw_html_chunk_obj = Chunk(
-                chunk_id=generated_chunk_id,
-                content=html,
-                source_id=None,  # 在数据库中暂时不设置source_id
-                session_id=FIXED_SESSION_ID,
-            )
-            raw_html_chunk_objects.append(raw_html_chunk_obj)
         
         
         # 5. 将chunk对象保存到数据库
-        print("正在保存chunk到数据库...")
+        print(f"正在保存chunk到数据库... (文本块: {len(chunk_objects)})")
         
         # 只有在创建新Source时才需要添加到数据库
         if not (is_recursive and parent_source_id and source.id):
@@ -659,7 +778,63 @@ async def agenttic_ingest(
                 print(f"Embedding task failed: {e}")
                 # 不中断整体流程，继续其他批次
 
-        # 7. 准备webhook数据
+        # 7. 提取子URL（本地解析优先）
+        print("正在本地解析子文档URL...")
+        try:
+            extracted_sub_docs = extract_links_from_html(raw_html, url)
+            # 严格过滤仅保留子路径，排除兄弟文档
+            from urllib.parse import urlparse
+            def is_strict_child(child: str, base: str) -> bool:
+                try:
+                    cu = urlparse(child)
+                    bu = urlparse(base)
+                    if cu.netloc != bu.netloc:
+                        return False
+                    base_path = bu.path.rstrip('/')
+                    url_path = cu.path.rstrip('/')
+                    return url_path.startswith(base_path + '/')
+                except Exception:
+                    return False
+            extracted_sub_docs = [u for u in extracted_sub_docs if is_strict_child(u, url)]
+            # 去重
+            extracted_sub_docs = list(dict.fromkeys(extracted_sub_docs))
+            print(f"本地解析到 {len(extracted_sub_docs)} 个潜在子文档URL")
+        except Exception as e:
+            print(f"本地解析子文档URL失败: {e}")
+            extracted_sub_docs = []
+
+        # 8. 本地子文档处理（异步后台，不阻塞响应）
+        if recursive_depth > 0 and extracted_sub_docs:
+            print("将本地解析的子文档加入后台处理任务...")
+            
+            # 生成任务ID
+            task_id = f"ingest_{hashlib.md5(url.encode()).hexdigest()[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            if background_tasks:
+                background_tasks.add_task(
+                    process_sub_docs_background,
+                    extracted_sub_docs,
+                    recursive_depth,
+                    task_id,  # 使用生成的task_id
+                    document_name,
+                    collection_name,
+                    source.id,
+                    url  # 添加parent_url参数
+                )
+            else:
+                asyncio.create_task(
+                    process_sub_docs_background(
+                        extracted_sub_docs,
+                        recursive_depth,
+                        task_id,  # 使用生成的task_id
+                        document_name,
+                        collection_name,
+                        source.id,
+                        url  # 添加parent_url参数
+                    )
+                )
+
+        # 9. 准备webhook数据（作为回退/补充渠道）
         import uuid
         from datetime import datetime
         
@@ -668,6 +843,9 @@ async def agenttic_ingest(
         import urllib.parse
         encoded_url = urllib.parse.quote(url, safe=':/')
         request_id = f"{encoded_url}_{datetime.now().strftime('%Y%m%d')}_{str(uuid.uuid4())}"
+        
+        # 如果需要webhook识别子文档，临时分块HTML（不保存到数据库）
+        temp_html_chunks = chunk_text(raw_html) if raw_html else []
         
         webhook_data = {
             "document_name": document_name,
@@ -679,18 +857,18 @@ async def agenttic_ingest(
             f"你正在阅读一个网页的部分html，这个网页的url是{url}，内容是某个开源框架文档。现在我需要你识别这个文档下面的的子文档。比如：https://lmstudio.ai/docs/python/getting-started/project-setup是https://lmstudio.ai/docs/python的子文档。子文档的URL有可能在HTML中以a标签的href，button的跳转link等等形式存在，你需要调用你的编程知识进行识别，使用{url}进行拼接。最终将识别出来的子文档URL以数组的形式放在sub_docs属性联合chunk_id、index返回，注意：如果没有发现任何子文档，那么返回空数组",
             "data_list": [
                 {
-                    "chunk_id": chunk.chunk_id,
-                    "content": chunk.content,
+                    "chunk_id": f"temp_html_{idx}",
+                    "content": html_chunk,
                     "index": idx
                 }
-                for idx, chunk in enumerate(raw_html_chunk_objects)
+                for idx, html_chunk in enumerate(temp_html_chunks)
             ],
             "request_id": request_id,
             "recursive_depth": recursive_depth,  # 添加递归深度参数
         }
 
-        # 8. 发送webhook（仅在递归深度大于0调用时）
-        if recursive_depth > 0:
+        # 10. 发送webhook（仅在递归深度大于0、且需要补充识别、且启用兜底时）
+        if recursive_depth > 0 and not extracted_sub_docs and use_webhook_fallback:
             print("正在发送webhook进行子文档识别...")
             
             # 创建工作流执行记录
@@ -730,9 +908,15 @@ async def agenttic_ingest(
                 except Exception as update_error:
                     print(f"更新工作流执行状态失败: {update_error}")
         else:
-            print(f"递归深度为0，跳过子文档识别webhook")
+            if recursive_depth <= 0:
+                print(f"递归深度为0，跳过子文档识别webhook")
+            elif not use_webhook_fallback and not extracted_sub_docs:
+                print("配置禁止 webhook 兜底，且本地未解析到子文档URL")
+            else:
+                print("已通过本地解析获得子文档URL，跳过webhook识别")
 
-        return {
+        # 准备返回结果
+        result = {
             "success": True,
             "message": f"成功摄取文档，共处理了 {total_chunks} 个文本块",
             "document_name": document_name,
@@ -740,6 +924,14 @@ async def agenttic_ingest(
             "total_chunks": total_chunks,
             "source_id": source.id  # 返回Source ID用于递归调用
         }
+        
+        # 如果启动了子文档后台任务，返回任务ID供前端监控
+        if recursive_depth > 0 and extracted_sub_docs:
+            result["sub_docs_task_id"] = task_id
+            result["sub_docs_count"] = len(extracted_sub_docs)
+            result["sub_docs_processing"] = True
+        
+        return result
 
     except Exception as e:
         error_message = f"摄取失败: {e.__class__.__name__}: {str(e)}"
@@ -796,3 +988,79 @@ async def workflow_response(
     """
     print("收到workflow_response请求，重定向到统一处理接口")
     return await agenttic_ingest(background_tasks, data, db)
+
+
+# ========== 任务监控API端点 ==========
+
+async def stream_ingest_progress(task_id: str):
+    """流式返回摄取任务进度"""
+    import json
+    
+    while True:
+        status = await ingest_task_manager.get_task_status(task_id)
+        if not status:
+            # 任务不存在，可能已完成并被清理
+            yield f"data: {json.dumps({'error': 'Task not found', 'task_id': task_id})}\n\n"
+            break
+            
+        # 发送当前状态
+        yield f"data: {json.dumps(status.to_dict())}\n\n"
+        
+        # 如果任务完成或失败，结束流
+        if status.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+            break
+            
+        await asyncio.sleep(2)  # 每2秒更新一次
+
+
+@router.get("/api/ingest-progress/{task_id}", summary="获取摄取任务进度（流式）")
+async def get_ingest_progress(task_id: str):
+    """获取摄取任务进度的流式响应"""
+    return StreamingResponse(
+        stream_ingest_progress(task_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
+@router.get("/api/ingest-status/{task_id}", summary="获取摄取任务状态")
+async def get_ingest_status(task_id: str):
+    """获取摄取任务的当前状态"""
+    status = await ingest_task_manager.get_task_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    return {
+        "success": True,
+        "task_id": task_id,
+        "status": status.to_dict()
+    }
+
+
+@router.get("/api/ingest-tasks", summary="获取所有活跃的摄取任务")
+async def list_ingest_tasks():
+    """获取所有活跃的摄取任务列表"""
+    tasks = await ingest_task_manager.list_active_tasks()
+    return {
+        "success": True,
+        "tasks": [task.to_dict() for task in tasks],
+        "total": len(tasks)
+    }
+
+
+@router.delete("/api/ingest-task/{task_id}", summary="删除摄取任务")
+async def delete_ingest_task(task_id: str):
+    """删除指定的摄取任务（通常在任务完成后清理）"""
+    success = await ingest_task_manager.remove_task(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    return {
+        "success": True,
+        "message": f"任务 {task_id} 已删除"
+    }

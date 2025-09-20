@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Source, Chunk
 from app.embedding_client import embed_texts
-from app.vector_db_client import add_embeddings, qdrant_client, COLLECTION_NAME
+from app.vector_db_client import add_embeddings, qdrant_client, COLLECTION_NAME, delete_vector_db_data
 from app.config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, DEFAULT_EMBEDDING_MODEL
 
 
@@ -121,6 +121,12 @@ class VectorDataFixer:
                             return True
                     except Exception:
                         pass  # 如果检查失败，继续处理
+
+                # 在重建前清理该集合在 Qdrant 的历史向量，避免旧数据残留
+                try:
+                    await delete_vector_db_data([source.id])
+                except Exception as e:
+                    print(f"清理旧向量失败（跳过继续）: {e}")
 
                 # 3. 获取所有chunks
                 print("2. 获取chunks...")
@@ -287,7 +293,13 @@ class VectorDataFixer:
 
 async def main():
     parser = argparse.ArgumentParser(description="向量数据库数据修复工具")
-    parser.add_argument("--session-id", required=True, help="Session ID")
+    # 默认使用与 agenttic_ingest 一致的固定 Session ID，用户无需理解/传递
+    parser.add_argument(
+        "--session-id",
+        required=False,
+        default="fixed_session_id_for_agenttic_ingest",
+        help="Session ID（可选，默认与 agenttic_ingest 一致）",
+    )
     parser.add_argument("--collection-id", type=int, help="指定修复的集合ID")
     parser.add_argument("--all", action="store_true", help="修复所有需要修复的集合")
     parser.add_argument("--list", action="store_true", help="列出所有集合状态")

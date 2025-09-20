@@ -120,33 +120,13 @@ async def query_embeddings(
     # Reconstruct Chunk objects from the payload
     hits = []
     for point in search_result:
-        # Get complete source information from database
-        source = None
-        if db is not None:
-            try:
-                # Ensure we properly handle the source object within the session
-                result = await db.execute(select(Source).where(Source.id == point.payload['source_id']))
-                source = result.scalar_one_or_none()
-                
-                # If we fetched a source, make sure it's in the session to avoid warnings
-                if source is not None:
-                    # This ensures the source is attached to the session
-                    await db.merge(source)
-            except Exception as e:
-                print(f"Failed to fetch source {point.payload['source_id']}: {e}")
-        
-        # If we couldn't get the source from DB, create a minimal one
-        if source is None:
-            # Create a minimal source without session association for fallback
-            source = Source(id=point.payload['source_id'], session_id=point.payload['session_id'], url="", title="")
-        
+        # 仅返回不绑定关系的 Chunk，避免触发关系集合的会话附加
         chunk = Chunk(
-            id=point.id, 
+            id=point.id,
             content=point.payload['content'],
             source_id=point.payload['source_id'],
             session_id=point.payload['session_id'],
-            source=source,
-            chunk_id=point.payload.get('chunk_id')  # Add chunk_id from payload
+            chunk_id=point.payload.get('chunk_id')
         )
         hits.append((chunk, point.score))
         
@@ -206,26 +186,8 @@ async def query_bm25(
     hits: List[Tuple[Chunk, float]] = []
     for row in rows:
         # row: (id, content, source_id, session_id, chunk_id, score)
-        # Get complete source information from database
-        source = None
-        try:
-            # Ensure we properly handle the source object within the session
-            result = await db.execute(select(Source).where(Source.id == row[2]))
-            source = result.scalar_one_or_none()
-            
-            # If we fetched a source, make sure it's in the session to avoid warnings
-            if source is not None:
-                # This ensures the source is attached to the session
-                await db.merge(source)
-        except Exception as e:
-            print(f"Failed to fetch source {row[2]}: {e}")
-        
-        # If we couldn't get the source from DB, create a minimal one
-        if source is None:
-            # Create a minimal source without session association for fallback
-            source = Source(id=row[2], session_id=row[3], url="", title="")
-        
-        chunk = Chunk(id=row[0], content=row[1], source_id=row[2], session_id=row[3], source=source)
+        # 返回只读 Chunk，不设置与 Source 的关系，避免触发关系集合的会话附加
+        chunk = Chunk(id=row[0], content=row[1], source_id=row[2], session_id=row[3])
         # 从数据库获取chunk_id
         chunk.chunk_id = row[4]  # row[4] is chunk_id from the query
         hits.append((chunk, float(row[5])))  # row[5] is the score

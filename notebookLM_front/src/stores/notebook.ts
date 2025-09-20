@@ -64,6 +64,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     triggeringAgenticIngest: collectionStore.loading.triggeringAgenticIngest,
     loadingCollections: collectionStore.loading.loadingCollections,
     queryingCollection: collectionStore.loading.queryingCollection,
+    deletingCollection: collectionStore.loading.deletingCollection,
     loadingModels: modelStore.loading.loadingModels
   }))
 
@@ -216,6 +217,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     performCollectionQuery: collectionStore.performCollectionQuery,
     queryCollection: collectionStore.queryCollection,
     clearCollectionResults: collectionStore.clearCollectionResults,
+    deleteCollection: collectionStore.deleteCollection,
     
     // 模型方法
     loadModels: modelStore.loadModels,
