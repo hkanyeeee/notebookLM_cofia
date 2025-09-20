@@ -330,7 +330,7 @@ export const notebookApi = {
   // 触发auto ingest
   async triggerAutoIngest(request: AutoIngestRequest): Promise<AutoIngestResponse> {
     try {
-      const response = await api.post<AutoIngestResponse>('/agenttic-ingest', request)
+      const response = await api.post<AutoIngestResponse>('/auto-ingest', request)
       return response.data
     } catch (error: any) {
       return {

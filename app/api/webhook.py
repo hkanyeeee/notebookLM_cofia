@@ -53,7 +53,7 @@ def sanitize_webhook_data(data: dict) -> dict:
     """
     # 添加任务名标识
     if "task_name" not in data:
-        data["task_name"] = "agenttic_ingest"
+        data["task_name"] = "auto_ingest"
     
     # 确保所有字段都存在且类型正确
     if "document_name" not in data:

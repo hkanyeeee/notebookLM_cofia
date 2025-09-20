@@ -416,8 +416,8 @@ async def _handle_collection_query(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid collection_id format")
 
-    # 使用固定的session_id与agenttic_ingest保持一致
-    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+    # 使用固定的session_id与auto_ingest保持一致
+    FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
 
     query_embedding = (await embed_texts([q], model=embedding_model, dimensions=embedding_dimensions))[0]
 

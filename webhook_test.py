@@ -12,7 +12,7 @@ data = {
     "collection_name": "lm_studio_python_guide",
     "url": "https://lmstudio.ai/docs/python",
     "total_chunks": 1,
-    "task_name": "agenttic_ingest",
+    "task_name": "auto_ingest",
     "prompt": "你正在阅读一个网页的部分html，这个网页的url是https://lmstudio.ai/docs/python，内容是某个开源框架文档。现在我需要你识别这个文档下面的的子文档。比如：https://lmstudio.ai/docs/python/getting-started/project-setup是https://lmstudio.ai/docs/python的子文档。子文档的URL有可能在HTML中以a标签的href，button的跳转link等等形式存在，你需要调用你的编程知识进行识别，使用https://lmstudio.ai/docs/python进行拼接。最终将识别出来的子文档URL以数组的形式放在sub_docs属性联合chunk_id、index返回，注意：如果没有发现任何子文档，那么返回空数组",
     "data_list": [
         {

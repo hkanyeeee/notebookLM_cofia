@@ -49,6 +49,12 @@ def determine_parent_url(url: str) -> str:
         elif len(path_parts) >= 2 and path_parts[0] == 'docs':
             return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
     
+    # 新增：将 python.langchain.com 的 API Reference 全部归入 /api_reference
+    # 期望：以 https://python.langchain.com/api_reference/ 作为单一入口，
+    # 其下所有子文档都归为一个 collection
+    if 'python.langchain.com' in parsed.netloc and 'api_reference' in path_parts:
+        return f"{parsed.scheme}://{parsed.netloc}/api_reference"
+    
     # 通用逻辑：多级路径归属到其父级（至少保留2级路径）
     if len(path_parts) >= 2:
         # 保留前两级路径作为父级
@@ -90,13 +96,13 @@ async def get_collections_list(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取所有通过agenttic_ingest处理的collection列表
+    获取所有通过auto_ingest处理的collection列表
     返回简化的collection信息，供前端选择使用
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
-        # 查询所有agenttic_ingest处理的文档
+        # 查询所有auto_ingest处理的文档
         stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
         result = await db.execute(stmt)
         sources = result.scalars().all()
@@ -155,7 +161,7 @@ async def query_collection(
     在指定的collection中进行向量搜索查询
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 验证collection_id并获取该collection下的所有sources
         all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
@@ -324,7 +330,7 @@ async def get_collection_detail(
     获取指定collection的详细信息，包括chunks数量等统计信息
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 获取该collection下的所有sources
         all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
@@ -390,7 +396,7 @@ async def delete_collection(
     删除指定的collection，包括相关的source和chunks数据
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 根据ID类型删除：
         # - 如果是数值（老格式）：删除该source
@@ -417,8 +423,12 @@ async def delete_collection(
                 parsed = urlparse(url)
                 normalized_path = parsed.path.rstrip('/')
                 parts = [p for p in normalized_path.split('/') if p]
+                # lmstudio docs 两级
                 if 'docs' in parts and len(parts) >= 2:
                     return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                # python.langchain.com API Reference 统一到 /api_reference
+                if parsed.netloc.endswith('python.langchain.com') and 'api_reference' in parts:
+                    return f"{parsed.scheme}://{parsed.netloc}/api_reference"
                 if len(parts) >= 2:
                     return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
                 return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
@@ -484,7 +494,7 @@ async def query_collection_stream(
     """
     async def stream_response() -> AsyncGenerator[str, None]:
         try:
-            FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+            FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
             
             # 验证collection_id是否存在
             # 兼容字符串型分组ID（collection_xxx）与数值ID
@@ -506,8 +516,12 @@ async def query_collection_stream(
                 def determine_parent_url(url: str) -> str:
                     parsed = urlparse(url)
                     parts = [p for p in parsed.path.split('/') if p]
+                    # lmstudio 文档两级
                     if 'docs' in parts and len(parts) >= 2:
                         return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
+                    # 统一 python.langchain.com API Reference 到根 /api_reference
+                    if parsed.netloc.endswith('python.langchain.com') and 'api_reference' in parts:
+                        return f"{parsed.scheme}://{parsed.netloc}/api_reference"
                     if len(parts) > 2:
                         return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
                     return url

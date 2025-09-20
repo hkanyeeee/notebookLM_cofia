@@ -147,8 +147,8 @@ async def process_sub_docs_concurrent(
                 # 创建一个虚拟的BackgroundTasks实例用于递归调用
                 dummy_background_tasks = BackgroundTasks()
                 
-                # 调用本模块的agenttic_ingest函数进行递归处理，参数顺序要正确
-                result = await agenttic_ingest(dummy_background_tasks, sub_request_data, db)
+                # 调用本模块的auto_ingest函数进行递归处理，参数顺序要正确
+                result = await auto_ingest(dummy_background_tasks, sub_request_data, db)
                 
                 print(f"子文档摄取成功: {sub_url}")
                 return {
@@ -234,7 +234,7 @@ async def process_sub_docs_concurrent_with_tracking(
                     dummy_background_tasks = BackgroundTasks()
                     
                     # 🔥 修复：使用独立的数据库会话进行递归调用
-                    result = await agenttic_ingest(dummy_background_tasks, sub_request_data, sub_db)
+                    result = await auto_ingest(dummy_background_tasks, sub_request_data, sub_db)
                     
                     print(f"子文档摄取成功: {sub_url}")
                     
@@ -355,7 +355,7 @@ async def process_webhook_response(
     print(f"总块数: {data.total_chunks}")
     
     # 检查任务名称
-    if data.task_name != "agenttic_ingest":
+    if data.task_name != "auto_ingest":
         return {
             "message": f"不支持的任务类型: {data.task_name}",
             "task_name": data.task_name,
@@ -433,7 +433,7 @@ async def process_webhook_response(
             if data.document_name:
                 try:
                     from sqlalchemy.future import select
-                    FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+                    FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
                     stmt = select(Source).where(
                         Source.title == data.document_name,
                         Source.session_id == FIXED_SESSION_ID
@@ -562,8 +562,8 @@ async def generate_document_names(url: str, model: str = None) -> dict:
         }
 
 
-@router.post("/agenttic-ingest", summary="智能文档摄取接口（统一处理客户端请求和webhook回调）")
-async def agenttic_ingest(
+@router.post("/auto-ingest", summary="智能文档摄取接口（统一处理客户端请求和webhook回调）")
+async def auto_ingest(
     background_tasks: BackgroundTasks,
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db)
@@ -652,7 +652,7 @@ async def agenttic_ingest(
         print(f"总共生成了 {total_chunks} 个文本块")
 
         # 4. 创建或获取Source对象 (支持UPSERT操作)
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 首先检查是否已存在相同URL的Source记录（全局唯一约束，不考虑session_id）
         existing_source_stmt = select(Source).where(Source.url == url)
@@ -855,7 +855,7 @@ async def agenttic_ingest(
             "collection_name": collection_name,
             "url": url,
             "total_chunks": total_chunks,
-            "task_name": "agenttic_ingest",
+            "task_name": "auto_ingest",
             "prompt": 
             f"你正在阅读一个网页的部分html，这个网页的url是{url}，内容是某个开源框架文档。现在我需要你识别这个文档下面的的子文档。比如：https://lmstudio.ai/docs/python/getting-started/project-setup是https://lmstudio.ai/docs/python的子文档。子文档的URL有可能在HTML中以a标签的href，button的跳转link等等形式存在，你需要调用你的编程知识进行识别，使用{url}进行拼接。最终将识别出来的子文档URL以数组的形式放在sub_docs属性联合chunk_id、index返回，注意：如果没有发现任何子文档，那么返回空数组",
             "data_list": [
@@ -951,7 +951,7 @@ async def get_auto_ingest_documents(
     返回所有使用固定session_id存储的文档
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 查询数据库中的source记录
         stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
@@ -987,10 +987,10 @@ async def workflow_response(
 ):
     """
     工作流响应处理接口 - 兼容性端点
-    此端点将请求重定向到统一的 agenttic_ingest 接口进行处理
+    此端点将请求重定向到统一的 auto_ingest 接口进行处理
     """
     print("收到workflow_response请求，重定向到统一处理接口")
-    return await agenttic_ingest(background_tasks, data, db)
+    return await auto_ingest(background_tasks, data, db)
 
 
 # ========== 任务监控API端点 ==========

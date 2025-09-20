@@ -68,7 +68,7 @@ export interface AutoIngestResponse {
  * 执行 Auto Ingest
  */
 export async function autoIngest(params: AutoIngestRequest): Promise<AutoIngestResponse> {
-  const response = await apiRequest('/api/agenttic-ingest', {
+  const response = await apiRequest('/api/auto-ingest', {
     method: 'POST',
     body: JSON.stringify(params)
   })

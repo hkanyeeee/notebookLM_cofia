@@ -28,7 +28,7 @@ notebookLM_cofia/
 ├── app/                    # Main application code
 │   ├── api/                # API routes
 │   │   ├── ingest.py       # Document ingestion endpoints
-│   │   ├── agenttic_ingest.py  # Agent-based ingestion
+│   │   ├── auto_ingest.py  # Agent-based ingestion
 │   │   ├── collections.py  # Vector collection management
 │   │   ├── search.py       # Search endpoints
 │   │   ├── documents.py    # Document management

@@ -31,7 +31,7 @@ The codebase is organized into the following main components:
 
 ### API Routes
 - `app/api/ingest.py`: Document ingestion endpoints
-- `app/api/agenttic_ingest.py`: Agenttic-specific ingestion
+- `app/api/auto_ingest.py`: Auto-specific ingestion
 - `app/api/collections.py`: Collection management
 - `app/api/search.py`: Search functionality
 - `app/api/documents.py`: Document operations

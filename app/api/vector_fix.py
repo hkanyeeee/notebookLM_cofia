@@ -105,7 +105,7 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
     优先使用请求头中的 session_id，若无结果则回退到固定的 Auto Ingest 会话ID。
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
 
         used_session_id = session_id
         groups = await _group_sources_by_parent(db, used_session_id)
@@ -176,7 +176,7 @@ async def fix_collection_vectors(
 ) -> bool:
     """修复按父集合（collection_id为父source.id）内所有子文档的向量数据。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
 
         # 确定实际使用的 session_id（优先使用请求头，没有则回退到固定ID；若本会话找不到父文档，也回退）
         used_session_id = session_id or FIXED_SESSION_ID
@@ -445,7 +445,7 @@ async def verify_collection(
 ):
     """按父集合聚合验证：collection_id 是父source.id，聚合其所有子文档。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
 
         # 选择使用的 session_id（优先请求头，无则回退固定；若在请求会话找不到，再回退固定）
         used_session_id = session_id or FIXED_SESSION_ID

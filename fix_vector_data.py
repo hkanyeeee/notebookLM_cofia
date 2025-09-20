@@ -293,12 +293,12 @@ class VectorDataFixer:
 
 async def main():
     parser = argparse.ArgumentParser(description="向量数据库数据修复工具")
-    # 默认使用与 agenttic_ingest 一致的固定 Session ID，用户无需理解/传递
+    # 默认使用与 auto_ingest 一致的固定 Session ID，用户无需理解/传递
     parser.add_argument(
         "--session-id",
         required=False,
-        default="fixed_session_id_for_agenttic_ingest",
-        help="Session ID（可选，默认与 agenttic_ingest 一致）",
+        default="fixed_session_id_for_auto_ingest",
+        help="Session ID（可选，默认与 auto_ingest 一致）",
     )
     parser.add_argument("--collection-id", type=int, help="指定修复的集合ID")
     parser.add_argument("--all", action="store_true", help="修复所有需要修复的集合")
