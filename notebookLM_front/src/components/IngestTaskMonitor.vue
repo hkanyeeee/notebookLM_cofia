@@ -138,6 +138,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { 
   listIngestTasks, 
   deleteIngestTask, 
@@ -145,11 +146,15 @@ import {
   type IngestTaskStatus,
   TaskStatus 
 } from '../api/ingest'
+import { useCollectionStore } from '../stores/useCollectionStore'
 
 // 响应式数据
 const tasks = ref<IngestTaskStatus[]>([])
 const expandedTasks = ref<Set<string>>(new Set())
 const eventSources = ref<Map<string, EventSource>>(new Map())
+// 防抖：记录已触发过刷新集合的任务，避免重复刷新
+const refreshedTasks = ref<Set<string>>(new Set())
+const collectionStore = useCollectionStore()
 
 // 轮询定时器
 let pollTimer: number | null = null
@@ -228,7 +233,7 @@ function startTaskMonitoring(taskId: string) {
 }
 
 // 更新任务状态
-function updateTaskStatus(updatedTask: IngestTaskStatus) {
+async function updateTaskStatus(updatedTask: IngestTaskStatus) {
   const index = tasks.value.findIndex(task => task.task_id === updatedTask.task_id)
   if (index !== -1) {
     tasks.value[index] = updatedTask
@@ -241,6 +246,17 @@ function updateTaskStatus(updatedTask: IngestTaskStatus) {
       if (eventSource) {
         eventSource.close()
         eventSources.value.delete(updatedTask.task_id)
+      }
+
+      // 首次完成时，自动刷新 Collection 列表
+      if (!refreshedTasks.value.has(updatedTask.task_id)) {
+        try {
+          await collectionStore.loadCollections()
+          refreshedTasks.value.add(updatedTask.task_id)
+          ElMessage.success('已自动刷新Collection列表')
+        } catch (e) {
+          console.error('自动刷新Collection列表失败:', e)
+        }
       }
     }
   }

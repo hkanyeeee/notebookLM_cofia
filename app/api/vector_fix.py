@@ -69,7 +69,9 @@ def determine_parent_url(url: str) -> str:
     - 其它站点：保留前两级路径作为父级（若有）
     """
     parsed = urlparse(url)
-    path_parts = [p for p in parsed.path.split('/') if p]
+    # 统一去掉结尾斜杠，确保 /a/b/ 与 /a/b 归为同一父级
+    normalized_path = parsed.path.rstrip('/')
+    path_parts = [p for p in normalized_path.split('/') if p]
 
     if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
         if len(path_parts) >= 2 and path_parts[0] == 'docs' and path_parts[1] == 'python':
@@ -77,11 +79,12 @@ def determine_parent_url(url: str) -> str:
         elif len(path_parts) >= 2 and path_parts[0] == 'docs':
             return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
 
-    if len(path_parts) > 2:
+    if len(path_parts) >= 2:
         parent_path = '/' + '/'.join(path_parts[:2])
-        return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
+    else:
+        parent_path = normalized_path or ''
 
-    return url
+    return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
 
 
 async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[str, List[Source]]:

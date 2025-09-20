@@ -37,7 +37,8 @@ def determine_parent_url(url: str) -> str:
         str: 父级URL
     """
     parsed = urlparse(url)
-    path_parts = [p for p in parsed.path.split('/') if p]
+    normalized_path = parsed.path.rstrip('/')
+    path_parts = [p for p in normalized_path.split('/') if p]
     
     # 特殊处理已知的文档站点结构
     if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
@@ -49,13 +50,13 @@ def determine_parent_url(url: str) -> str:
             return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
     
     # 通用逻辑：多级路径归属到其父级（至少保留2级路径）
-    if len(path_parts) > 2:
+    if len(path_parts) >= 2:
         # 保留前两级路径作为父级
         parent_path = '/' + '/'.join(path_parts[:2])
         return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
-    
-    # 默认返回原URL（根级文档）
-    return url
+
+    # 默认返回规范化后的根级URL
+    return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
 
 
 class AgenticCollection(BaseModel):
@@ -414,12 +415,13 @@ async def delete_collection(
             from urllib.parse import urlparse
             def determine_parent_url(url: str) -> str:
                 parsed = urlparse(url)
-                parts = [p for p in parsed.path.split('/') if p]
+                normalized_path = parsed.path.rstrip('/')
+                parts = [p for p in normalized_path.split('/') if p]
                 if 'docs' in parts and len(parts) >= 2:
                     return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                if len(parts) > 2:
+                if len(parts) >= 2:
                     return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                return url
+                return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
 
             import hashlib
             for s in all_sources:
