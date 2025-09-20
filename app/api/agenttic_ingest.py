@@ -19,6 +19,7 @@ from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..utils.link_extractor import extract_links_from_html
 from ..utils.task_status import ingest_task_manager, TaskStatus
+from app.config import LLM_SERVICE_URL, DEFAULT_INGEST_MODEL, SUBDOC_MAX_CONCURRENCY
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, SUBDOC_USE_WEBHOOK_FALLBACK
@@ -121,7 +122,7 @@ async def process_sub_docs_concurrent(
         return results
     
     # 使用信号量控制并发数量 - 子文档处理使用更高的并发数
-    MAX_CONCURRENT_SUB_DOCS = min(16, len(sub_docs_urls))  # 最多16个并发，但不超过子文档总数
+    MAX_CONCURRENT_SUB_DOCS = min(SUBDOC_MAX_CONCURRENCY, len(sub_docs_urls))  # 使用配置的并发数，但不超过子文档总数
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
     
     # 并发处理所有子文档URL
@@ -200,7 +201,7 @@ async def process_sub_docs_concurrent_with_tracking(
         return results
     
     # 使用信号量控制并发数量 - 子文档处理使用更高的并发数
-    MAX_CONCURRENT_SUB_DOCS = min(16, len(sub_docs_urls))  # 最多16个并发，但不超过子文档总数
+    MAX_CONCURRENT_SUB_DOCS = min(SUBDOC_MAX_CONCURRENCY, len(sub_docs_urls))  # 使用配置的并发数，但不超过子文档总数
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SUB_DOCS)
     
     # 并发处理所有子文档URL
@@ -521,7 +522,7 @@ URL: {url}
     
     try:
         # 使用LLM服务的底层API直接调用，绕过generate_answer函数
-        url = f"{LLM_SERVICE_URL}/chat/completions"
+        service_url = f"{LLM_SERVICE_URL}/chat/completions"
         
         payload = {
             "model": "qwen3-30b-a3b-instruct-2507",
@@ -532,7 +533,7 @@ URL: {url}
         }
 
         async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(service_url, json=payload)
             response.raise_for_status()
             data = response.json()
             # 获取模型返回的内容
@@ -1007,7 +1008,7 @@ async def stream_ingest_progress(task_id: str):
         yield f"data: {json.dumps(status.to_dict())}\n\n"
         
         # 如果任务完成或失败，结束流
-        if status.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+        if status.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.PARTIALLY_COMPLETED]:
             break
             
         await asyncio.sleep(2)  # 每2秒更新一次

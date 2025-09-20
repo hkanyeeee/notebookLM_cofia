@@ -114,6 +114,7 @@ N8N_PASSWORD = get_config_value("N8N_PASSWORD")
 
 # 子文档提取/递归相关配置
 SUBDOC_USE_WEBHOOK_FALLBACK = get_config_value("SUBDOC_USE_WEBHOOK_FALLBACK", "true").lower() == "true"
+SUBDOC_MAX_CONCURRENCY = int(get_config_value("SUBDOC_MAX_CONCURRENCY", "16"))  # 子文档并发处理数量
 
 print("--- Application Configuration ---")
 print(f"DATABASE_URL: {DATABASE_URL}")

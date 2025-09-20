@@ -9,7 +9,7 @@ from sqlalchemy import distinct
 import json
 from urllib.parse import urlparse
 
-from app.config import EMBEDDING_BATCH_SIZE
+from app.config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
 
 from ..models import Source, Chunk
 from ..database import get_db
@@ -210,7 +210,7 @@ async def query_collection(
                 texts=[request.query],
                 model=DEFAULT_EMBEDDING_MODEL,
                 batch_size=EMBEDDING_BATCH_SIZE,
-                dimensions=1024
+                dimensions=EMBEDDING_DIMENSIONS
             )
             
             if not query_embeddings or len(query_embeddings) == 0:
@@ -269,6 +269,9 @@ async def query_collection(
             print(f"向量搜索失败: {search_error}")
             
             # 如果向量搜索失败，回退到文本搜索
+            # 重建source_map以防异常发生在构建之前
+            source_map = {s.id: s for s in collection_sources}
+            
             text_results = []
             text_contexts = []  # 收集文本搜索的上下文
             query_lower = request.query.lower()
@@ -431,6 +434,8 @@ async def delete_collection(
 
         # 删除相关chunks与sources
         deleted_chunks = 0
+        source_ids_for_vector_cleanup = []
+        
         for src in sources_to_delete:
             chunks_stmt = select(Chunk).where(
                 Chunk.source_id == src.id,
@@ -441,7 +446,13 @@ async def delete_collection(
             for chunk in chunks:
                 await db.delete(chunk)
             deleted_chunks += len(chunks)
+            source_ids_for_vector_cleanup.append(src.id)
             await db.delete(src)
+        
+        # 在提交数据库事务之前，先删除向量库中的对应数据
+        if source_ids_for_vector_cleanup:
+            from ..vector_db_client import delete_vector_db_data
+            await delete_vector_db_data(source_ids_for_vector_cleanup)
         
         # 提交事务
         await db.commit()
@@ -543,7 +554,7 @@ async def query_collection_stream(
                     texts=[request.query],
                     model=DEFAULT_EMBEDDING_MODEL,
                     batch_size=EMBEDDING_BATCH_SIZE,
-                    dimensions=1024
+                    dimensions=EMBEDDING_DIMENSIONS
                 )
                 
                 if query_embeddings and len(query_embeddings) > 0:
@@ -646,10 +657,9 @@ async def query_collection_stream(
     
     return StreamingResponse(
         stream_response(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "text/event-stream"
+            "Connection": "keep-alive"
         }
     )
