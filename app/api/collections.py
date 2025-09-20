@@ -61,12 +61,12 @@ async def get_collections_list(
     返回简化的collection信息，供前端选择使用
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
-        
-        # 查询所有auto_ingest处理的文档
-        stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
-        result = await db.execute(stmt)
-        sources = result.scalars().all()
+        # 兼容历史与当前固定会话ID，合并 sources
+        sources: List[Source] = []
+        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+            stmt = select(Source).where(Source.session_id == sid)
+            result = await db.execute(stmt)
+            sources.extend(result.scalars().all())
         
         # 按collection进行分组：子文档归属到父文档的collection
         collection_groups = {}
@@ -122,12 +122,12 @@ async def query_collection(
     在指定的collection中进行向量搜索查询
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
-        
-        # 验证collection_id并获取该collection下的所有sources
-        all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
-        all_sources_result = await db.execute(all_sources_stmt)
-        all_sources = all_sources_result.scalars().all()
+        # 兼容多个固定会话ID，汇总 collection 的所有 sources
+        all_sources: List[Source] = []
+        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+            all_sources_stmt = select(Source).where(Source.session_id == sid)
+            all_sources_result = await db.execute(all_sources_stmt)
+            all_sources.extend(all_sources_result.scalars().all())
         
         # 找到属于指定collection的所有sources（兼容数值ID）
         collection_sources = []
@@ -291,12 +291,12 @@ async def get_collection_detail(
     获取指定collection的详细信息，包括chunks数量等统计信息
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
-        
-        # 获取该collection下的所有sources
-        all_sources_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
-        all_sources_result = await db.execute(all_sources_stmt)
-        all_sources = all_sources_result.scalars().all()
+        # 获取该collection下的所有sources（合并多会话）
+        all_sources: List[Source] = []
+        for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+            all_sources_stmt = select(Source).where(Source.session_id == sid)
+            all_sources_result = await db.execute(all_sources_stmt)
+            all_sources.extend(all_sources_result.scalars().all())
         
         # 找到属于指定collection的所有sources
         collection_sources = []
@@ -375,9 +375,12 @@ async def delete_collection(
             sources_to_delete = [source]
         else:
             # 分组删除：找到所有属于该collection_id的sources
-            all_stmt = select(Source).where(Source.session_id == FIXED_SESSION_ID)
-            all_result = await db.execute(all_stmt)
-            all_sources = all_result.scalars().all()
+            # 合并多会话下的 sources
+            all_sources: List[Source] = []
+            for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
+                all_stmt = select(Source).where(Source.session_id == sid)
+                all_result = await db.execute(all_stmt)
+                all_sources.extend(all_result.scalars().all())
 
             # 使用统一工具函数
             from ..utils.url_grouping import determine_parent_url

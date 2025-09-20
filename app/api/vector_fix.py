@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 from ..utils.url_grouping import determine_parent_url
+from ..utils.session_ids import get_known_auto_ingest_session_ids
 
 from ..database import get_db
 from ..models import Source, Chunk
@@ -79,18 +80,24 @@ async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[st
     return groups
 
 
+async def _group_sources_by_parent_multi(db: AsyncSession, session_ids: List[str]) -> Dict[str, List[Source]]:
+    """按父URL对多个 session_id 的 Source 进行分组并合并。"""
+    merged: Dict[str, List[Source]] = {}
+    for sid in session_ids:
+        stmt = select(Source).where(Source.session_id == sid)
+        result = await db.execute(stmt)
+        for src in result.scalars().all():
+            parent_url = determine_parent_url(src.url)
+            merged.setdefault(parent_url, []).append(src)
+    return merged
+
+
 async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
     """获取聚合后的集合信息（按父URL聚合）。使用统一会话ID与分组规则。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
-
-        used_session_id = session_id
-        groups = await _group_sources_by_parent(db, used_session_id)
-
-        # 如果当前 session 下没有任何集合，回退到固定的摄取会话ID
-        if not groups and used_session_id != FIXED_SESSION_ID:
-            used_session_id = FIXED_SESSION_ID
-            groups = await _group_sources_by_parent(db, used_session_id)
+        # 合并请求会话ID与已知的 Auto-Ingest 固定会话ID，按父URL聚合
+        session_ids = get_known_auto_ingest_session_ids(session_id)
+        groups = await _group_sources_by_parent_multi(db, session_ids)
 
         collections: List[Dict[str, Any]] = []
         for parent_url, sources in groups.items():
@@ -153,31 +160,20 @@ async def fix_collection_vectors(
 ) -> bool:
     """修复按父集合（collection_id为父source.id）内所有子文档的向量数据。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
+        # 合并会话ID，兼容历史与当前
+        session_ids = get_known_auto_ingest_session_ids(session_id)
 
-        # 确定实际使用的 session_id（优先使用请求头，没有则回退到固定ID；若本会话找不到父文档，也回退）
-        used_session_id = session_id or FIXED_SESSION_ID
-
-        # 获取父source，推断parent_url
-        src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
+        # 获取父source（不限定 session_id，避免不同固定ID下找不到）
+        src_stmt = select(Source).where(Source.id == collection_id)
         src_result = await db.execute(src_stmt)
         parent_source = src_result.scalar_one_or_none()
-        if not parent_source and used_session_id != FIXED_SESSION_ID:
-            used_session_id = FIXED_SESSION_ID
-            src_stmt = select(Source).where(Source.id == collection_id, Source.session_id == used_session_id)
-            src_result = await db.execute(src_stmt)
-            parent_source = src_result.scalar_one_or_none()
         if not parent_source:
             return False
 
         parent_url = determine_parent_url(parent_source.url)
 
-        # 找到同一父集合内的所有sources
-        groups = await _group_sources_by_parent(db, used_session_id)
-        if parent_url not in groups and used_session_id != FIXED_SESSION_ID:
-            # 回退到固定会话分组
-            used_session_id = FIXED_SESSION_ID
-            groups = await _group_sources_by_parent(db, used_session_id)
+        # 找到同一父集合内的所有sources（跨会话合并）
+        groups = await _group_sources_by_parent_multi(db, session_ids)
         sources_in_group = groups.get(parent_url, [parent_source])
 
         if task_id:
@@ -185,7 +181,8 @@ async def fix_collection_vectors(
 
         # 统计总chunks
         source_ids = [s.id for s in sources_in_group]
-        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids), Chunk.session_id == used_session_id)
+        # 统计 chunks 仅按 source_id 限制，允许跨会话聚合
+        chunks_stmt = select(Chunk).where(Chunk.source_id.in_(source_ids))
         chunks_result = await db.execute(chunks_stmt)
         all_chunks = chunks_result.scalars().all()
 
