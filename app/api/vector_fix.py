@@ -6,6 +6,7 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
+from ..utils.url_grouping import determine_parent_url
 
 from ..database import get_db
 from ..models import Source, Chunk
@@ -62,29 +63,7 @@ class VectorFixStatus:
 fix_status = VectorFixStatus()
 
 
-def determine_parent_url(url: str) -> str:
-    """
-    按文档站点的父路径归属集合：
-    - https://lmstudio.ai/docs/python/* -> https://lmstudio.ai/docs/python
-    - 其它站点：保留前两级路径作为父级（若有）
-    """
-    parsed = urlparse(url)
-    # 统一去掉结尾斜杠，确保 /a/b/ 与 /a/b 归为同一父级
-    normalized_path = parsed.path.rstrip('/')
-    path_parts = [p for p in normalized_path.split('/') if p]
-
-    if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
-        if len(path_parts) >= 2 and path_parts[0] == 'docs' and path_parts[1] == 'python':
-            return f"{parsed.scheme}://{parsed.netloc}/docs/python"
-        elif len(path_parts) >= 2 and path_parts[0] == 'docs':
-            return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
-
-    if len(path_parts) >= 2:
-        parent_path = '/' + '/'.join(path_parts[:2])
-    else:
-        parent_path = normalized_path or ''
-
-    return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
+# 使用统一的 determine_parent_url
 
 
 async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[str, List[Source]]:
@@ -101,11 +80,9 @@ async def _group_sources_by_parent(db: AsyncSession, session_id: str) -> Dict[st
 
 
 async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
-    """获取聚合后的集合信息（按父URL聚合）。
-    优先使用请求头中的 session_id，若无结果则回退到固定的 Auto Ingest 会话ID。
-    """
+    """获取聚合后的集合信息（按父URL聚合）。使用统一会话ID与分组规则。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
         used_session_id = session_id
         groups = await _group_sources_by_parent(db, used_session_id)
@@ -176,7 +153,7 @@ async def fix_collection_vectors(
 ) -> bool:
     """修复按父集合（collection_id为父source.id）内所有子文档的向量数据。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
         # 确定实际使用的 session_id（优先使用请求头，没有则回退到固定ID；若本会话找不到父文档，也回退）
         used_session_id = session_id or FIXED_SESSION_ID
@@ -445,7 +422,7 @@ async def verify_collection(
 ):
     """按父集合聚合验证：collection_id 是父source.id，聚合其所有子文档。"""
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
+        FIXED_SESSION_ID = "fixed_session_id_for_agenttic_ingest"
 
         # 选择使用的 session_id（优先请求头，无则回退固定；若在请求会话找不到，再回退固定）
         used_session_id = session_id or FIXED_SESSION_ID

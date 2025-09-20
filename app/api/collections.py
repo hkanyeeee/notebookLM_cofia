@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 from sqlalchemy import distinct
 import json
 from urllib.parse import urlparse
+from ..utils.url_grouping import determine_parent_url
 
 from app.config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
 
@@ -22,47 +23,7 @@ DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 router = APIRouter()
 
 
-def determine_parent_url(url: str) -> str:
-    """
-    确定URL的父级collection归属
-    
-    对于文档网站的子页面，归属到其父级路径：
-    - https://lmstudio.ai/docs/python/* -> https://lmstudio.ai/docs/python
-    - https://example.com/docs/guide/* -> https://example.com/docs/guide
-    
-    Args:
-        url: 要分析的URL
-        
-    Returns:
-        str: 父级URL
-    """
-    parsed = urlparse(url)
-    normalized_path = parsed.path.rstrip('/')
-    path_parts = [p for p in normalized_path.split('/') if p]
-    
-    # 特殊处理已知的文档站点结构
-    if 'lmstudio.ai' in parsed.netloc and 'docs' in path_parts:
-        # 对于 lmstudio.ai/docs/python/* -> lmstudio.ai/docs/python
-        if len(path_parts) >= 2 and path_parts[0] == 'docs' and path_parts[1] == 'python':
-            return f"{parsed.scheme}://{parsed.netloc}/docs/python"
-        # 对于其他docs子页面，归属到各自的子section
-        elif len(path_parts) >= 2 and path_parts[0] == 'docs':
-            return f"{parsed.scheme}://{parsed.netloc}/docs/{path_parts[1]}"
-    
-    # 新增：将 python.langchain.com 的 API Reference 全部归入 /api_reference
-    # 期望：以 https://python.langchain.com/api_reference/ 作为单一入口，
-    # 其下所有子文档都归为一个 collection
-    if 'python.langchain.com' in parsed.netloc and 'api_reference' in path_parts:
-        return f"{parsed.scheme}://{parsed.netloc}/api_reference"
-    
-    # 通用逻辑：多级路径归属到其父级（至少保留2级路径）
-    if len(path_parts) >= 2:
-        # 保留前两级路径作为父级
-        parent_path = '/' + '/'.join(path_parts[:2])
-        return f"{parsed.scheme}://{parsed.netloc}{parent_path}"
-
-    # 默认返回规范化后的根级URL
-    return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
+# 统一从 utils.url_grouping 导入 determine_parent_url
 
 
 class AutoCollection(BaseModel):
@@ -418,20 +379,8 @@ async def delete_collection(
             all_result = await db.execute(all_stmt)
             all_sources = all_result.scalars().all()
 
-            from urllib.parse import urlparse
-            def determine_parent_url(url: str) -> str:
-                parsed = urlparse(url)
-                normalized_path = parsed.path.rstrip('/')
-                parts = [p for p in normalized_path.split('/') if p]
-                # lmstudio docs 两级
-                if 'docs' in parts and len(parts) >= 2:
-                    return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                # python.langchain.com API Reference 统一到 /api_reference
-                if parsed.netloc.endswith('python.langchain.com') and 'api_reference' in parts:
-                    return f"{parsed.scheme}://{parsed.netloc}/api_reference"
-                if len(parts) >= 2:
-                    return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
+            # 使用统一工具函数
+            from ..utils.url_grouping import determine_parent_url
 
             import hashlib
             for s in all_sources:
@@ -513,18 +462,7 @@ async def query_collection_stream(
                 all_result = await db.execute(all_stmt)
                 all_sources = all_result.scalars().all()
 
-                def determine_parent_url(url: str) -> str:
-                    parsed = urlparse(url)
-                    parts = [p for p in parsed.path.split('/') if p]
-                    # lmstudio 文档两级
-                    if 'docs' in parts and len(parts) >= 2:
-                        return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                    # 统一 python.langchain.com API Reference 到根 /api_reference
-                    if parsed.netloc.endswith('python.langchain.com') and 'api_reference' in parts:
-                        return f"{parsed.scheme}://{parsed.netloc}/api_reference"
-                    if len(parts) > 2:
-                        return f"{parsed.scheme}://{parsed.netloc}/{'/'.join(parts[:2])}"
-                    return url
+                from ..utils.url_grouping import determine_parent_url
 
                 sources = []
                 for s in all_sources:
