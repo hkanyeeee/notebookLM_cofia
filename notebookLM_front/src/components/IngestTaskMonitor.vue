@@ -152,7 +152,7 @@ const expandedTasks = ref<Set<string>>(new Set())
 const eventSources = ref<Map<string, EventSource>>(new Map())
 
 // 轮询定时器
-let pollTimer: NodeJS.Timeout | null = null
+let pollTimer: number | null = null
 
 // 组件挂载时开始监控
 onMounted(async () => {
@@ -250,10 +250,7 @@ function updateTaskStatus(updatedTask: IngestTaskStatus) {
 function isTaskCompleted(status: TaskStatus): boolean {
   return status === TaskStatus.COMPLETED || 
          status === TaskStatus.PARTIALLY_COMPLETED || 
-         status === TaskStatus.FAILED ||
-         status === 'completed' ||
-         status === 'partially_completed' ||
-         status === 'failed'
+         status === TaskStatus.FAILED
 }
 
 // 移除任务
