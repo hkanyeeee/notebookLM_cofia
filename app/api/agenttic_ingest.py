@@ -505,7 +505,7 @@ async def generate_document_names(url: str) -> dict:
     # 创建一个专门用于文档名称生成的提示模板，避免使用query接口中的generate_answer函数
     # 通过调用llm_client的底层API实现，而不是复用generate_answer函数
     import httpx
-    from ..config import LLM_SERVICE_URL
+    from ..config import LLM_SERVICE_URL, DEFAULT_INGEST_MODEL
     
     prompt = f"""
 请为以下URL的文档生成合适的中文名称和英文collection名称：
@@ -525,7 +525,7 @@ URL: {url}
         service_url = f"{LLM_SERVICE_URL}/chat/completions"
         
         payload = {
-            "model": "qwen3-30b-a3b-instruct-2507",
+            "model": DEFAULT_INGEST_MODEL,
             "messages": [
                 {"role": "system", "content": "你是一个文档名称生成助手，专门负责为网页内容生成合适的中文标题和英文collection名称。"},
                 {"role": "user", "content": prompt},

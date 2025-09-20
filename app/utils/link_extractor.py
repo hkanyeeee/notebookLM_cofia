@@ -22,7 +22,7 @@ def is_potential_sub_doc(candidate_url: str, base_url: str) -> bool:
 
         # 仅允许更深层路径（严格子路径）。
         # 例如 base: /docs/python 只允许 /docs/python/*，排除 /docs/python3、/docs/typescript 等兄弟文档。
-        if url_path.startswith(base_path + '/') or (url_path == base_path and len(url_path) > len(base_path)):
+        if url_path.startswith(base_path + '/'):
             return True
 
         return False

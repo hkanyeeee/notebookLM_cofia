@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import DATABASE_URL, LLM_SERVICE_URL
 from .database import init_db
 from .tools.orchestrator import initialize_orchestrator
+from .utils.task_status import ingest_task_manager
+
+
+async def cleanup_tasks_periodically():
+    """定期清理已完成的摄取任务"""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # 每小时清理一次
+            await ingest_task_manager.cleanup_completed_tasks(max_age_hours=24)
+            print("[定时清理] 已完成摄取任务清理")
+        except asyncio.CancelledError:
+            print("[定时清理] 清理任务已取消")
+            break
+        except Exception as e:
+            print(f"[定时清理] 清理任务出错：{e}")
 
 
 @asynccontextmanager
@@ -30,7 +46,24 @@ async def app_lifespan(app: FastAPI):
         print(f"Tool orchestrator initialization failed: {e}")
         # 继续运行，工具功能会自动退化为普通问答
     
+    # 启动定时清理任务
+    cleanup_task = None
+    try:
+        cleanup_task = asyncio.create_task(cleanup_tasks_periodically())
+        print("任务清理定时器启动成功")
+    except Exception as e:
+        print(f"任务清理定时器启动失败：{e}")
+    
     yield
+    
+    # 应用关闭时停止清理任务
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        print("任务清理定时器已停止")
 
 
 app = FastAPI(title="NotebookLM-Py Backend", lifespan=app_lifespan)
