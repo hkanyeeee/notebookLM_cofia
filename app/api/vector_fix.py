@@ -110,32 +110,30 @@ async def get_collections_info(session_id: str, db: AsyncSession) -> List[Dict[s
             if not main_source:
                 main_source = min(sources, key=lambda s: len(s.url))
 
-            # 聚合 chunks 数
+            # 聚合 chunks 数（跨会话汇总）
             source_ids = [s.id for s in sources]
             chunks_stmt = select(Chunk).where(
                 Chunk.source_id.in_(source_ids),
-                Chunk.session_id == used_session_id
+                Chunk.session_id.in_(session_ids)
             )
             chunks_result = await db.execute(chunks_stmt)
             chunks_count = len(chunks_result.scalars().all())
 
-            # 聚合 Qdrant 向量数
-            qdrant_count = 0
-            for sid in source_ids:
-                try:
-                    count_result = qdrant_client.count(
-                        collection_name=COLLECTION_NAME,
-                        count_filter={
-                            "must": [
-                                {"key": "source_id", "match": {"value": sid}},
-                                {"key": "session_id", "match": {"value": used_session_id}}
-                            ]
-                        }
-                    )
-                    qdrant_count += count_result.count
-                except Exception as e:
-                    print(f"获取Qdrant计数失败: {e}")
-                    qdrant_count += 0
+            # 聚合 Qdrant 向量数（跨会话与多 source 合并）
+            try:
+                count_result = qdrant_client.count(
+                    collection_name=COLLECTION_NAME,
+                    count_filter={
+                        "must": [
+                            {"key": "source_id", "match": {"any": source_ids}},
+                            {"key": "session_id", "match": {"any": session_ids}},
+                        ]
+                    }
+                )
+                qdrant_count = count_result.count
+            except Exception as e:
+                print(f"获取Qdrant计数失败: {e}")
+                qdrant_count = 0
 
             collections.append({
                 'id': main_source.id,
