@@ -322,7 +322,7 @@ function isReasoningExpanded(messageId: string) {
       </div>
       
       <!-- 输入框和发送按钮 -->
-      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter="handleSendQuery">
+      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入您的问题..."

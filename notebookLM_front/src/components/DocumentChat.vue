@@ -305,7 +305,7 @@ function isQueryDisabled() {
 
     <!-- 输入区域 -->
     <div class="p-4 border-t chat-input-container">
-      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter="handleSendQuery">
+      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
         <ElInput
           v-model="queryInput"
           placeholder="请输入关于文档的问题..."

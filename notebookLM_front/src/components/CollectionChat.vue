@@ -432,7 +432,7 @@ async function handleDeleteCollection(collectionId: string) {
         </el-button>
       </div>
       
-      <div class="flex gap-3 max-w-3xl mx-auto" @keydown.shift.enter="handleSendQuery">
+      <div class="flex gap-3 max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
         <el-input
           v-model="queryInput"
           :placeholder="getInputPlaceholder()"
