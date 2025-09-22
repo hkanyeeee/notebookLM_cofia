@@ -16,6 +16,19 @@ const themeStore = useThemeStore()
 // 检查是否为移动端
 const isMobile = ref(window.innerWidth <= 768)
 
+// 折叠的响应式阈值（小屏默认折叠）
+const COLLAPSE_BREAKPOINT = 1024
+const isSmallScreen = ref(window.innerWidth <= COLLAPSE_BREAKPOINT)
+
+// 仅在跨越阈值时，才根据屏幕大小自动切换折叠状态，避免覆盖用户手动操作
+const syncCollapseWithScreen = () => {
+  const newIsSmall = window.innerWidth <= COLLAPSE_BREAKPOINT
+  if (newIsSmall !== isSmallScreen.value) {
+    sidebarCollapsed.value = newIsSmall
+    isSmallScreen.value = newIsSmall
+  }
+}
+
 // 拖拽相关状态
 const isDragging = ref(false)
 const buttonPosition = ref({ 
@@ -31,6 +44,8 @@ const handleResize = () => {
   if (!isMobile.value) {
     mobileMenuOpen.value = false
   }
+  // 根据屏幕大小变化自动同步折叠状态（仅在跨越阈值时生效）
+  syncCollapseWithScreen()
 }
 
 // 切换移动端侧边栏
@@ -135,6 +150,10 @@ onMounted(() => {
   
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('resize', handleResize)
+
+  // 初始根据屏幕大小设置折叠状态
+  sidebarCollapsed.value = window.innerWidth <= COLLAPSE_BREAKPOINT
+  isSmallScreen.value = sidebarCollapsed.value
 })
 
 onBeforeUnmount(() => {
