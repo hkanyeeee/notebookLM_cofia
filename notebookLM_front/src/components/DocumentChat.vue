@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
-import { Promotion } from '@element-plus/icons-vue'
+import { Promotion, MagicStick, Reading, Search } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message, Document, IngestionProgress } from '../stores/notebook'
 
@@ -217,15 +217,24 @@ function isQueryDisabled() {
 
         <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 rounded-lg border feature-card">
-            <strong class="block mb-2 text-sm" style="color: var(--color-text)">💡 智能问答</strong>
+            <div class="flex items-center gap-2 mb-2">
+              <ElIcon class="text-indigo-600"><MagicStick /></ElIcon>
+              <strong class="text-sm" style="color: var(--color-text)">智能问答</strong>
+            </div>
             <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">基于您添加的文档内容回答问题</p>
           </div>
           <div class="text-left p-5 rounded-lg border feature-card">
-            <strong class="block mb-2 text-sm" style="color: var(--color-text)">📚 文档总结</strong>
+            <div class="flex items-center gap-2 mb-2">
+              <ElIcon class="text-indigo-600"><Reading /></ElIcon>
+              <strong class="text-sm" style="color: var(--color-text)">文档总结</strong>
+            </div>
             <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">快速获取文档的核心要点</p>
           </div>
           <div class="text-left p-5 rounded-lg border feature-card">
-            <strong class="block mb-2 text-sm" style="color: var(--color-text)">🔍 深度分析</strong>
+            <div class="flex items-center gap-2 mb-2">
+              <ElIcon class="text-indigo-600"><Search /></ElIcon>
+              <strong class="text-sm" style="color: var(--color-text)">深度分析</strong>
+            </div>
             <p class="text-xs leading-relaxed" style="color: var(--color-text-secondary)">深入分析文档中的关键信息</p>
           </div>
         </div>

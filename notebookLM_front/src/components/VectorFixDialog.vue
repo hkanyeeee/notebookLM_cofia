@@ -125,10 +125,10 @@
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1">
-                  <div class="flex items-center gap-2 mb-2">
-                    <span class="text-lg">
-                      {{ getStatusIcon(collection.status) }}
-                    </span>
+              <div class="flex items-center gap-2 mb-2">
+                <ElIcon class="text-lg">
+                  <component :is="getStatusIconComp(collection.status)" />
+                </ElIcon>
                     <h5 class="font-medium text-gray-900">{{ collection.title }}</h5>
                     <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                       ID: {{ collection.id }}
@@ -198,7 +198,9 @@
               <div class="card-header">
                 <div class="collection-info">
                   <div class="collection-title">
-                    <span class="status-icon">{{ getStatusIcon(collection.status) }}</span>
+                    <ElIcon class="status-icon">
+                      <component :is="getStatusIconComp(collection.status)" />
+                    </ElIcon>
                     {{ collection.title }}
                   </div>
                   <div class="collection-id">ID: {{ collection.id }}</div>
@@ -264,7 +266,7 @@ import {
   ElDialog, ElButton, ElIcon, ElProgress, ElTag, ElMessage
 } from 'element-plus'
 import { 
-  Loading, Warning, Tools, Refresh
+  Loading, Warning, Tools, Refresh, SuccessFilled, CloseBold, WarningFilled, QuestionFilled
 } from '@element-plus/icons-vue'
 import { 
   getCollectionsStatus, 
@@ -442,13 +444,17 @@ const verifyCollection = async (collectionId: number) => {
   }
 }
 
-// 获取状态图标
-const getStatusIcon = (status: string) => {
+// 获取状态图标组件
+const getStatusIconComp = (status: string) => {
   switch (status) {
-    case 'complete': return '✅'
-    case 'missing': return '❌'
-    case 'partial': return '⚠️'
-    default: return '❓'
+    case 'complete':
+      return SuccessFilled
+    case 'missing':
+      return CloseBold
+    case 'partial':
+      return WarningFilled
+    default:
+      return QuestionFilled
   }
 }
 
