@@ -5,7 +5,7 @@ import json
 from typing import List, Dict, Any, Optional
 from .models import ToolExecutionContext
 import httpx
-from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, LLM_DEFAULT_TIMEOUT
+from ..config import DEFAULT_SEARCH_MODEL, LLM_SERVICE_URL, LLM_DEFAULT_TIMEOUT, NORMAL_MAX_SUB_QUERIES
 
 
 class QueryDecomposer:
@@ -28,14 +28,15 @@ class QueryDecomposer:
    - 如果有聊天历史，分析用户的意图是否与之前的对话相关
    - 识别是否是对之前回答的追问、延续或新的独立问题
    - 考虑历史中已讨论过的概念，避免重复分解已知信息
-2. 智能判断问题复杂度和子问题数量：
+2. 智能判断问题复杂度和子问题数量（必须遵守数量上限）：
    - 简单事实类问题（如天气查询、价格查询、定义问答等）：保持为单个问题，无需分解
-   - 中等复杂度问题（包含多个概念或需要推理）：分解为最少2个、最多4个核心子问题
-   - 复杂问题（涉及多个维度、需要深入分析）子问题数量无上限
+   - 中等复杂度问题（包含多个概念或需要推理）：分解为2至{max_sub_queries}个核心子问题
+   - 复杂问题（涉及多个维度、需要深入分析）：子问题总数不超过{max_sub_queries}个；若识别到更多，请合并相近或次要子问题
    - 实时信息查询（涉及当前时间、天气、价格、新闻等）：优先标记为需要外部信息
 3. 每个子问题应该是独立且完整的，避免重复或冗余
 4. 识别问题的关键信息点和可能需要外部信息验证的部分
 5. 评估每个子问题的复杂程度和重要性
+6. 若需要裁剪数量，请按重要性由高到低保留，确保覆盖面与非冗余
 
 请返回以下JSON格式:
 {{
@@ -105,7 +106,8 @@ class QueryDecomposer:
             prompt = self.decomposition_prompt.format(
                 query=query, 
                 complexity=complexity,
-                conversation_context=conversation_context
+                conversation_context=conversation_context,
+                max_sub_queries=NORMAL_MAX_SUB_QUERIES
             )
             
             # 调用LLM进行问题拆解

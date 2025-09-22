@@ -55,6 +55,9 @@ SIMPLE_QUERY_RESULT_COUNT = int(get_config_value("SIMPLE_QUERY_RESULT_COUNT", "4
 SIMPLE_QUERY_MAX_RESULTS = int(get_config_value("SIMPLE_QUERY_MAX_RESULTS", "20"))  # 简单查询的最大总结果数量，更精简
 SIMPLE_QUERY_MAX_WORDS_PER_QUERY = int(get_config_value("SIMPLE_QUERY_MAX_WORDS_PER_QUERY", "3"))  # 简单查询每个查询的最大词数，更简洁
 
+# 普通问答：子问题数量上限（用于问题拆解阶段）
+NORMAL_MAX_SUB_QUERIES = int(get_config_value("NORMAL_MAX_SUB_QUERIES", "5"))
+
 # Web 爬取相关配置  
 WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_web, playwright
 PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "10.0"))
@@ -149,4 +152,5 @@ print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
 print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
 print(f"CHUNK_SIZE: {CHUNK_SIZE}")
 print(f"RAG_TOP_K: {RAG_TOP_K}")
+print(f"NORMAL_MAX_SUB_QUERIES: {NORMAL_MAX_SUB_QUERIES}")
 print("-------------------------------")
