@@ -118,6 +118,10 @@ N8N_PASSWORD = get_config_value("N8N_PASSWORD")
 # 子文档提取/递归相关配置
 SUBDOC_USE_WEBHOOK_FALLBACK = get_config_value("SUBDOC_USE_WEBHOOK_FALLBACK", "true").lower() == "true"
 SUBDOC_MAX_CONCURRENCY = int(get_config_value("SUBDOC_MAX_CONCURRENCY", "16"))  # 子文档并发处理数量
+SUBDOC_MAX_RETRIES = int(get_config_value("SUBDOC_MAX_RETRIES", "2"))  # 子文档失败时的最大重试次数
+SUBDOC_RETRY_BACKOFF_BASE = float(get_config_value("SUBDOC_RETRY_BACKOFF_BASE", "1.0"))  # 初始退避秒数
+SUBDOC_RETRY_BACKOFF_FACTOR = float(get_config_value("SUBDOC_RETRY_BACKOFF_FACTOR", "2.0"))  # 指数退避因子
+SUBDOC_RETRY_JITTER = float(get_config_value("SUBDOC_RETRY_JITTER", "0.3"))  # 抖动上限（0~该值内随机）
 
 print("--- Application Configuration ---")
 print(f"DATABASE_URL: {DATABASE_URL}")

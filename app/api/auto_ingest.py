@@ -23,6 +23,7 @@ from ..config import DEFAULT_INGEST_MODEL, SUBDOC_MAX_CONCURRENCY
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..config import WEBHOOK_TIMEOUT, WEBHOOK_PREFIX, EMBEDDING_MAX_CONCURRENCY, EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS, SUBDOC_USE_WEBHOOK_FALLBACK
+from ..config import SUBDOC_MAX_RETRIES, SUBDOC_RETRY_BACKOFF_BASE, SUBDOC_RETRY_BACKOFF_FACTOR, SUBDOC_RETRY_JITTER
 from ..vector_db_client import add_embeddings
 
 
@@ -128,43 +129,62 @@ async def process_sub_docs_concurrent(
     # 并发处理所有子文档URL
     async def process_single_sub_doc(sub_url: str, parent_doc_name: str = None, parent_collection_name: str = None, parent_source_id: int = None) -> dict:
         async with semaphore:  # 使用信号量控制并发
-            try:
-                print(f"开始递归摄取子文档: {sub_url}")
+            attempts = int(SUBDOC_MAX_RETRIES) + 1
+            last_error: Exception = None
+            for attempt in range(1, attempts + 1):
+                try:
+                    print(f"开始递归摄取子文档: {sub_url} (尝试 {attempt}/{attempts})")
 
-                # 构造递归调用的请求数据
-                sub_request_data = {
-                    "url": sub_url,
-                    "recursive_depth": recursive_depth - 1,  # 减少递归深度
-                    "embedding_model": DEFAULT_EMBEDDING_MODEL,
-                    "embedding_dimensions": EMBEDDING_DIMENSIONS,
-                    "webhook_url": WEBHOOK_PREFIX + "/array2array",
-                    "is_recursive": True,  # 标记为递归调用
-                    "document_name": parent_doc_name,  # 传递父级文档名称
-                    "collection_name": parent_collection_name,  # 传递父级collection名称
-                    "parent_source_id": parent_source_id  # 传递父级Source ID
-                }
-                
-                # 创建一个虚拟的BackgroundTasks实例用于递归调用
-                dummy_background_tasks = BackgroundTasks()
-                
-                # 调用本模块的auto_ingest函数进行递归处理，参数顺序要正确
-                result = await auto_ingest(dummy_background_tasks, sub_request_data, db)
-                
-                print(f"子文档摄取成功: {sub_url}")
-                return {
-                    "url": sub_url,
-                    "success": True,
-                    "result": result
-                }
-                
-            except Exception as e:
-                error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
-                print(error_msg)
-                return {
-                    "url": sub_url,
-                    "success": False,
-                    "error": error_msg
-                }
+                    # 构造递归调用的请求数据
+                    sub_request_data = {
+                        "url": sub_url,
+                        "recursive_depth": recursive_depth - 1,  # 减少递归深度
+                        "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                        "embedding_dimensions": EMBEDDING_DIMENSIONS,
+                        "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                        "is_recursive": True,  # 标记为递归调用
+                        "document_name": parent_doc_name,  # 传递父级文档名称
+                        "collection_name": parent_collection_name,  # 传递父级collection名称
+                        "parent_source_id": parent_source_id  # 传递父级Source ID
+                    }
+                    
+                    # 创建一个虚拟的BackgroundTasks实例用于递归调用
+                    dummy_background_tasks = BackgroundTasks()
+                    
+                    # 为每次尝试创建独立的会话，避免事务污染
+                    from ..database import AsyncSessionLocal
+                    async with AsyncSessionLocal() as sub_db:
+                        result = await auto_ingest(dummy_background_tasks, sub_request_data, sub_db)
+                    
+                    print(f"子文档摄取成功: {sub_url}")
+                    return {
+                        "url": sub_url,
+                        "success": True,
+                        "result": result
+                    }
+                    
+                except Exception as e:
+                    last_error = e
+                    error_msg = f"子文档摄取失败 {sub_url}（第 {attempt}/{attempts} 次）: {str(e)}"
+                    print(error_msg)
+                    
+                    if attempt < attempts:
+                        # 指数退避 + 抖动
+                        delay = SUBDOC_RETRY_BACKOFF_BASE * (SUBDOC_RETRY_BACKOFF_FACTOR ** (attempt - 1))
+                        try:
+                            import random  # 局部导入以避免顶层未使用
+                            jitter = random.uniform(0, SUBDOC_RETRY_JITTER)
+                        except Exception:
+                            jitter = 0.0
+                        await asyncio.sleep(delay + jitter)
+                        continue
+                    
+                    # 最终失败
+                    return {
+                        "url": sub_url,
+                        "success": False,
+                        "error": error_msg
+                    }
     
     # 使用asyncio.gather进行并发处理，但通过信号量控制最大并发数
     try:
@@ -210,63 +230,82 @@ async def process_sub_docs_concurrent_with_tracking(
             # 更新状态为运行中
             if task_id:
                 await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.RUNNING)
-            
-            # 🔥 修复：为每个子文档创建独立的数据库会话，避免事务冲突
-            from ..database import AsyncSessionLocal
-            async with AsyncSessionLocal() as sub_db:
-                try:
-                    print(f"开始递归摄取子文档: {sub_url}")
 
-                    # 构造递归调用的请求数据
-                    sub_request_data = {
-                        "url": sub_url,
-                        "recursive_depth": recursive_depth - 1,  # 减少递归深度
-                        "embedding_model": DEFAULT_EMBEDDING_MODEL,
-                        "embedding_dimensions": EMBEDDING_DIMENSIONS,
-                        "webhook_url": WEBHOOK_PREFIX + "/array2array",
-                        "is_recursive": True,  # 标记为递归调用
-                        "document_name": parent_doc_name,  # 传递父级文档名称
-                        "collection_name": parent_collection_name,  # 传递父级collection名称
-                        "parent_source_id": parent_source_id  # 传递父级Source ID
-                    }
-                    
-                    # 创建一个虚拟的BackgroundTasks实例用于递归调用
-                    dummy_background_tasks = BackgroundTasks()
-                    
-                    # 🔥 修复：使用独立的数据库会话进行递归调用
-                    result = await auto_ingest(dummy_background_tasks, sub_request_data, sub_db)
-                    
-                    print(f"子文档摄取成功: {sub_url}")
-                    
-                    # 更新状态为完成
-                    if task_id:
-                        await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.COMPLETED)
-                    
-                    return {
-                        "url": sub_url,
-                        "success": True,
-                        "result": result
-                    }
-                    
-                except Exception as e:
-                    error_msg = f"子文档摄取失败 {sub_url}: {str(e)}"
-                    print(error_msg)
-                    
-                    # 确保出错时也回滚子文档的数据库会话
+            attempts = int(SUBDOC_MAX_RETRIES) + 1
+            last_error: Exception = None
+
+            for attempt in range(1, attempts + 1):
+                # 为每次尝试创建独立的数据库会话，避免事务冲突
+                from ..database import AsyncSessionLocal
+                async with AsyncSessionLocal() as sub_db:
                     try:
-                        await sub_db.rollback()
-                    except:
-                        pass
-                    
-                    # 更新状态为失败
-                    if task_id:
-                        await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.FAILED, error_msg)
-                    
-                    return {
-                        "url": sub_url,
-                        "success": False,
-                        "error": error_msg
-                    }
+                        print(f"开始递归摄取子文档: {sub_url} (尝试 {attempt}/{attempts})")
+
+                        # 构造递归调用的请求数据
+                        sub_request_data = {
+                            "url": sub_url,
+                            "recursive_depth": recursive_depth - 1,  # 减少递归深度
+                            "embedding_model": DEFAULT_EMBEDDING_MODEL,
+                            "embedding_dimensions": EMBEDDING_DIMENSIONS,
+                            "webhook_url": WEBHOOK_PREFIX + "/array2array",
+                            "is_recursive": True,  # 标记为递归调用
+                            "document_name": parent_doc_name,  # 传递父级文档名称
+                            "collection_name": parent_collection_name,  # 传递父级collection名称
+                            "parent_source_id": parent_source_id  # 传递父级Source ID
+                        }
+                        
+                        # 创建一个虚拟的BackgroundTasks实例用于递归调用
+                        dummy_background_tasks = BackgroundTasks()
+                        
+                        # 使用独立的数据库会话进行递归调用
+                        result = await auto_ingest(dummy_background_tasks, sub_request_data, sub_db)
+                        
+                        print(f"子文档摄取成功: {sub_url}")
+                        
+                        # 更新状态为完成
+                        if task_id:
+                            await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.COMPLETED)
+                        
+                        return {
+                            "url": sub_url,
+                            "success": True,
+                            "result": result
+                        }
+                        
+                    except Exception as e:
+                        last_error = e
+                        error_msg = f"子文档摄取失败 {sub_url}（第 {attempt}/{attempts} 次）: {str(e)}"
+                        print(error_msg)
+
+                        # 失败即时写入状态（但不累计失败计数，直到最终失败）
+                        if task_id and attempt < attempts:
+                            await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.RUNNING, error_msg)
+                        
+                        # 尝试回滚
+                        try:
+                            await sub_db.rollback()
+                        except Exception:
+                            pass
+                        
+                        if attempt < attempts:
+                            # 指数退避 + 抖动
+                            delay = SUBDOC_RETRY_BACKOFF_BASE * (SUBDOC_RETRY_BACKOFF_FACTOR ** (attempt - 1))
+                            try:
+                                import random
+                                jitter = random.uniform(0, SUBDOC_RETRY_JITTER)
+                            except Exception:
+                                jitter = 0.0
+                            await asyncio.sleep(delay + jitter)
+                            continue
+                        
+                        # 最终失败，更新状态为失败
+                        if task_id:
+                            await ingest_task_manager.update_sub_doc_status(task_id, sub_url, TaskStatus.FAILED, error_msg)
+                        return {
+                            "url": sub_url,
+                            "success": False,
+                            "error": error_msg
+                        }
     
     # 使用asyncio.gather进行并发处理，但通过信号量控制最大并发数
     try:
