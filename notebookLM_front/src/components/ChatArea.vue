@@ -172,18 +172,18 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full" style="background-color: var(--color-background)">
+  <div class="flex flex-col h-full bg-[var(--color-background)]">
     <!-- 头部 -->
-    <header class="header-container" :class="{ 'header-collapsed': headerCollapsed }">
+    <header class="px-5 py-3 border-b bg-[var(--color-surface)] border-[var(--color-border)] z-10 transition-all duration-300" :class="{ 'pb-2': headerCollapsed }">
       <!-- 第一行：标题和按钮 -->
-      <div class="header-row">
-        <div class="header-title flex items-center">
-          <ThemeToggle :show-dropdown="!isMobile" class="action-btn" />
+      <div class="flex justify-between items-center mb-3">
+        <div class="m-0 text-[var(--color-text)] text-lg font-semibold whitespace-nowrap transition-colors flex items-center">
+          <ThemeToggle :show-dropdown="!isMobile" class="px-3 py-2 min-h-8" />
           <h1>对话</h1>
         </div>
-        <div class="header-actions">
+        <div class="flex gap-2">
           <!-- 移动端折叠按钮 -->
-          <ElButton text @click="headerCollapsed = !headerCollapsed" class="action-btn collapse-btn">
+          <ElButton text @click="headerCollapsed = !headerCollapsed" class="px-3 py-2 min-h-8 collapse-btn">
             <ElIcon>
               <ArrowUp v-if="!headerCollapsed" />
               <ArrowDown v-else />
@@ -197,38 +197,38 @@ onMounted(async () => {
             <ElButton 
               text 
               @click="toggleAudio" 
-              class="action-btn" 
-              :class="{ 'audio-disabled': !audioEnabled }"
+              class="px-3 py-2 min-h-8" 
+              :class="{ 'opacity-60 hover:opacity-80': !audioEnabled }"
             >
               <ElIcon :class="{ 'pulsing': isToggling }">
                 <component :is="currentIcon" />
               </ElIcon>
-              <span class="action-text">{{ audioEnabled ? '提示音' : '提示音' }}</span>
+              <span class="action-text hidden md:inline">{{ audioEnabled ? '提示音' : '提示音' }}</span>
             </ElButton>
           </ElTooltip>
-          <ElButton text @click="handleShowWorkflows" class="action-btn" >
+          <ElButton text @click="handleShowWorkflows" class="px-3 py-2 min-h-8" >
             <ElIcon>
               <Notification />
             </ElIcon>
-            <span class="action-text">工作流状态</span>
+            <span class="action-text hidden md:inline">工作流状态</span>
           </ElButton>
-          <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0" class="action-btn">
+          <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0" class="px-3 py-2 min-h-8">
             <ElIcon>
               <Refresh />
             </ElIcon>
-            <span class="action-text">清空</span>
+            <span class="action-text hidden md:inline">清空</span>
           </ElButton>
         </div>
       </div>
       
       <!-- 第二行：选择器 -->
-      <div class="header-controls">
+      <div class="flex gap-4 mb-2 md:max-w-[800px] md:mx-auto md:mb-2 flex-col md:flex-row transition-all">
         <!-- 模型选择器容器 -->
-        <div class="model-selector-container" :class="{ 'hidden-when-collapsed': isMobile && headerCollapsed }">
+        <div class="flex-1 min-w-0" :class="{ 'hidden-when-collapsed': isMobile && headerCollapsed }">
           <ElSelect
             v-model="store.selectedModel"
             placeholder="选择模型"
-            class="model-select"
+            class="w-full"
             :loading="store.loading.loadingModels"
             clearable
             filterable
@@ -243,11 +243,11 @@ onMounted(async () => {
         </div>
 
         <!-- 问答类型选择器 -->
-        <div class="query-type-container" :class="{ 'expanded-when-collapsed': isMobile && headerCollapsed }">
+        <div class="flex-1 min-w-0" :class="{ 'expanded-when-collapsed': isMobile && headerCollapsed }">
           <ElSelect
             v-model="store.queryType"
             placeholder="选择问答类型"
-            class="query-type-select"
+            class="w-full"
           >
             <ElOption
               label="普通问答"

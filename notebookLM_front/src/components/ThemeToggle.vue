@@ -1,5 +1,5 @@
 <template>
-  <div class="theme-toggle-container">
+  <div class="flex items-center justify-center gap-1">
     
     <!-- 主题选择下拉菜单 -->
     <ElDropdown
@@ -11,15 +11,15 @@
       <ElButton
         text
         @click="toggleTheme"
-        class="theme-toggle-btn"
+        class="p-2 rounded-lg transition-all text-[var(--color-text-secondary)] min-w-10 min-h-10 hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
         :class="{ 'dark-mode': themeStore.isDarkMode }"
       >
-        <ElIcon :class="{ 'rotating': isToggling }">
+        <ElIcon :class="{ 'animate-[rotate_0.3s_ease-in-out]': isToggling }">
           <component :is="currentIcon" />
         </ElIcon>
       </ElButton>
       <template #dropdown>
-        <ElDropdownMenu class="theme-dropdown-menu">
+        <ElDropdownMenu class="min-w-[140px]">
           <ElDropdownItem command="light" :class="{ active: themeStore.theme === 'light' }">
             <ElIcon><Sunny /></ElIcon>
             <span>浅色模式</span>
@@ -99,72 +99,7 @@ const handleThemeChange = (theme: Theme) => {
 </script>
 
 <style scoped>
-.theme-toggle-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.theme-toggle-btn,
-.theme-dropdown-btn {
-  padding: 8px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 40px;
-  min-height: 40px;
-}
-
-.theme-toggle-btn:hover,
-.theme-dropdown-btn:hover {
-  background-color: var(--color-hover);
-  color: var(--color-text);
-}
-
-.theme-toggle-btn.dark-mode,
-.theme-dropdown-btn.dark-mode {
-  color: var(--color-text-secondary);
-}
-
-.theme-toggle-btn.dark-mode:hover,
-.theme-dropdown-btn.dark-mode:hover {
-  color: var(--color-text);
-  background-color: var(--color-hover);
-}
-
-.rotating {
-  animation: rotate 0.3s ease-in-out;
-}
-
-/* 图标居中对齐 */
-.theme-toggle-btn .el-icon,
-.theme-dropdown-btn .el-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  width: 16px;
-  height: 16px;
-}
-
-@keyframes rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(180deg);
-  }
-}
-
-/* Dropdown menu styles */
-:deep(.theme-dropdown-menu) {
-  min-width: 140px;
-}
-
+/* 细粒度的 el-dropdown 定制保留使用 :deep 选择器 */
 :deep(.el-dropdown-menu__item) {
   display: flex;
   align-items: center;
@@ -182,7 +117,6 @@ const handleThemeChange = (theme: Theme) => {
   color: var(--el-color-primary);
 }
 
-/* Dark mode dropdown styles */
 html.dark :deep(.el-dropdown-menu) {
   background-color: var(--color-surface);
   border-color: var(--color-border);

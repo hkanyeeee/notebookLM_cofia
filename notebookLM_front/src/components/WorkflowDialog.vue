@@ -128,9 +128,9 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
     max-height="70%"
     class="workflow-dialog"
   >
-    <div class="workflow-status-container" v-loading="loadingWorkflows">
+    <div class="min-h-[300px]" v-loading="loadingWorkflows">
       <div class="workflow-section">
-        <h3 class="mt-4">正在执行的工作流 ({{ runningWorkflows.length }})</h3>
+        <h3 class="mt-4 text-gray-900 text-[16px] font-semibold mb-4">正在执行的工作流 ({{ runningWorkflows.length }})</h3>
         
         <!-- 桌面端表格显示 -->
         <ElTable 
@@ -155,34 +155,34 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
         </ElTable>
         
         <!-- 移动端卡片显示 -->
-        <div v-else class="mobile-workflow-list">
+        <div v-else class="flex flex-col gap-3 max-h-[300px] overflow-y-auto">
           <div 
             v-if="runningWorkflows.length === 0" 
-            class="empty-state"
+            class="text-center text-gray-400 py-10 text-[14px]"
           >
             {{ loadingWorkflows ? '加载中...' : '暂无正在执行的工作流' }}
           </div>
           <div 
             v-for="workflow in runningWorkflows" 
             :key="workflow.executionId"
-            class="mobile-workflow-card running"
+            class="bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow border-l-4 border-l-amber-500"
           >
             <div class="card-header">
-              <div class="document-name">{{ workflow.documentName || '未知文档' }}</div>
+              <div class="document-name text-gray-900 font-semibold text-[14px] leading-tight flex-1 break-words">{{ workflow.documentName || '未知文档' }}</div>
               <ElTag type="warning" effect="plain" size="small">
                 {{ getStatusText(workflow.status) }}
               </ElTag>
             </div>
             <div class="card-body">
-              <div class="execution-id">执行ID: {{ workflow.executionId }}</div>
-              <div class="start-time">开始时间: {{ formatWorkflowTime(workflow.startedAt) }}</div>
+              <div class="execution-id text-gray-500 text-[12px] font-mono break-all">执行ID: {{ workflow.executionId }}</div>
+              <div class="start-time text-gray-500 text-[12px]">开始时间: {{ formatWorkflowTime(workflow.startedAt) }}</div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="workflow-section">
-        <h3 style="margin-top: 20px;">执行历史 ({{ workflowHistory.length }})</h3>
+        <h3 class="mt-5 text-gray-900 text-[16px] font-semibold mb-4">执行历史 ({{ workflowHistory.length }})</h3>
         
         <!-- 桌面端表格显示 -->
         <ElTable 
@@ -217,20 +217,20 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
         </ElTable>
         
         <!-- 移动端卡片显示 -->
-        <div v-else class="mobile-workflow-list">
+        <div v-else class="flex flex-col gap-3 max-h-[300px] overflow-y-auto">
           <div 
             v-if="workflowHistory.length === 0" 
-            class="empty-state"
+            class="text-center text-gray-400 py-10 text-[14px]"
           >
             {{ loadingWorkflows ? '加载中...' : '暂无执行历史' }}
           </div>
           <div 
             v-for="workflow in workflowHistory" 
             :key="workflow.executionId"
-            class="mobile-workflow-card history"
+            class="bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow border-l-4 border-l-gray-500"
           >
             <div class="card-header">
-              <div class="document-name">{{ workflow.documentName || '未知文档' }}</div>
+              <div class="document-name text-gray-900 font-semibold text-[14px] leading-tight flex-1 break-words">{{ workflow.documentName || '未知文档' }}</div>
               <ElTag 
                 :type="getStatusTagType(workflow.status)" 
                 effect="plain" 
@@ -240,12 +240,10 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
               </ElTag>
             </div>
             <div class="card-body">
-              <div class="execution-id">执行ID: {{ workflow.executionId }}</div>
-              <div class="time-info">
-                <div class="start-time">开始: {{ formatWorkflowTime(workflow.startedAt) }}</div>
-                <div v-if="workflow.stoppedAt" class="stop-time">
-                  结束: {{ formatWorkflowTime(workflow.stoppedAt) }}
-                </div>
+              <div class="execution-id text-gray-500 text-[12px] font-mono break-all">执行ID: {{ workflow.executionId }}</div>
+              <div class="time-info flex flex-col gap-0.5">
+                <div class="start-time text-gray-500 text-[12px]">开始: {{ formatWorkflowTime(workflow.startedAt) }}</div>
+                <div v-if="workflow.stoppedAt" class="stop-time text-gray-500 text-[12px]">结束: {{ formatWorkflowTime(workflow.stoppedAt) }}</div>
               </div>
             </div>
           </div>
@@ -254,7 +252,7 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
     </div>
     
     <template #footer>
-      <div class="dialog-footer">
+      <div class="flex gap-2 justify-end">
         <ElButton @click="loadWorkflowStatus" :loading="loadingWorkflows">
           <ElIcon><Refresh /></ElIcon>
           刷新
@@ -266,154 +264,15 @@ function getStatusTagType(status: string): 'primary' | 'success' | 'warning' | '
 </template>
 
 <style scoped>
-.workflow-status-container {
-  min-height: 300px;
-}
-
-.workflow-section h3 {
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-
-.dialog-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-/* 移动端样式 */
-.mobile-workflow-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.mobile-workflow-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px;
-  transition: all 0.2s ease;
-}
-
-.mobile-workflow-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.mobile-workflow-card.running {
-  border-left: 4px solid #f59e0b;
-}
-
-.mobile-workflow-card.history {
-  border-left: 4px solid #6b7280;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-  gap: 8px;
-}
-
-.document-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 14px;
-  line-height: 1.4;
-  flex: 1;
-  word-break: break-word;
-}
-
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.execution-id {
-  color: #6b7280;
-  font-size: 12px;
-  font-family: 'Monaco', 'Menlo', monospace;
-  word-break: break-all;
-}
-
-.time-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.start-time, .stop-time {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.empty-state {
-  text-align: center;
-  color: #9ca3af;
-  padding: 40px 20px;
-  font-size: 14px;
-}
-
-/* 响应式调整 */
+/* 保留仅 Element Plus 深度选择器相关的移动端间距适配 */
 @media (max-width: 768px) {
-  .workflow-dialog :deep(.el-dialog) {
-    margin: 5% auto;
-  }
-  
-  .workflow-dialog :deep(.el-dialog__header) {
-    padding: 16px 20px;
-  }
-  
-  .workflow-dialog :deep(.el-dialog__body) {
-    padding: 0 20px 20px;
-  }
-  
-  .workflow-dialog :deep(.el-dialog__footer) {
-    padding: 16px 20px;
-  }
-  
-  .workflow-section h3 {
-    font-size: 14px;
-    margin-bottom: 12px;
-  }
-  
-  .dialog-footer {
-    justify-content: center;
-  }
-  
-  .dialog-footer .el-button {
-    flex: 1;
-    max-width: 120px;
-  }
+  .workflow-dialog :deep(.el-dialog) { margin: 5% auto; }
+  .workflow-dialog :deep(.el-dialog__header) { padding: 16px 20px; }
+  .workflow-dialog :deep(.el-dialog__body) { padding: 0 20px 20px; }
+  .workflow-dialog :deep(.el-dialog__footer) { padding: 16px 20px; }
 }
 
 @media (max-width: 480px) {
-  .workflow-dialog :deep(.el-dialog) {
-    width: 95% !important;
-    margin: 3% auto;
-  }
-  
-  .mobile-workflow-card {
-    padding: 10px;
-  }
-  
-  .document-name {
-    font-size: 13px;
-  }
-  
-  .execution-id {
-    font-size: 11px;
-  }
-  
-  .start-time, .stop-time {
-    font-size: 11px;
-  }
+  .workflow-dialog :deep(.el-dialog) { width: 95% !important; margin: 3% auto; }
 }
 </style>

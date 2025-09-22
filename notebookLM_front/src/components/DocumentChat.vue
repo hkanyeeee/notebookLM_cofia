@@ -144,7 +144,7 @@ function isQueryDisabled() {
     <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
       <!-- 欢迎消息 -->
       <div v-if="messages.length === 0" class="text-center max-w-2xl mx-auto" style="color: var(--color-text-secondary)">
-        <div class="welcomeMessage mt-8 mb-10 text-base leading-relaxed">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</div>
+        <div class="mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600">您可以输入一个课题，我会抓取候选网页供添加；或者您可以在左侧直接添加网址。</div>
         
         <!-- 课题输入 -->
         <div class="flex gap-3 items-center mb-6">
@@ -217,7 +217,7 @@ function isQueryDisabled() {
 
         <div v-if="messages.length === 0 && candidateUrls.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
           <div class="text-left p-5 rounded-lg border feature-card">
-            <div class="flex items-center gap-2 mb-2">
+          <div class="flex items-center gap-2 mb-2">
               <ElIcon class="text-indigo-600"><MagicStick /></ElIcon>
               <strong class="text-sm" style="color: var(--color-text)">智能问答</strong>
             </div>
@@ -304,7 +304,7 @@ function isQueryDisabled() {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-4 border-t chat-input-container">
+    <div class="p-4 border-t bg-[var(--color-surface)] border-[var(--color-border)]">
       <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
         <ElInput
           v-model="queryInput"
@@ -393,11 +393,7 @@ function isQueryDisabled() {
   background-color: var(--color-surface-light);
 }
 
-.welcomeMessage {
-  padding-left: 16px;
-  width: fit-content;
-  border-left: 6px solid #4f46e5;
-}
+/* welcomeMessage 已迁移至 Tailwind 类（pl-4 + border-l-4 + border-indigo-600） */
 
 /* 响应式设计 */
 @media (max-width: 768px) {

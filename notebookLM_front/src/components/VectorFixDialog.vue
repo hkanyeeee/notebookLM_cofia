@@ -8,7 +8,7 @@
     @close="handleClose"
     class="vector-fix-dialog-wrapper"
   >
-    <div class="vector-fix-dialog">
+    <div class="vector-fix-dialog min-h-[400px]">
       <!-- 加载状态 -->
       <div v-if="loading" class="text-center py-8">
         <el-icon class="animate-spin text-2xl text-blue-500 mb-2">
@@ -178,7 +178,7 @@
           </div>
 
           <!-- 移动端卡片显示 -->
-          <div v-else class="mobile-collection-list">
+          <div v-else class="flex flex-col gap-3 max-h-[400px] overflow-y-auto">
             <div 
               v-if="collectionsStatus.collections.length === 0" 
               class="empty-state"
@@ -188,22 +188,22 @@
             <div
               v-for="collection in collectionsStatus.collections"
               :key="collection.id"
-              class="mobile-collection-card"
+              class="bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow"
               :class="{
-                'status-missing': collection.status === 'missing',
-                'status-partial': collection.status === 'partial',
-                'status-complete': collection.status === 'complete'
+                'border-l-4 border-l-emerald-500 bg-emerald-50': collection.status === 'complete',
+                'border-l-4 border-l-red-500 bg-red-50': collection.status === 'missing',
+                'border-l-4 border-l-amber-500 bg-yellow-50': collection.status === 'partial'
               }"
             >
               <div class="card-header">
                 <div class="collection-info">
-                  <div class="collection-title">
-                    <ElIcon class="status-icon">
+                  <div class="collection-title font-semibold text-gray-900 text-[14px] leading-tight mb-1 break-words">
+                    <ElIcon class="status-icon mr-1">
                       <component :is="getStatusIconComp(collection.status)" />
                     </ElIcon>
                     {{ collection.title }}
                   </div>
-                  <div class="collection-id">ID: {{ collection.id }}</div>
+                  <div class="collection-id text-gray-500 text-[11px] font-mono bg-gray-100 px-2 py-1 rounded inline-block">ID: {{ collection.id }}</div>
                 </div>
                 <el-tag 
                   :type="getStatusTagType(collection.status)" 
@@ -215,32 +215,32 @@
               </div>
               
               <div class="card-body">
-                <div class="stats-info">
-                  <div class="stat-item">
-                    <span class="stat-label">文档块数:</span>
-                    <span class="stat-value">{{ collection.chunks_count }}</span>
+                <div class="stats-info flex justify-between gap-4">
+                  <div class="stat-item flex flex-col items-center flex-1">
+                    <span class="stat-label text-gray-500 text-[11px] mb-0.5">文档块数:</span>
+                    <span class="stat-value text-gray-900 font-semibold text-[14px]">{{ collection.chunks_count }}</span>
                   </div>
-                  <div class="stat-item">
-                    <span class="stat-label">向量数:</span>
-                    <span class="stat-value">{{ collection.qdrant_count }}</span>
+                  <div class="stat-item flex flex-col items-center flex-1">
+                    <span class="stat-label text-gray-500 text-[11px] mb-0.5">向量数:</span>
+                    <span class="stat-value text-gray-900 font-semibold text-[14px]">{{ collection.qdrant_count }}</span>
                   </div>
                 </div>
                 
-                <div class="card-actions">
+                <div class="card-actions flex gap-2 justify-center">
                   <el-button
                     v-if="collection.needs_fix"
                     size="small"
                     type="primary"
                     :disabled="isFixing"
                     @click="fixSingleCollection(collection.id)"
-                    class="action-button"
+                    class="flex-1 max-w-[80px]"
                   >
                     修复
                   </el-button>
                   <el-button
                     size="small"
                     @click="verifyCollection(collection.id)"
-                    class="action-button"
+                    class="flex-1 max-w-[80px]"
                   >
                     验证
                   </el-button>
@@ -253,7 +253,7 @@
     </div>
 
     <template #footer>
-      <div class="dialog-footer" :class="{ 'mobile-footer': isMobile }">
+      <div class="flex justify-end gap-2" :class="{ 'justify-center': isMobile }">
         <el-button @click="handleClose" :class="{ 'w-full': isMobile }">关闭</el-button>
       </div>
     </template>

@@ -188,7 +188,7 @@ async function handleDeleteCollection(collectionId: string) {
         <!-- 没有任何Collection时 - 引导添加 -->
         <div v-if="collections.length === 0 && !loadingCollections">
           <div class="mb-8">
-            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
+            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
             <p class="text-gray-600 mb-8 max-w-lg mx-auto">
               通过添加URL创建您的第一个Collection，或者选择现有的Collection开始对话。
             </p>
@@ -207,7 +207,7 @@ async function handleDeleteCollection(collectionId: string) {
         <!-- 有Collection但未选择时 - 显示可选择的Collection -->
         <div v-else-if="collections.length > 0 && !selectedCollection">
           <div class="mb-8">
-            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
+            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
             <p class="text-gray-600 mb-6 text-center">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
             </p>
@@ -233,10 +233,10 @@ async function handleDeleteCollection(collectionId: string) {
                     {{ collection.collection_id.substring(0, 8) }}...
                   </div>
                 </div>
-                <h3 class="font-semibold text-gray-900 mb-2 text-sm line-clamp-2">
+                <h3 class="font-semibold text-gray-900 mb-2 text-sm text-ellipsis-2">
                   {{ collection.document_title || '未命名Collection' }}
                 </h3>
-                <p class="text-xs text-gray-600 mb-3 line-clamp-3">
+                <p class="text-xs text-gray-600 mb-3 text-ellipsis-3">
                   {{ collection.url || '无描述' }}
                 </p>
                 <div class="flex justify-between items-center text-xs text-gray-500">
@@ -254,7 +254,7 @@ async function handleDeleteCollection(collectionId: string) {
         <!-- 已选择Collection时 - 显示Collection信息 -->
         <div v-else-if="selectedCollection" class="text-center">
           <div class="mb-8">
-            <div class="welcomeMessage mx-auto mt-8 mb-10 text-base leading-relaxed" style="color: var(--color-text-secondary)">
+            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">
               {{ collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
             </div>
             <div class="max-w-2xl mx-auto">
@@ -386,7 +386,7 @@ async function handleDeleteCollection(collectionId: string) {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-4 border-t chat-input-container">
+    <div class="p-4 border-t bg-[var(--color-surface)] border-[var(--color-border)]">
       <!-- Collection与Auto Ingest 控制区 -->
       <div class="flex items-center mb-3 gap-3 max-w-3xl mx-auto">
         <!-- Collection选择下拉框和删除按钮 -->
@@ -461,31 +461,3 @@ async function handleDeleteCollection(collectionId: string) {
     />
   </div>
 </template>
-
-<style scoped>
-/* line-clamp utilities for text truncation */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.welcomeMessage {
-  padding-left: 16px;
-  border-left: 6px solid #4f46e5;
-}
-</style>
-
-<style>
-/* 全局聊天消息样式 */
-</style>

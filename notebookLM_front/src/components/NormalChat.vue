@@ -270,7 +270,7 @@ function isReasoningExpanded(messageId: string) {
               v-if="message.content" 
               v-html="marked(message.content)"
               class="chat-message-content"
-              :class="{ 'status-message': isStatusMessage(message.content) }">
+              :class="{ 'status-message bg-gray-50': isStatusMessage(message.content) }">
             </div>
             <div class="status-message" v-else>思考中...</div>
             <div class="text-xs opacity-70 mt-2 text-left">{{ formatTime(message.timestamp) }}</div>
@@ -301,7 +301,7 @@ function isReasoningExpanded(messageId: string) {
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-4 border-t chat-input-container">
+    <div class="p-4 border-t bg-[var(--color-surface)] border-[var(--color-border)]">
       <!-- 工具开关行 -->
       <div class="flex justify-center mb-3">
         <div class="tools-control-container">

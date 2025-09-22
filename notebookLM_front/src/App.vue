@@ -176,7 +176,7 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 </script>
 
 <template>
-  <div class="app-container">
+  <div class="flex h-full relative transition-colors duration-300 bg-light-background dark:bg-dark-background">
     <!-- 桌面端侧边栏 -->
     <Sidebar 
       v-if="!isMobile" 
@@ -188,9 +188,9 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     <Sidebar 
       v-if="isMobile" 
       :collapsed="false" 
-      :class="{ 'mobile-sidebar-visible': mobileMenuOpen }"
-      @toggle="toggleMobileSidebar" 
-      class="mobile-sidebar"
+      @toggle="toggleMobileSidebar"
+      class="transform -translate-x-full transition-transform duration-300 z-[101]"
+      :class="{ 'translate-x-0': mobileMenuOpen }"
     />
 
     <!-- 移动端触发按钮 -->
@@ -204,8 +204,8 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       type="primary"
       circle
       size="large"
-      class="mobile-menu-trigger"
-      :class="{ 'dragging': isDragging }"
+      class="fixed z-[100] w-12 h-12 shadow-md transition-transform duration-200 select-none touch-none"
+      :class="[ isDragging ? 'scale-110 shadow-xl opacity-90' : 'hover:scale-105 hover:shadow-lg' ]"
       :style="{ 
         bottom: buttonPosition.bottom + 'px', 
         right: buttonPosition.right + 'px' 
@@ -219,104 +219,16 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     <!-- 移动端遮罩层 -->
     <div 
       v-if="isMobile && mobileMenuOpen" 
-      class="mobile-overlay"
+      class="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 transition-colors duration-300"
       @click="toggleMobileSidebar"
     ></div>
 
     <!-- 主内容区域 -->
-    <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <main class="flex-1 ml-0 transition-[margin-left] duration-300" :class="[ sidebarCollapsed ? 'md:ml-20' : 'md:ml-[390px]' ]">
       <ChatArea />
     </main>
   </div>
 </template>
 
 <style scoped>
-.app-container {
-  display: flex;
-  height: 100%;
-  background-color: var(--color-background);
-  position: relative;
-  transition: background-color 0.3s ease;
-}
-
-.main-content {
-  flex: 1;
-  margin-left: 390px;
-  transition: margin-left 0.3s ease;
-}
-
-.main-content.sidebar-collapsed {
-  margin-left: 80px;
-}
-
-/* 移动端触发按钮 */
-.mobile-menu-trigger {
-  position: fixed;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  width: 48px;
-  height: 48px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  user-select: none;
-  touch-action: none; /* 防止默认的触摸行为 */
-}
-
-.mobile-menu-trigger:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.mobile-menu-trigger.dragging {
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-  opacity: 0.9;
-}
-
-/* 移动端侧边栏 */
-.mobile-sidebar {
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
-  z-index: 101;
-}
-
-.mobile-sidebar.mobile-sidebar-visible {
-  transform: translateX(0);
-}
-
-/* 移动端遮罩层 */
-.mobile-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 50;
-  transition: background-color 0.3s ease;
-}
-
-/* 暗色主题下的遮罩层 */
-html.dark .mobile-overlay {
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .app-container {
-    /* Safari移动端适配 - 使用百分比避免滚动条问题 */
-    height: 100%;
-  }
-
-  .main-content {
-    margin-left: 0;
-    /* 确保在移动端占满整个容器 */
-    width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-
-  .main-content.sidebar-collapsed {
-    margin-left: 0;
-  }
-}
 </style>

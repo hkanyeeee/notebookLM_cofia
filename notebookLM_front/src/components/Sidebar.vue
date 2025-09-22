@@ -83,11 +83,11 @@ function handleRemoveFailedUrl(url: string) {
 </script>
 
 <template>
-  <aside class="border-r flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300 overflow-hidden sidebar-container" :class="{ 'w-20': collapsed, 'w-96': !collapsed }">
+  <aside class="border-r flex flex-col fixed left-0 top-0 h-screen z-50 transition-all duration-300 overflow-hidden bg-[var(--color-surface)] border-[var(--color-border)]" :class="{ 'w-20': collapsed, 'w-96': !collapsed }">
     <!-- 头部 -->
-    <div class="p-5 border-b flex items-center justify-between min-h-[70px] sidebar-header">
+    <div class="p-5 border-b flex items-center justify-between min-h-[70px] bg-[var(--color-surface)] border-[var(--color-border)]">
       <div v-if="!collapsed" class="flex-1">
-        <h2 class="m-0 text-xl font-semibold sidebar-title">文档</h2>
+        <h2 class="m-0 text-xl font-semibold text-[var(--color-text)]">文档</h2>
       </div>
       <ElButton text @click="$emit('toggle')" class="p-2 rounded-md">
         <ElIcon>
@@ -98,7 +98,7 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- 添加文档按钮 - 只在文档问答模式下显示 -->
-    <div v-if="isDocumentQueryMode" class="p-5 border-b sidebar-section">
+    <div v-if="isDocumentQueryMode" class="p-5 border-b border-[var(--color-border)]">
       <ElButton
         type="primary"
         :icon="Plus"
@@ -112,12 +112,12 @@ function handleRemoveFailedUrl(url: string) {
     </div>
 
     <!-- Ingestion Progress Section -->
-    <div class="px-5 pb-5 sidebar-ingestion" v-if="!collapsed && store.ingestionStatus.size > 0">
-      <h3 class="my-3 text-base font-medium sidebar-section-title">正在处理</h3>
+    <div class="px-5 pb-5" v-if="!collapsed && store.ingestionStatus.size > 0">
+      <h3 class="my-3 text-base font-medium text-[var(--color-text-secondary)]">正在处理</h3>
       <div v-for="[url, status] in store.ingestionStatus.entries()" :key="url" class="mb-4">
         <div class="flex justify-between items-center mb-1.5 gap-2">
-          <span class="text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] sidebar-url">{{ url }}</span>
-          <span class="text-xs sidebar-status-text">{{ status.message }}</span>
+          <span class="text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] text-[var(--color-text-secondary)]">{{ url }}</span>
+          <span class="text-xs text-[var(--color-text-muted)]">{{ status.message }}</span>
           <!-- 进行中或失败时均支持删除/取消，以优化体验 -->
           <ElButton 
             text 
@@ -141,7 +141,7 @@ function handleRemoveFailedUrl(url: string) {
     <!-- 文档列表 -->
     <div class="flex-1 p-5 overflow-y-auto relative" v-if="!collapsed">
       <div class="transition-opacity duration-300" :class="{ 'opacity-30': store.isCollectionQueryMode || isNormalQueryMode }">
-        <h3 class="m-0 mb-4 text-base font-medium sidebar-section-title">文档列表</h3>
+        <h3 class="m-0 mb-4 text-base font-medium text-[var(--color-text-secondary)]">文档列表</h3>
         <div class="flex flex-col gap-3">
           <ElTooltip
             v-for="doc in store.documents"
@@ -155,13 +155,13 @@ function handleRemoveFailedUrl(url: string) {
                 <div>{{ doc.url }}</div>
               </div>
             </template>
-            <div class="flex items-center p-3 rounded-lg border transition-all duration-200 group sidebar-document-item">
-              <ElIcon class="mr-3 sidebar-document-icon">
+            <div class="flex items-center p-3 rounded-lg border transition-all duration-200 group bg-[var(--color-surface-light)] border-[var(--color-border)] hover:bg-[var(--color-surface-lighter)] hover:border-[var(--color-border-light)]">
+              <ElIcon class="mr-3 text-[var(--color-text-muted)]">
                 <Document />
               </ElIcon>
               <div class="flex-1 min-w-0">
-                <div class="font-medium text-sm mb-1 overflow-hidden text-ellipsis whitespace-nowrap sidebar-document-title">{{ doc.title }}</div>
-                <div class="text-xs overflow-hidden text-ellipsis whitespace-nowrap sidebar-document-url">{{ doc.url }}</div>
+                <div class="font-medium text-sm mb-1 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--color-text)]">{{ doc.title }}</div>
+                <div class="text-xs overflow-hidden text-ellipsis whitespace-nowrap text-[var(--color-text-muted)]">{{ doc.url }}</div>
               </div>
               <ElButton text type="danger" @click="handleRemoveDocument(doc.id)" class="opacity-0 group-hover:opacity-100 transition-opacity">
                 <ElIcon>
@@ -171,28 +171,28 @@ function handleRemoveFailedUrl(url: string) {
             </div>
           </ElTooltip>
 
-          <div v-if="store.documents.length === 0" class="text-center mt-10 sidebar-empty-state">
+          <div v-if="store.documents.length === 0" class="text-center mt-10 text-[var(--color-text-muted)]">
             <p class="my-2">还没有添加任何文档</p>
-            <p class="my-2 text-xs sidebar-empty-hint">可在右侧输入课题，或点击上方按钮添加网址</p>
+            <p class="my-2 text-xs opacity-80">可在右侧输入课题，或点击上方按钮添加网址</p>
           </div>
         </div>
       </div>
 
       <!-- Collection查询模式蒙版 -->
-      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-10 sidebar-overlay">
-        <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] sidebar-modal">
-          <h4 class="m-0 mb-3 text-base font-semibold sidebar-modal-title">Collection查询模式</h4>
-          <p class="my-2 text-sm leading-relaxed sidebar-modal-text">当前正在使用Collection进行查询</p>
-          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs sidebar-modal-collection">{{ store.collections.find((c: AutoCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
+      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-10 bg-black/10 dark:bg-black/20">
+        <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] bg-[var(--color-surface)] border-[var(--color-border)]">
+          <h4 class="m-0 mb-3 text-base font-semibold text-[var(--color-text)]">Collection查询模式</h4>
+          <p class="my-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">当前正在使用Collection进行查询</p>
+          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs text-primary-600 bg-primary-50 dark:text-primary-500 dark:bg-primary-200/20">{{ store.collections.find((c: AutoCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
 
       <!-- 普通问答模式蒙版 -->
-      <div v-if="isNormalQueryMode" class="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-10 sidebar-overlay">
-        <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] sidebar-modal">
-          <h4 class="m-0 mb-3 text-base font-semibold sidebar-modal-title">普通问答模式</h4>
-          <p class="my-2 text-sm leading-relaxed sidebar-modal-text">当前正在使用网络搜索进行问答</p>
-          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs sidebar-modal-collection">该模式将自动使用工具为您提供最新的信息和答案</p>
+      <div v-if="isNormalQueryMode" class="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-10 bg-black/10 dark:bg-black/20">
+        <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] bg-[var(--color-surface)] border-[var(--color-border)]">
+          <h4 class="m-0 mb-3 text-base font-semibold text-[var(--color-text)]">普通问答模式</h4>
+          <p class="my-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">当前正在使用网络搜索进行问答</p>
+          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs text-primary-600 bg-primary-50 dark:text-primary-500 dark:bg-primary-200/20">该模式将自动使用工具为您提供最新的信息和答案</p>
         </div>
       </div>
     </div>
@@ -222,108 +222,5 @@ function handleRemoveFailedUrl(url: string) {
 
 <!-- 响应式设计 -->
 <style scoped>
-/* 侧边栏容器 */
-.sidebar-container {
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-/* 侧边栏头部 */
-.sidebar-header {
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-.sidebar-title {
-  color: var(--color-text);
-}
-
-/* 侧边栏节 */
-.sidebar-section {
-  border-color: var(--color-border);
-}
-
-.sidebar-ingestion {
-  border-color: var(--color-border);
-}
-
-.sidebar-section-title {
-  color: var(--color-text-secondary);
-}
-
-/* 处理状态文本 */
-.sidebar-url {
-  color: var(--color-text-secondary);
-}
-
-.sidebar-status-text {
-  color: var(--color-text-muted);
-}
-
-/* 文档项 */
-.sidebar-document-item {
-  background-color: var(--color-surface-light);
-  border-color: var(--color-border);
-}
-
-.sidebar-document-item:hover {
-  background-color: var(--color-surface-lighter);
-  border-color: var(--color-border-light);
-}
-
-.sidebar-document-icon {
-  color: var(--color-text-muted);
-}
-
-.sidebar-document-title {
-  color: var(--color-text);
-}
-
-.sidebar-document-url {
-  color: var(--color-text-muted);
-}
-
-/* 空状态 */
-.sidebar-empty-state {
-  color: var(--color-text-muted);
-}
-
-.sidebar-empty-hint {
-  color: var(--color-text-muted);
-  opacity: 0.8;
-}
-
-/* 蒙版和对话框 */
-.sidebar-overlay {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-html.dark .sidebar-overlay {
-  background-color: rgba(0, 0, 0, 0.2);
-}
-
-.sidebar-modal {
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-.sidebar-modal-title {
-  color: var(--color-text);
-}
-
-.sidebar-modal-text {
-  color: var(--color-text-secondary);
-}
-
-.sidebar-modal-collection {
-  color: var(--el-color-primary);
-  background-color: rgba(79, 70, 229, 0.1);
-}
-
-html.dark .sidebar-modal-collection {
-  color: #6366f1;
-  background-color: rgba(99, 102, 241, 0.2);
-}
-
 /* 移动端侧边栏样式在 App.vue 中处理 */
 </style>
