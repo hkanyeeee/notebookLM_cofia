@@ -29,7 +29,7 @@
       <!-- 主要内容 -->
       <div v-else>
         <!-- 统计信息 -->
-        <div v-if="collectionsStatus" class="mb-6">
+        <div v-if="collectionsStatus" class="mb-6 mt-6">
           <div class="grid gap-4 mb-4" :class="isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'">
             <div class="bg-blue-50 p-4 rounded-lg text-center">
               <div class="text-2xl font-bold text-blue-600">{{ collectionsStatus.stats.total_collections }}</div>

@@ -203,6 +203,7 @@ function handleRemoveFailedUrl(url: string) {
         v-model="newUrl"
         type="textarea"
         :rows="5"
+        style="margin-top: 30px;"
         placeholder="用逗号分隔多个网址，例如：https://example.com, https://another-example.com"
         @keyup.enter.native.stop
         @keydown.shift.enter="handleAddDocument"
