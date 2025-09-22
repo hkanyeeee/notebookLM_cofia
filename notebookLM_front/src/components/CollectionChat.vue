@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption, ElMessageBox } from 'element-plus'
-import { Promotion, Plus, Tools, Delete, Folder, Document, Link, Postcard, ArrowRight, Timer } from '@element-plus/icons-vue'
+import { Promotion, Plus, Tools, Delete } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import type { AutoCollection, CollectionResult } from '../api/notebook'
@@ -180,7 +180,7 @@ async function handleDeleteCollection(collectionId: string) {
 <template>
   <div class="flex flex-col h-full">
     <!-- 消息列表 / 欢迎信息 -->
-    <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth">
+    <div ref="messageContainer" class="flex-1 overflow-y-auto p-2 scroll-smooth" :class="messages.length === 0 ? ['flex','items-center','justify-center'] : []">
       
       <!-- 智能欢迎消息 -->
       <div v-if="messages.length === 0" class="max-w-4xl mx-auto p-6">
@@ -224,7 +224,7 @@ async function handleDeleteCollection(collectionId: string) {
             >
               <div class="text-left">
                 <div class="flex items-start justify-between mb-3">
-                  <el-icon class="text-2xl"><folder /></el-icon>
+                  <div class="text-2xl">📁</div>
                   <div class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                     {{ collection.collection_id.substring(0, 8) }}...
                   </div>
@@ -237,7 +237,7 @@ async function handleDeleteCollection(collectionId: string) {
                 </p>
                 <div class="flex justify-between items-center text-xs text-gray-500">
                   <span>点击选择</span>
-                  <span><el-icon><arrow-right /></el-icon></span>
+                  <span>→</span>
                 </div>
               </div>
             </div>
@@ -255,11 +255,11 @@ async function handleDeleteCollection(collectionId: string) {
               <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
                 <div class="text-left space-y-3">
                   <div class="flex items-center">
-                    <span class="text-indigo-600 font-medium w-16"><el-icon class="mr-1"><document /></el-icon>标题:</span>
+                    <span class="text-indigo-600 font-medium w-16">📋 标题:</span>
                     <span class="text-gray-700">{{ collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知' }}</span>
                   </div>
                   <div class="flex items-center">
-                    <span class="text-indigo-600 font-medium w-16"><el-icon class="mr-1"><link /></el-icon>来源:</span>
+                    <span class="text-indigo-600 font-medium w-16">🔗 来源:</span>
                     <a 
                       :href="collections.find(c => c.collection_id === selectedCollection)?.url" 
                       target="_blank"
@@ -269,7 +269,7 @@ async function handleDeleteCollection(collectionId: string) {
                     </a>
                   </div>
                   <div class="flex items-center">
-                    <span class="text-blue-600 font-medium w-16"><el-icon class="mr-1"><postcard /></el-icon>ID:</span>
+                    <span class="text-blue-600 font-medium w-16">🆔 ID:</span>
                     <span class="text-gray-600 font-mono text-sm">{{ selectedCollection }}</span>
                   </div>
                 </div>
@@ -295,7 +295,7 @@ async function handleDeleteCollection(collectionId: string) {
 
         <!-- 加载状态 -->
         <div v-else-if="loadingCollections" class="text-center py-12">
-          <div class="text-4xl mb-4"><el-icon class="text-4xl"><timer /></el-icon></div>
+          <div class="text-4xl mb-4">⏳</div>
           <h2 class="text-xl text-gray-600">正在加载Collection...</h2>
         </div>
 
