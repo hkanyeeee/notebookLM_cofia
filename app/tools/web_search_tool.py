@@ -12,6 +12,7 @@ import httpx
 from difflib import SequenceMatcher
 import os
 from concurrent.futures import ProcessPoolExecutor
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 from ..config import (
     EMBEDDING_BATCH_SIZE, LLM_SERVICE_URL, SEARXNG_QUERY_URL,
@@ -187,20 +188,49 @@ class WebSearchTool:
     
     def _similarity_check(self, fp1: str, fp2: str) -> float:
         """检查两个fingerprint的相似度 (0-1)"""
-        # 提取查询部分
+        # 提取全部查询项（不能只取首段）
         try:
-            queries1 = set(fp1.split('|')[0].replace('queries:', '').split('|'))
-            queries2 = set(fp2.split('|')[0].replace('queries:', '').split('|'))
-            
+            def _extract_queries(fp: str) -> Set[str]:
+                s = fp or ""
+                prefix = "queries:"
+                if s.startswith(prefix):
+                    s = s[len(prefix):]
+                parts = [p for p in s.split('|') if p]
+                return set(parts)
+
+            queries1 = _extract_queries(fp1)
+            queries2 = _extract_queries(fp2)
+
             if not queries1 or not queries2:
                 return 0.0
-            
-            # 计算Jaccard相似度
+
             intersection = len(queries1.intersection(queries2))
             union = len(queries1.union(queries2))
             return intersection / union if union > 0 else 0.0
-        except:
+        except Exception:
             return 0.0
+
+    def _normalize_url_for_dedup(self, url: str) -> str:
+        """用于去重的URL规范化：小写scheme/netloc，去默认端口与fragment，排序查询参数，去除多余尾斜杠。"""
+        try:
+            parsed = urlparse(url.strip())
+            scheme = (parsed.scheme or '').lower()
+            netloc = (parsed.netloc or '').lower()
+            if (scheme == 'http' and netloc.endswith(':80')) or (scheme == 'https' and netloc.endswith(':443')):
+                netloc = netloc.rsplit(':', 1)[0]
+            path = parsed.path or ''
+            if path.endswith('/') and path != '/':
+                path = path.rstrip('/')
+            query_items = parse_qsl(parsed.query, keep_blank_values=True)
+            if query_items:
+                query_items.sort(key=lambda kv: (kv[0], kv[1]))
+                query = urlencode(query_items, doseq=True)
+            else:
+                query = ''
+            normalized = urlunparse((scheme, netloc, path, parsed.params, query, ''))
+            return normalized
+        except Exception:
+            return url
 
     def _clean_and_validate_queries(self, queries: List[str], original_topic: str) -> List[str]:
         """清理和验证生成的搜索查询 - 简化版本"""
@@ -442,10 +472,12 @@ class WebSearchTool:
         if not content:
             return None, [], global_chunk_index
         
-        # 检查是否已存在相同URL的Source记录
+        # 规范化 URL，避免重复的 Source
+        normalized_url = self._normalize_url_for_dedup(url)
+        # 检查是否已存在相同URL的Source记录（使用规范化后的URL）
         from sqlalchemy import select
         existing_source = await db.execute(
-            select(Source).where(Source.url == url)
+            select(Source).where(Source.url == normalized_url)
         )
         source = existing_source.scalar_one_or_none()
         
@@ -456,7 +488,7 @@ class WebSearchTool:
             # 创建新的 Source 记录
             source = Source(
                 session_id=session_id,
-                url=url,
+                url=normalized_url,
                 title=title
             )
             db.add(source)
@@ -696,14 +728,15 @@ class WebSearchTool:
             result["metrics"]["step_durations_ms"]["searxng_search"] = search_time
             print(f"[WebSearch] 并发搜索耗时: {search_time/1000.0:.2f}s")
             
-            # 合并搜索结果并去重
+            # 合并搜索结果并去重（使用规范化 URL）
             all_results = []
             seen_urls = set()
             for results in search_results_list:
                 if isinstance(results, list):
                     for item in results:
                         url = item.get("url")
-                        if url and url not in seen_urls:
+                        norm_url = self._normalize_url_for_dedup(url) if url else None
+                        if norm_url and norm_url not in seen_urls:
                             # 应用域名过滤
                             if filter_list:
                                 from urllib.parse import urlparse
@@ -711,7 +744,7 @@ class WebSearchTool:
                                 # 如果域名在过滤列表中，则跳过
                                 if any(filter_domain in domain for filter_domain in filter_list):
                                     continue
-                            seen_urls.add(url)
+                            seen_urls.add(norm_url)
                             all_results.append(item)
             
             # 限制结果数量
