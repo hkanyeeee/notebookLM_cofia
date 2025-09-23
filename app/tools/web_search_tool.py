@@ -505,9 +505,12 @@ class WebSearchTool:
         
         # 创建 Chunk 记录
         chunks = []
-        for chunk_content in chunks_text:
-            # 生成基于session_id和全局索引的唯一chunk_id
-            chunk_id = f"{session_id}_{global_chunk_index}"
+        import time
+        timestamp_ms = int(time.time() * 1000)
+        for idx, chunk_content in enumerate(chunks_text):
+            # 生成更加唯一的chunk_id，包含时间戳和URL哈希
+            url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()[:8]
+            chunk_id = f"{session_id}_{url_hash}_{global_chunk_index}_{timestamp_ms}_{idx}"
             chunk = Chunk(
                 content=chunk_content,
                 source_id=source.id,
@@ -517,17 +520,55 @@ class WebSearchTool:
             chunks.append(chunk)
             global_chunk_index += 1
         
-        db.add_all(chunks)
-        await db.commit()
-        
-        # 刷新以获取 ID 并确保chunks在session中
-        for chunk in chunks:
-            await db.refresh(chunk)
-            # 确保source关系正确加载
-            if not chunk.source:
-                chunk.source = source
-        
-        return source.id, chunks, global_chunk_index
+        try:
+            db.add_all(chunks)
+            await db.commit()
+            
+            # 刷新以获取 ID 并确保chunks在session中
+            for chunk in chunks:
+                await db.refresh(chunk)
+                # 确保source关系正确加载
+                if not chunk.source:
+                    chunk.source = source
+            
+            return source.id, chunks, global_chunk_index
+        except Exception as e:
+            await db.rollback()
+            print(f"[WebSearch] 数据库操作失败，回滚事务: {e}")
+            # 如果是重复键错误，尝试重新生成chunk_id
+            if "UNIQUE constraint failed: chunks.id" in str(e):
+                print(f"[WebSearch] 检测到ID冲突，尝试重新创建chunks...")
+                # 清除之前的chunks，重新创建
+                chunks.clear()
+                retry_timestamp = int(time.time() * 1000000)  # 更高精度的时间戳
+                for idx, chunk_content in enumerate(chunks_text):
+                    # 使用更随机的chunk_id来避免冲突
+                    url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()[:8]
+                    chunk_id = f"{session_id}_{url_hash}_{global_chunk_index}_retry_{retry_timestamp}_{idx}"
+                    chunk = Chunk(
+                        content=chunk_content,
+                        source_id=source.id,
+                        session_id=session_id,
+                        chunk_id=chunk_id
+                    )
+                    chunks.append(chunk)
+                
+                try:
+                    db.add_all(chunks)
+                    await db.commit()
+                    
+                    for chunk in chunks:
+                        await db.refresh(chunk)
+                        if not chunk.source:
+                            chunk.source = source
+                    
+                    return source.id, chunks, global_chunk_index
+                except Exception as retry_e:
+                    await db.rollback()
+                    print(f"[WebSearch] 重试后仍失败: {retry_e}")
+                    raise retry_e
+            else:
+                raise e
 
     async def process_chunk_batch(
         self, 
@@ -817,6 +858,13 @@ class WebSearchTool:
                                     print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}")
                                     return None, None, []
                             except Exception as e:
+                                # 如果遇到数据库错误，确保session状态正常
+                                if "constraint" in str(e).lower() or "rollback" in str(e).lower():
+                                    try:
+                                        await db.rollback()
+                                        print(f"[WebSearch] 数据库错误后执行回滚: {item['url']}")
+                                    except Exception as rollback_e:
+                                        print(f"[WebSearch] 回滚失败: {rollback_e}")
                                 print(f"[WebSearch] ✗ 处理异常: {item['url']} - {e}")
                                 return None, None, []
                     

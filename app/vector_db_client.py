@@ -121,13 +121,16 @@ async def query_embeddings(
     hits = []
     for point in search_result:
         # 仅返回不绑定关系的 Chunk，避免触发关系集合的会话附加
+        # Note: Do not set explicit id to avoid conflicts with auto-increment
         chunk = Chunk(
-            id=point.id,
             content=point.payload['content'],
             source_id=point.payload['source_id'],
             session_id=point.payload['session_id'],
             chunk_id=point.payload.get('chunk_id')
         )
+        # Set the id after creation to preserve point ID for vector operations
+        # but prevent SQLAlchemy from treating this as a new insert
+        chunk.id = point.id
         hits.append((chunk, point.score))
         
     return hits
@@ -187,9 +190,16 @@ async def query_bm25(
     for row in rows:
         # row: (id, content, source_id, session_id, chunk_id, score)
         # 返回只读 Chunk，不设置与 Source 的关系，避免触发关系集合的会话附加
-        chunk = Chunk(id=row[0], content=row[1], source_id=row[2], session_id=row[3])
-        # 从数据库获取chunk_id
-        chunk.chunk_id = row[4]  # row[4] is chunk_id from the query
+        # Note: Do not set explicit id to avoid conflicts with auto-increment
+        chunk = Chunk(
+            content=row[1], 
+            source_id=row[2], 
+            session_id=row[3],
+            chunk_id=row[4]
+        )
+        # Set the id after creation to preserve database row ID for queries
+        # but prevent SQLAlchemy from treating this as a new insert
+        chunk.id = row[0]
         hits.append((chunk, float(row[5])))  # row[5] is the score
     return hits
 
