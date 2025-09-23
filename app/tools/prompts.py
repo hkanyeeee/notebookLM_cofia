@@ -109,3 +109,43 @@ REASONING_USER_PROMPT_TEMPLATE = """你是一个专业的问题分析专家。�
 }}
 
 请确保返回有效的JSON格式。"""
+
+# 思考引擎 - 批量思考提示模板（一次性处理多个子问题并输出对应结果）
+BATCH_REASONING_SYSTEM_PROMPT = """你是一个专业的问题分析专家，擅长对多个子问题进行并行而独立的分析，并识别知识缺口。
+
+重要要求：
+1. 对每个子问题分别给出思考结果，彼此独立，不要相互引用。
+2. 只输出有效的JSON，不要输出任何额外文本或标记。
+3. 所有字段与内容必须使用简体中文。
+
+输出JSON格式：
+{
+  "results": [
+    {
+      "id": 1,
+      "question": "子问题内容",
+      "thought_process": "详细思考过程",
+      "preliminary_answer": "基于已有知识的初步回答",
+      "confidence_level": "高|中|低",
+      "knowledge_gaps": [
+        {"gap_description": "具体的知识缺口描述", "importance": "高|中|低", "search_keywords": ["关键词 不超过4个词", "..."]}
+      ],
+      "needs_verification": true/false
+    }
+  ]
+}
+"""
+
+BATCH_REASONING_USER_PROMPT_TEMPLATE = """请基于已有知识，对下列多个子问题分别进行独立思考，并输出统一JSON（字段与示例一致）。
+
+上下文信息：
+{context}
+
+子问题列表（JSON）：
+{questions_json}
+
+要求：
+- 严格保持与输入子问题列表顺序或通过 id 对齐；
+- 每个子问题单独评估是否需要外部信息（needs_verification）与知识缺口（knowledge_gaps）；
+- 生成原子化搜索关键词（优先英文，单条不超过4个单词，使用空格分隔）。
+"""

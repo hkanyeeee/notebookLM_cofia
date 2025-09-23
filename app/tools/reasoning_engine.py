@@ -34,7 +34,10 @@ from ..config import (
     QUERY_GENERATION_PROMPT_TEMPLATE,
     MAX_WORDS_PER_QUERY
 )
-from .prompts import REASONING_SYSTEM_PROMPT, REASONING_USER_PROMPT_TEMPLATE
+from .prompts import (
+    BATCH_REASONING_SYSTEM_PROMPT,
+    BATCH_REASONING_USER_PROMPT_TEMPLATE,
+)
 # 注意：避免顶层导入 chat_complete 以防循环依赖
 
 
@@ -46,90 +49,6 @@ class ReasoningEngine:
     def __init__(self, llm_service_url: str = LLM_SERVICE_URL):
         self.llm_service_url = llm_service_url
 
-    async def think_independently(
-        self, 
-        question: str, 
-        context: List[str] = None,
-        execution_context: Optional[ToolExecutionContext] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None
-    ) -> Dict[str, Any]:
-        """
-        对单个问题进行独立思考
-        
-        Args:
-            question: 要思考的问题
-            context: 相关上下文信息
-            execution_context: 执行上下文
-        
-        Returns:
-            思考结果字典
-        """
-        try:
-            # 准备上下文信息
-            context_str = "\n".join(context) if context else "无特定上下文"
-            
-            # 构建提示
-            prompt = REASONING_USER_PROMPT_TEMPLATE.format(
-                question=question,
-                context=context_str
-            )
-            
-            # 构建消息列表
-            messages = [
-                {
-                    "role": "system",
-                    "content": REASONING_SYSTEM_PROMPT
-                }
-            ]
-            
-            # 添加对话历史（如果提供）
-            if conversation_history:
-                messages.extend(conversation_history)
-            
-            messages.append({"role": "user", "content": prompt})
-            
-            # 延迟导入以避免循环依赖
-            from ..llm_client import chat_complete as _chat_complete
-            # 调用统一 LLM 客户端
-            content = await _chat_complete(
-                system_prompt=REASONING_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                model=execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
-                timeout=REASONING_TIMEOUT,
-                conversation_history=conversation_history,
-            )
-
-            # 尝试解析JSON
-            try:
-                # 清理 markdown 代码块标记
-                cleaned_content = self._clean_json_content(content)
-                thinking_result = json.loads(cleaned_content)
-                
-                # 验证必要字段
-                required_fields = ["thought_process", "confidence_level", "knowledge_gaps"]
-                if not all(key in thinking_result for key in required_fields):
-                    raise ValueError("缺少必要字段")
-                
-                return thinking_result
-            
-            except json.JSONDecodeError as e:
-                print(f"JSON解析失败: {e}, 原内容: {content}")
-                # 尝试修复截断的JSON
-                try:
-                    repaired_content = self._repair_truncated_json(content)
-                    if repaired_content:
-                        thinking_result = json.loads(repaired_content)
-                        print(f"JSON修复成功")
-                        return thinking_result
-                except Exception as repair_e:
-                    print(f"JSON修复失败: {repair_e}")
-                
-                return await self._create_fallback_thinking(question, context_str, execution_context)
-                    
-        except Exception as e:
-            print(f"独立思考失败: {e}")
-            return await self._create_fallback_thinking(question, context or [], execution_context)
-
     async def think_about_decomposition(
         self, 
         decomposition: Dict[str, Any], 
@@ -138,7 +57,8 @@ class ReasoningEngine:
         conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> List[Dict[str, Any]]:
         """
-        对拆解后的多个子问题进行思考
+        对拆解后的多个子问题进行思考（批量版）：一次性送入大模型，返回逐子问题的思考结果。
+        不再逐子问题分别调用大模型。
         
         Args:
             decomposition: 问题拆解结果
@@ -148,25 +68,77 @@ class ReasoningEngine:
         Returns:
             每个子问题的思考结果列表
         """
-        thoughts = []
-        
-        sub_queries = decomposition.get("sub_queries", [])
-        for sub_query in sub_queries:
-            if isinstance(sub_query, dict):
-                question = sub_query.get("question", "")
+        sub_queries_raw = decomposition.get("sub_queries", [])
+        # 规范化为 [{id, question}]
+        normalized_sub_queries = []
+        for idx, sq in enumerate(sub_queries_raw):
+            if isinstance(sq, dict):
+                q = sq.get("question", "")
+                sq_id = sq.get("id", idx + 1)
             else:
-                question = str(sub_query)
-            
-            if question:
-                thought = await self.think_independently(
-                    question, 
-                    context, 
-                    execution_context,
-                    conversation_history
-                )
-                thought["sub_query_id"] = sub_query.get("id") if isinstance(sub_query, dict) else None
-                thoughts.append(thought)
-        
+                q = str(sq)
+                sq_id = idx + 1
+            if q:
+                normalized_sub_queries.append({"id": sq_id, "question": q})
+
+        return await self.think_in_batch(
+            normalized_sub_queries,
+            context,
+            execution_context,
+            conversation_history,
+        )
+
+    async def think_in_batch(
+        self,
+        sub_queries: List[Dict[str, Any]],
+        context: List[str] = None,
+        execution_context: Optional[ToolExecutionContext] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        批量思考：一次性将多个子问题发送给大模型，统一返回每个子问题的思考与知识缺口。
+        不包含逐子问题的回退逻辑。
+        """
+        # 准备上下文
+        context_str = "\n".join(context) if context else "无特定上下文"
+        questions_json = json.dumps(sub_queries, ensure_ascii=False)
+
+        # 构建提示
+        system_prompt = BATCH_REASONING_SYSTEM_PROMPT
+        user_prompt = BATCH_REASONING_USER_PROMPT_TEMPLATE.format(
+            context=context_str,
+            questions_json=questions_json,
+        )
+
+        # 调用统一 LLM 客户端
+        from ..llm_client import chat_complete as _chat_complete
+        content = await _chat_complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=execution_context.run_config.model if execution_context else DEFAULT_SEARCH_MODEL,
+            timeout=REASONING_TIMEOUT,
+            conversation_history=conversation_history,
+        )
+
+        # 解析结果
+        cleaned = self._clean_json_content(content)
+        parsed = json.loads(cleaned)
+        results = parsed.get("results", []) if isinstance(parsed, dict) else []
+        thoughts: List[Dict[str, Any]] = []
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            thought = {
+                "question": item.get("question"),
+                "thought_process": item.get("thought_process"),
+                "preliminary_answer": item.get("preliminary_answer"),
+                "confidence_level": item.get("confidence_level", "中"),
+                "knowledge_gaps": item.get("knowledge_gaps", []),
+                "needs_verification": bool(item.get("needs_verification", False)),
+                "sub_query_id": item.get("id"),
+            }
+            thoughts.append(thought)
+
         return thoughts
 
     async def _create_fallback_thinking(self, question: str, context: Any, execution_context: Optional[ToolExecutionContext] = None) -> Dict[str, Any]:
