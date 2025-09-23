@@ -7,8 +7,8 @@ import time
 import re
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple, Set
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
 from difflib import SequenceMatcher
 import os
 from concurrent.futures import ProcessPoolExecutor
@@ -235,64 +235,6 @@ class WebSearchTool:
         # 使用快速相似度计算方法
         return _fast_similarity(text1, text2)
     
-    def _deduplicate_documents(self, documents: List[Dict[str, str]], similarity_threshold: float = 0.8) -> List[Dict[str, str]]:
-        """
-        对文档进行内容去重 - 使用优化的快速去重算法
-        
-        Args:
-            documents: 文档列表
-            similarity_threshold: 相似度阈值，超过此值认为是重复内容
-        
-        Returns:
-            去重后的文档列表
-        """
-        if not documents:
-            return documents
-        
-        unique_documents: List[Dict[str, str]] = []
-        seen_hashes: Set[str] = set()  # 哈希去重
-        content_shingles: List[Set[str]] = []  # 存储已有文档的shingles用于相似度比较
-        removed_count = 0
-
-        print(f"[WebSearch] 开始快速去重处理 {len(documents)} 个文档...")
-        
-        for doc in documents:
-            content = doc.get("content", "")
-            if not content or not content.strip():
-                continue  # 跳过空内容
-
-            # 第一步：快速哈希去重（完全相同的内容）
-            content_hash = _get_text_hash(content)
-            if content_hash in seen_hashes:
-                url = doc.get('url', 'unknown')
-                print(f"[WebSearch] 发现完全重复内容(哈希匹配)，跳过: {url}")
-                removed_count += 1
-                continue
-            
-            # 第二步：基于shingles的相似度检查（仅对前2000字符）
-            content_truncated = content[:2000] if len(content) > 2000 else content
-            current_shingles = _get_text_shingles(content_truncated, k=3)
-            
-            # 检查与已有文档的相似度
-            is_duplicate = False
-            for existing_shingles in content_shingles:
-                similarity = _jaccard_similarity(current_shingles, existing_shingles)
-                if similarity > similarity_threshold:
-                    url = doc.get('url', 'unknown')
-                    print(f"[WebSearch] 发现相似内容(相似度:{similarity:.2f})，跳过: {url}")
-                    is_duplicate = True
-                    removed_count += 1
-                    break
-
-            if not is_duplicate:
-                unique_documents.append(doc)
-                seen_hashes.add(content_hash)
-                content_shingles.append(current_shingles)
-
-        if removed_count > 0:
-            print(f"[WebSearch] 内容去重完成，移除了 {removed_count} 个重复文档，保留 {len(unique_documents)} 个")
-
-        return unique_documents
     
     async def generate_search_queries(self, topic: str, model: str = None, search_history: List[Dict[str, Any]] = None) -> List[str]:
         """生成搜索关键词
@@ -485,111 +427,118 @@ class WebSearchTool:
         
         return content
     
-    async def process_documents(
+    async def process_single_document(
         self, 
-        documents: List[Dict[str, str]], 
-        session_id: str
-    ) -> List[int]:
-        """处理文档：切分、embedding、存储到向量数据库"""
-        if not documents:
+        doc: Dict[str, str], 
+        session_id: str, 
+        global_chunk_index: int,
+        db: AsyncSession
+    ) -> Tuple[Optional[int], List[Chunk], int]:
+        """处理单个文档：切分、创建chunks、返回source_id和chunks"""
+        url = doc["url"]
+        title = doc["title"]
+        content = doc.get("content", "")
+        
+        if not content:
+            return None, [], global_chunk_index
+        
+        # 检查是否已存在相同URL的Source记录
+        from sqlalchemy import select
+        existing_source = await db.execute(
+            select(Source).where(Source.url == url)
+        )
+        source = existing_source.scalar_one_or_none()
+        
+        if source:
+            # 使用现有的Source记录
+            print(f"[WebSearch] 使用现有Source记录: {url}")
+        else:
+            # 创建新的 Source 记录
+            source = Source(
+                session_id=session_id,
+                url=url,
+                title=title
+            )
+            db.add(source)
+            await db.commit()
+            await db.refresh(source)
+            print(f"[WebSearch] 创建新Source记录: {url}")
+        
+        # 文档切分
+        chunks_text = chunk_text(
+            content,
+            tokens_per_chunk=CHUNK_SIZE,
+            overlap_tokens=CHUNK_OVERLAP
+        )
+        
+        # 创建 Chunk 记录
+        chunks = []
+        for chunk_content in chunks_text:
+            # 生成基于session_id和全局索引的唯一chunk_id
+            chunk_id = f"{session_id}_{global_chunk_index}"
+            chunk = Chunk(
+                content=chunk_content,
+                source_id=source.id,
+                session_id=session_id,
+                chunk_id=chunk_id
+            )
+            chunks.append(chunk)
+            global_chunk_index += 1
+        
+        db.add_all(chunks)
+        await db.commit()
+        
+        # 刷新以获取 ID 并确保chunks在session中
+        for chunk in chunks:
+            await db.refresh(chunk)
+            # 确保source关系正确加载
+            if not chunk.source:
+                chunk.source = source
+        
+        return source.id, chunks, global_chunk_index
+
+    async def process_chunk_batch(
+        self, 
+        chunk_batch: List[Tuple[Chunk, int]], 
+        pending_embeddings: List[str]
+    ) -> List[Tuple[int, List[Chunk], List[List[float]]]]:
+        """处理一批chunks：计算embedding并按source分组"""
+        if not chunk_batch or not pending_embeddings:
             return []
         
-        # 使用数据库会话
-        async with AsyncSessionLocal() as db:
-            source_ids = []
-            all_chunks = []
-            all_embeddings_flat = []
-            
-            # 用于确保 chunk_id 在整个 session 中唯一的全局计数器
-            global_chunk_index = 0
-            
-            for doc in documents:
-                url = doc["url"]
-                title = doc["title"]
-                content = doc.get("content", "")
-                
-                if not content:
-                    continue
-                
-                # 检查是否已存在相同URL的Source记录
-                from sqlalchemy import select
-                existing_source = await db.execute(
-                    select(Source).where(Source.url == url)
-                )
-                source = existing_source.scalar_one_or_none()
-                
-                if source:
-                    # 使用现有的Source记录
-                    print(f"[WebSearch] 使用现有Source记录: {url}")
-                    source_ids.append(source.id)
-                else:
-                    # 创建新的 Source 记录
-                    source = Source(
-                        session_id=session_id,
-                        url=url,
-                        title=title
-                    )
-                    db.add(source)
-                    await db.commit()
-                    await db.refresh(source)
-                    source_ids.append(source.id)
-                    print(f"[WebSearch] 创建新Source记录: {url}")
-                
-                # 文档切分
-                chunks_text = chunk_text(
-                    content,
-                    tokens_per_chunk=CHUNK_SIZE,
-                    overlap_tokens=CHUNK_OVERLAP
-                )
-                
-                # 创建 Chunk 记录
-                chunks = []
-                # 使用全局计数器确保chunk_id在整个session中唯一
-                for chunk_content in chunks_text:
-                    # 生成基于session_id和全局索引的唯一chunk_id
-                    chunk_id = f"{session_id}_{global_chunk_index}"
-                    chunk = Chunk(
-                        content=chunk_content,
-                        source_id=source.id,
-                        session_id=session_id,
-                        chunk_id=chunk_id
-                    )
-                    chunks.append(chunk)
-                    global_chunk_index += 1
-                
-                db.add_all(chunks)
-                await db.commit()
-                
-                # 刷新以获取 ID 并确保chunks在session中
-                for chunk in chunks:
-                    await db.refresh(chunk)
-                    # 确保source关系正确加载
-                    if not chunk.source:
-                        chunk.source = source
-                
-                all_chunks.extend(chunks)
-                
-                # 计算 embeddings
-                chunk_texts = [chunk.content for chunk in chunks]
-                embeddings = await embed_texts(
-                    chunk_texts,
-                    model=DEFAULT_EMBEDDING_MODEL,
-                    batch_size=EMBEDDING_BATCH_SIZE
-                )
-                all_embeddings_flat.extend(embeddings)
-            
-            # 批量存储到向量数据库
-            if all_chunks and all_embeddings_flat:
-                # 按 source 分组存储
-                chunk_idx = 0
-                for source_id in source_ids:
-                    source_chunks = [c for c in all_chunks if c.source_id == source_id]
-                    if source_chunks:
-                        source_embeddings = all_embeddings_flat[chunk_idx:chunk_idx + len(source_chunks)]
-                        await add_embeddings(source_id, source_chunks, source_embeddings)
-                        chunk_idx += len(source_chunks)
-            
-            return source_ids
+        print(f"[WebSearch] 处理微批embedding: {len(pending_embeddings)} 个chunks")
+        
+        # 计算embeddings
+        embeddings = await embed_texts(
+            pending_embeddings,
+            model=DEFAULT_EMBEDDING_MODEL,
+            batch_size=EMBEDDING_BATCH_SIZE
+        )
+        
+        # 按source_id分组
+        source_groups = {}
+        for (chunk, embed_idx), embedding in zip(chunk_batch, embeddings):
+            source_id = chunk.source_id
+            if source_id not in source_groups:
+                source_groups[source_id] = {'chunks': [], 'embeddings': []}
+            source_groups[source_id]['chunks'].append(chunk)
+            source_groups[source_id]['embeddings'].append(embedding)
+        
+        # 转换为返回格式
+        result = []
+        for source_id, group in source_groups.items():
+            result.append((source_id, group['chunks'], group['embeddings']))
+        
+        return result
+
+    async def flush_to_vector_db(self, source_chunk_embeddings: List[Tuple[int, List[Chunk], List[List[float]]]]):
+        """将chunks和embeddings写入向量数据库"""
+        for source_id, chunks, embeddings in source_chunk_embeddings:
+            try:
+                await add_embeddings(source_id, chunks, embeddings)
+                print(f"[WebSearch] 成功入库 source_id={source_id}, {len(chunks)} 个chunks")
+            except Exception as e:
+                print(f"[WebSearch] 入库失败 source_id={source_id}: {e}")
     
     async def search_and_retrieve(
         self, 
@@ -770,61 +719,123 @@ class WebSearchTool:
             print(f"找到 {len(all_results)} 个搜索结果")
             
             if all_results:
-                # 3. 并发爬取网页内容
-                print(f"[WebSearch] 开始并发爬取网页内容...")
+                # 3. 增量处理：先去重，然后并发爬取+实时处理
+                print(f"[WebSearch] 开始增量处理模式...")
                 t2 = time.perf_counter()
-                content_tasks = []
-                for item in all_results[:WEB_SEARCH_CONCURRENT_REQUESTS]:
-                    content_tasks.append(self.fetch_web_content(item["url"]))
                 
-                # 处理剩余的 URL（分批）
-                remaining_urls = all_results[WEB_SEARCH_CONCURRENT_REQUESTS:]
-                contents = await asyncio.gather(*content_tasks, return_exceptions=True)
-                first_batch_time = (time.perf_counter() - t2) * 1000.0
-                print(f"[WebSearch] 第一批爬取耗时: {first_batch_time/1000.0:.2f}s")
+                # 微批配置
+                FLUSH_CHUNK_COUNT = 20  # 达到20个chunk就flush
+                FLUSH_TIMEOUT_MS = 500  # 或者500ms超时就flush
                 
-                # 处理剩余的批次
-                t2b = time.perf_counter()
-                for i in range(0, len(remaining_urls), WEB_SEARCH_CONCURRENT_REQUESTS):
-                    batch = remaining_urls[i:i + WEB_SEARCH_CONCURRENT_REQUESTS]
-                    batch_tasks = [self.fetch_web_content(item["url"]) for item in batch]
-                    batch_contents = await asyncio.gather(*batch_tasks, return_exceptions=True)
-                    contents.extend(batch_contents)
+                # 使用数据库会话
+                async with AsyncSessionLocal() as db:
+                    source_ids = []
+                    processed_documents = []
+                    global_chunk_index = 0
+                    
+                    # 微批缓冲区
+                    pending_chunks = []  # List[Tuple[Chunk, int]]  # (chunk, embedding_index)
+                    pending_embeddings = []  # List[str]  # chunk contents for embedding
+                    last_flush_time = time.perf_counter()
+                    
+                    async def flush_pending():
+                        nonlocal pending_chunks, pending_embeddings, last_flush_time
+                        if not pending_chunks:
+                            return
+                        
+                        print(f"[WebSearch] 触发微批flush: {len(pending_chunks)} chunks")
+                        source_chunk_embeddings = await self.process_chunk_batch(pending_chunks, pending_embeddings)
+                        await self.flush_to_vector_db(source_chunk_embeddings)
+                        
+                        # 清空缓冲区
+                        pending_chunks.clear()
+                        pending_embeddings.clear()
+                        last_flush_time = time.perf_counter()
+                    
+                    # 创建并发爬取任务
+                    crawl_semaphore = asyncio.Semaphore(WEB_SEARCH_CONCURRENT_REQUESTS)
+                    
+                    async def crawl_and_process(item):
+                        nonlocal global_chunk_index
+                        async with crawl_semaphore:
+                            try:
+                                content = await self.fetch_web_content(item["url"])
+                                if isinstance(content, str) and content:
+                                    doc = {
+                                        "url": item["url"],
+                                        "title": item["title"],
+                                        "content": content,
+                                        "snippet": item.get("snippet", "")
+                                    }
+                                    
+                                    # 立即处理单个文档
+                                    source_id, chunks, new_global_index = await self.process_single_document(
+                                        doc, session_id, global_chunk_index, db
+                                    )
+                                    global_chunk_index = new_global_index
+                                    
+                                    if source_id and chunks:
+                                        print(f"[WebSearch] ✓ 成功处理: {item['url']} -> {len(chunks)} chunks")
+                                        return source_id, doc, chunks
+                                    else:
+                                        print(f"[WebSearch] ✗ 处理失败: {item['url']} - 无内容")
+                                        return None, None, []
+                                else:
+                                    print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}")
+                                    return None, None, []
+                            except Exception as e:
+                                print(f"[WebSearch] ✗ 处理异常: {item['url']} - {e}")
+                                return None, None, []
+                    
+                    # 并发处理所有URL
+                    tasks = [crawl_and_process(item) for item in all_results]
+                    
+                    # 使用as_completed逐个处理完成的任务
+                    completed_count = 0
+                    for coro in asyncio.as_completed(tasks):
+                        try:
+                            source_id, doc, chunks = await coro
+                            completed_count += 1
+                            
+                            if source_id and doc and chunks:
+                                source_ids.append(source_id)
+                                processed_documents.append(doc)
+                                
+                                # 添加到微批缓冲区
+                                for chunk in chunks:
+                                    pending_chunks.append((chunk, len(pending_embeddings)))
+                                    pending_embeddings.append(chunk.content)
+                                
+                                # 检查是否需要flush
+                                current_time = time.perf_counter()
+                                should_flush = (
+                                    len(pending_chunks) >= FLUSH_CHUNK_COUNT or
+                                    (current_time - last_flush_time) * 1000 >= FLUSH_TIMEOUT_MS
+                                )
+                                
+                                if should_flush:
+                                    await flush_pending()
+                            
+                            # 每处理5个页面输出一次进度
+                            if completed_count % 5 == 0:
+                                print(f"[WebSearch] 进度: {completed_count}/{len(tasks)} 页面已处理")
+                                
+                        except Exception as e:
+                            print(f"[WebSearch] 处理任务异常: {e}")
+                            completed_count += 1
+                    
+                    # 最后flush剩余的chunks
+                    if pending_chunks:
+                        print("[WebSearch] 最终flush剩余chunks")
+                        await flush_pending()
+                    
+                    result["source_ids"] = source_ids
+                    result["search_results"] = processed_documents
                 
                 crawl_time = (time.perf_counter() - t2) * 1000.0
-                result["metrics"]["step_durations_ms"]["crawl_contents_total"] = crawl_time
-                result["metrics"]["step_durations_ms"]["crawl_first_batch"] = first_batch_time
-                result["metrics"]["step_durations_ms"]["crawl_remaining_batches"] = (time.perf_counter() - t2b) * 1000.0
-                # 组装文档
-                raw_documents = []
-                for item, content in zip(all_results, contents):
-                    if isinstance(content, str) and content:
-                        raw_documents.append({
-                            "url": item["url"],
-                            "title": item["title"],
-                            "content": content,
-                            "snippet": item.get("snippet", "")
-                        })
-                        print(f"[WebSearch] ✓ 成功爬取: {item['url']}")
-                    else:
-                        print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}: {str(content)[:100] if content else 'None'}")
-                
-                print(f"成功爬取 {len(raw_documents)} 个网页")
-                
-                # 对文档进行内容去重
-                documents = self._deduplicate_documents(raw_documents, similarity_threshold=0.8)
-                result["search_results"] = documents
-                
-                if documents:
-                    # 4. 处理文档（切分、embedding、存储）
-                    print(f"[WebSearch] 开始处理文档（切分、embedding、存储）...")
-                    t3 = time.perf_counter()
-                    source_ids = await self.process_documents(documents, session_id)
-                    result["source_ids"] = source_ids
-                    proc_time = (time.perf_counter() - t3) * 1000.0
-                    result["metrics"]["step_durations_ms"]["process_documents"] = proc_time
-                    print(f"[WebSearch] 文档处理耗时: {proc_time/1000.0:.2f}s")
-                    print(f"[WebSearch] 处理了 {len(source_ids)} 个文档源")
+                result["metrics"]["step_durations_ms"]["incremental_process_total"] = crawl_time
+                print(f"[WebSearch] 增量处理总耗时: {crawl_time/1000.0:.2f}s")
+                print(f"[WebSearch] 成功处理 {len(processed_documents)} 个文档，入库 {len(source_ids)} 个源")
             
             # 5. 搜索和召回（可选）
             if result["source_ids"]:
