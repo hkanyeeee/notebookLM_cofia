@@ -652,7 +652,7 @@ class IntelligentOrchestrator:
                 original_query, knowledge_gaps, is_simple_query=is_simple_query
             )
             
-            from ..config import MAX_KNOWLEDGE_GAPS, GAP_RECALL_TOP_K
+            from ..config import GAP_RECALL_TOP_K
             from ..tools.web_search_tool import web_search_tool
             import uuid
             
@@ -684,7 +684,7 @@ class IntelligentOrchestrator:
             print(f"[IntelligentOrchestrator] 搜索完成，获得{len(source_ids)}个数据源")
             
             # 3. 为每个知识缺口进行独立召回
-            selected_gaps = knowledge_gaps[:MAX_KNOWLEDGE_GAPS]
+            selected_gaps = knowledge_gaps
             knowledge_gaps_search_results = {}
             
             import asyncio
