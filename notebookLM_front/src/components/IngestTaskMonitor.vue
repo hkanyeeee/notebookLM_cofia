@@ -38,15 +38,14 @@
                 {{ getTaskStatusText(task.status) }}
               </span>
               
-              <!-- 增强的关闭按钮 -->
+              <!-- 删除/关闭按钮：进行中也允许删除 -->
               <button 
-                v-if="isTaskCompleted(task.status)"
-                @click="removeTask(task.task_id)"
+                @click="confirmRemoveTask(task)"
                 class="remove-btn enhanced"
-                title="关闭任务"
+                :title="isTaskCompleted(task.status) ? '关闭任务' : '删除进行中的任务'"
               >
                 <i class="fas fa-times"></i>
-                <span class="remove-text">关闭</span>
+                <span class="remove-text">{{ isTaskCompleted(task.status) ? '关闭' : '删除' }}</span>
               </button>
             </div>
           </div>
@@ -284,9 +283,19 @@ async function removeTask(taskId: string) {
       eventSource.close()
       eventSources.value.delete(taskId)
     }
+    ElMessage.success('任务已移除')
   } catch (error) {
     console.error('移除任务失败:', error)
   }
+}
+
+// 删除前确认：进行中给出提示
+function confirmRemoveTask(task: IngestTaskStatus) {
+  if (task.status === TaskStatus.RUNNING || task.status === TaskStatus.PENDING) {
+    const ok = window.confirm('确定要删除进行中的任务吗？这将仅移除监控项，不会中断后台处理。')
+    if (!ok) return
+  }
+  removeTask(task.task_id)
 }
 
 // 批量清理所有完成的任务
@@ -383,11 +392,27 @@ function formatTime(timeStr: string): string {
   background: var(--color-background);
 }
 
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .task-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-background) 90%, transparent),
+    color-mix(in oklab, var(--color-background) 70%, transparent)
+  );
+  backdrop-filter: saturate(140%) blur(2px);
+  padding: 6px 0;
 }
 
 .task-list-title {
@@ -429,15 +454,18 @@ function formatTime(timeStr: string): string {
 }
 
 .task-item {
-  background: var(--color-background-soft);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 16px;
-  transition: all 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 1px 2px var(--color-shadow);
 }
 
 .task-item:hover {
-  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+  border-color: var(--color-border-light);
+  box-shadow: 0 6px 16px var(--color-shadow);
 }
 
 .task-header {
@@ -456,7 +484,7 @@ function formatTime(timeStr: string): string {
 
 .task-url {
   font-size: 0.85em;
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
   font-family: monospace;
 }
 
@@ -470,10 +498,11 @@ function formatTime(timeStr: string): string {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
   font-size: 0.85em;
   font-weight: 500;
+  border: 1px solid color-mix(in oklab, currentColor 30%, transparent);
 }
 
 .status-pending { color: #f59e0b; background: #fef3c7; }
@@ -497,7 +526,7 @@ function formatTime(timeStr: string): string {
 
 .remove-btn:hover {
   color: var(--color-text);
-  background: var(--color-background-mute);
+  background: var(--color-surface-light);
 }
 
 /* 增强版关闭按钮样式 */
@@ -529,9 +558,10 @@ function formatTime(timeStr: string): string {
 
 .progress-bar {
   width: 100%;
-  height: 6px;
-  background: var(--color-background-mute);
-  border-radius: 3px;
+  height: 8px;
+  background: var(--color-surface-light);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
   overflow: hidden;
   margin-bottom: 6px;
 }
@@ -539,7 +569,7 @@ function formatTime(timeStr: string): string {
 .progress-fill {
   height: 100%;
   transition: width 0.3s ease;
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 .progress-pending { background: #f59e0b; }
@@ -564,7 +594,7 @@ function formatTime(timeStr: string): string {
   justify-content: space-between;
   align-items: center;
   font-size: 0.85em;
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
 }
 
 .failed-count {
@@ -590,6 +620,7 @@ function formatTime(timeStr: string): string {
   gap: 6px;
   max-height: 200px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
 .sub-doc-item {
@@ -597,8 +628,9 @@ function formatTime(timeStr: string): string {
   justify-content: space-between;
   align-items: center;
   padding: 6px 8px;
-  background: var(--color-background);
-  border-radius: 4px;
+  background: var(--color-surface);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
   font-size: 0.85em;
 }
 
@@ -612,7 +644,7 @@ function formatTime(timeStr: string): string {
 
 .sub-doc-url {
   font-family: monospace;
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -645,7 +677,7 @@ function formatTime(timeStr: string): string {
 .expand-btn {
   background: none;
   border: 1px solid var(--color-border);
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -657,7 +689,7 @@ function formatTime(timeStr: string): string {
 }
 
 .expand-btn:hover {
-  border-color: var(--color-border-hover);
+  border-color: var(--color-border-light);
   color: var(--color-text);
 }
 
@@ -667,7 +699,7 @@ function formatTime(timeStr: string): string {
   align-items: flex-end;
   gap: 2px;
   font-size: 0.75em;
-  color: var(--color-text-3);
+  color: var(--color-text-muted);
 }
 
 .task-error {
@@ -685,12 +717,32 @@ function formatTime(timeStr: string): string {
 .empty-state {
   text-align: center;
   padding: 40px;
-  color: var(--color-text-3);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
 }
 
 .empty-state i {
   font-size: 2em;
   margin-bottom: 12px;
   display: block;
+}
+
+@media (max-width: 768px) {
+  .task-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .task-status {
+    align-self: flex-start;
+  }
+
+  .task-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 </style>

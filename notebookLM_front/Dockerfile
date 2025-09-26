@@ -7,6 +7,7 @@ ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
+ARG VITE_API_BASE_URL
 ENV HTTP_PROXY=$HTTP_PROXY
 ENV HTTPS_PROXY=$HTTPS_PROXY
 ENV NO_PROXY=$NO_PROXY
@@ -18,6 +19,8 @@ RUN npm config set registry ${NPM_REGISTRY} \
  && pnpm config set registry ${NPM_REGISTRY}
 
 COPY . .
+# 允许通过构建参数覆盖，未传参时默认为空字符串（走同源反代）
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-""}
 RUN pnpm install --frozen-lockfile \
  && pnpm build
 

@@ -8,7 +8,10 @@ from bs4 import BeautifulSoup
 def is_potential_sub_doc(candidate_url: str, base_url: str) -> bool:
     """
     判断候选URL是否可能是 base_url 的子文档。
-    规则：同域名，且路径为更深层或同层内的子路径。
+    规则（与 preview_auto_ingest 对齐）：
+    - 必须与 base_url 同域名
+    - 若 URL 路径是 base 路径的更深层（严格子路径），判定为子文档
+    - 另外允许“同一父目录下的兄弟文档”（即与 base 同目录的其他路径）作为潜在子文档
     """
     try:
         parsed_url = urlparse(candidate_url)
@@ -20,10 +23,16 @@ def is_potential_sub_doc(candidate_url: str, base_url: str) -> bool:
         base_path = parsed_base.path.rstrip('/')
         url_path = parsed_url.path.rstrip('/')
 
-        # 仅允许更深层路径（严格子路径）。
-        # 例如 base: /docs/python 只允许 /docs/python/*，排除 /docs/python3、/docs/typescript 等兄弟文档。
-        if url_path.startswith(base_path + '/'):
+        # 更深层严格子路径：/docs -> /docs/python
+        if url_path.startswith(base_path) and len(url_path) > len(base_path):
             return True
+
+        # 同一父目录下的兄弟文档：/docs/guide.html 与 /docs/index.html
+        if base_path:
+            parent_dir = base_path.rsplit('/', 1)[0] if '/' in base_path else ''
+            # 允许在相同父目录下出现的其他路径
+            if url_path.startswith(parent_dir):
+                return True
 
         return False
     except Exception:

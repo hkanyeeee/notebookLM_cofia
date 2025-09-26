@@ -44,8 +44,7 @@ WEB_SEARCH_TIMEOUT = float(get_config_value("WEB_SEARCH_TIMEOUT", "10.0"))
 # 搜索关键词词数限制
 MAX_WORDS_PER_QUERY = int(get_config_value("MAX_WORDS_PER_QUERY", "4"))  # 每个查询的最大词数
 
-# 知识缺口和关键词限制
-MAX_KNOWLEDGE_GAPS = int(get_config_value("MAX_KNOWLEDGE_GAPS", "10"))  # 用于网络搜索的知识缺口最多10个
+# 关键词限制与召回规模
 MAX_KEYWORDS_PER_GAP = int(get_config_value("MAX_KEYWORDS_PER_GAP", "2"))  # 每个知识缺口的搜索关键词最多2个
 GAP_RECALL_TOP_K = int(get_config_value("GAP_RECALL_TOP_K", "4"))  # 每个知识缺口召回top 4
 
@@ -117,7 +116,7 @@ N8N_PASSWORD = get_config_value("N8N_PASSWORD")
 
 # 子文档提取/递归相关配置
 SUBDOC_USE_WEBHOOK_FALLBACK = get_config_value("SUBDOC_USE_WEBHOOK_FALLBACK", "true").lower() == "true"
-SUBDOC_MAX_CONCURRENCY = int(get_config_value("SUBDOC_MAX_CONCURRENCY", "16"))  # 子文档并发处理数量
+SUBDOC_MAX_CONCURRENCY = int(get_config_value("SUBDOC_MAX_CONCURRENCY", "10"))  # 子文档并发处理数量
 SUBDOC_MAX_RETRIES = int(get_config_value("SUBDOC_MAX_RETRIES", "2"))  # 子文档失败时的最大重试次数
 SUBDOC_RETRY_BACKOFF_BASE = float(get_config_value("SUBDOC_RETRY_BACKOFF_BASE", "1.0"))  # 初始退避秒数
 SUBDOC_RETRY_BACKOFF_FACTOR = float(get_config_value("SUBDOC_RETRY_BACKOFF_FACTOR", "2.0"))  # 指数退避因子
@@ -143,12 +142,15 @@ print(f"SUBDOC_USE_WEBHOOK_FALLBACK: {SUBDOC_USE_WEBHOOK_FALLBACK}")
 # 工具相关配置
 print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")
 print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
+print(f"DEFAULT_TOOL_CHOICE: {DEFAULT_TOOL_CHOICE}")
+print(f"ENABLE_SPECULATIVE_DECODING: {ENABLE_SPECULATIVE_DECODING}")
+print(f"DEFAULT_MODEL_TTL: {DEFAULT_MODEL_TTL}")
+print(f"ENABLE_USAGE_STATS: {ENABLE_USAGE_STATS}")
 
 # Web 搜索相关配置
 print(f"WEB_SEARCH_RESULT_COUNT: {WEB_SEARCH_RESULT_COUNT}")
 print(f"WEB_SEARCH_MAX_QUERIES: {WEB_SEARCH_MAX_QUERIES}")
 print(f"WEB_SEARCH_MAX_RESULTS: {WEB_SEARCH_MAX_RESULTS}")
-print(f"MAX_KNOWLEDGE_GAPS: {MAX_KNOWLEDGE_GAPS}")
 print(f"MAX_KEYWORDS_PER_GAP: {MAX_KEYWORDS_PER_GAP}")
 print(f"GAP_RECALL_TOP_K: {GAP_RECALL_TOP_K}")
 print(f"MAX_WORDS_PER_QUERY: {MAX_WORDS_PER_QUERY}")

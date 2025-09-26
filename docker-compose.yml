@@ -42,7 +42,7 @@ services:
       - PROXY_URL=${PROXY_URL:-http://192.168.31.167:7890}
       # 嵌入与大模型服务
       - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-http://embedding-gateway:7998/v1}
-      - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://host.docker.internal:1234/v1}
+      - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://llm-gateway:7995/v1}
       - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-}
       - SEARXNG_QUERY_URL=${SEARXNG_QUERY_URL:-http://host.docker.internal:8080/search}
       # 后端给 n8n 回调时的地址，建议用容器名，避免写死宿主机 IP
@@ -80,7 +80,6 @@ services:
       - MAX_WORDS_PER_QUERY=${MAX_WORDS_PER_QUERY:-4}
       
       # 知识缺口和关键词配置
-      - MAX_KNOWLEDGE_GAPS=${MAX_KNOWLEDGE_GAPS:-10}
       - MAX_KEYWORDS_PER_GAP=${MAX_KEYWORDS_PER_GAP:-2}
       - GAP_RECALL_TOP_K=${GAP_RECALL_TOP_K:-4}
       
@@ -120,6 +119,7 @@ services:
       - ./data:/app/data
     depends_on:
       - embedding-gateway
+      - llm-gateway
     networks:
       - localnet
     ports:
@@ -158,6 +158,25 @@ services:
       - localnet
     expose:
       - "7998"
+
+  llm-gateway:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: llm-gateway
+    ports:
+      - "7995:7995"
+    command: ["python", "llm_gateway.py"]
+    environment:
+      - LLM_BACKENDS=${LLM_BACKENDS:-http://192.168.31.98:1234/v1,http://192.168.31.231:1234/v1}
+      - LLM_GATEWAY_HOST=0.0.0.0
+      - LLM_GATEWAY_PORT=7995
+      - LLM_TIMEOUT=${LLM_TIMEOUT:-600}
+    networks:
+      - localnet
+    expose:
+      - "7995"
 
   # ============ 新增 n8n ============
   n8n:

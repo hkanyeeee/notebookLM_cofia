@@ -174,7 +174,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 #### 知识缺口分析配置
 
-*   `MAX_KNOWLEDGE_GAPS`: 一次请求中分析出的最大知识缺口数量。默认为 `10`。
 *   `MAX_KEYWORDS_PER_GAP`: 为每个知识缺口生成的最大搜索关键词数量。默认为 `2`。
 *   `GAP_RECALL_TOP_K`: 为每个知识缺口从向量库中召回的初始文档片段数量。默认为 `4`。
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
 import { useSessionStore } from './stores/session'
 import { useThemeStore } from './stores/theme'
+import { useNotebookStore, QueryType } from './stores/notebook'
 import { cleanupSession } from './api/notebook'
 import { ElButton, ElIcon } from 'element-plus'
 import { Menu } from '@element-plus/icons-vue'
@@ -12,6 +13,7 @@ const sidebarCollapsed = ref(false)
 const mobileMenuOpen = ref(false) // 移动端侧边栏显示状态
 const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
+const notebookStore = useNotebookStore()
 
 // 检查是否为移动端
 const isMobile = ref(window.innerWidth <= 768)
@@ -24,10 +26,39 @@ const isSmallScreen = ref(window.innerWidth <= COLLAPSE_BREAKPOINT)
 const syncCollapseWithScreen = () => {
   const newIsSmall = window.innerWidth <= COLLAPSE_BREAKPOINT
   if (newIsSmall !== isSmallScreen.value) {
-    sidebarCollapsed.value = newIsSmall
+    // 小屏一律折叠；大屏根据当前问答模式设置默认展开/收起
+    if (newIsSmall) {
+      sidebarCollapsed.value = true
+    } else {
+      applySidebarByMode()
+    }
     isSmallScreen.value = newIsSmall
   }
 }
+
+// 根据当前问答模式设置桌面端侧边栏：
+// - 普通/Collection：收起
+// - 文档：展开
+const applySidebarByMode = () => {
+  if (isMobile.value) return
+  const type = notebookStore.queryType
+  const currentType = typeof type === 'object' && 'value' in type ? (type as any).value : type
+  if (currentType === QueryType.DOCUMENT) {
+    sidebarCollapsed.value = false
+  } else {
+    sidebarCollapsed.value = true
+  }
+}
+
+// 模式切换时在桌面端联动侧边栏展开/收起
+watch(
+  () => notebookStore.queryType,
+  () => {
+    if (!isSmallScreen.value) {
+      applySidebarByMode()
+    }
+  }
+)
 
 // 拖拽相关状态
 const isDragging = ref(false)
@@ -154,6 +185,10 @@ onMounted(() => {
   // 初始根据屏幕大小设置折叠状态
   sidebarCollapsed.value = window.innerWidth <= COLLAPSE_BREAKPOINT
   isSmallScreen.value = sidebarCollapsed.value
+  // 如果是桌面端，按当前问答模式设置默认展开/收起
+  if (!isSmallScreen.value) {
+    applySidebarByMode()
+  }
 })
 
 onBeforeUnmount(() => {

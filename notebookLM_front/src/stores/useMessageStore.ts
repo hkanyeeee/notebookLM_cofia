@@ -204,7 +204,15 @@ export function useMessageStore() {
               playNotificationSound();
 
             } else if (evt.type === 'error') {
-              throw new Error(evt.message || 'stream error');
+              // 将错误作为消息内容展示，并结束本次流式
+              const errorText = typeof evt.message === 'string' ? evt.message : '流式处理发生错误';
+              messages.value[messageIndex] = {
+                ...messages.value[messageIndex],
+                content: errorText,
+              };
+              // 播放提示音，提示本条消息已完成（即使为错误）
+              playNotificationSound();
+              return;
             }
           } catch (e) {
             console.warn('Failed to parse stream event:', evt, e);

@@ -5,7 +5,6 @@ import re
 from typing import List, Dict, Any, Set, Optional
 from ..config import (
     WEB_SEARCH_MAX_QUERIES, 
-    MAX_KNOWLEDGE_GAPS, 
     MAX_KEYWORDS_PER_GAP,
     MAX_WORDS_PER_QUERY,
     # 简单查询专用配置
@@ -102,10 +101,8 @@ class SearchPlanner:
         """
         keywords = []
         
-        # 应用知识缺口数量限制
-        selected_gaps = knowledge_gaps[:MAX_KNOWLEDGE_GAPS]
-        
-        for gap in selected_gaps:
+        # 直接遍历全部知识缺口（不再限制数量）
+        for gap in knowledge_gaps:
             gap_keywords = gap.get("search_keywords", [])
             # 应用每个缺口的关键词数量限制
             limited_keywords = gap_keywords[:MAX_KEYWORDS_PER_GAP]

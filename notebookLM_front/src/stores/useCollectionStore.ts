@@ -257,6 +257,21 @@ export function useCollectionStore() {
     collectionQueryInput.value = ''
   }
 
+  // 重命名collection
+  async function renameCollection(collectionId: string, displayName: string) {
+    try {
+      const resp = await notebookApi.renameCollection(collectionId, displayName)
+      if (!resp.success) {
+        throw new Error(resp.message || '重命名失败')
+      }
+      await loadCollections()
+      return { success: true }
+    } catch (error: any) {
+      console.error('重命名Collection失败:', error)
+      throw error
+    }
+  }
+
   // 删除collection
   async function deleteCollection(collectionId: string) {
     loading.deletingCollection = true
@@ -302,5 +317,6 @@ export function useCollectionStore() {
     queryCollection,
     clearCollectionResults,
     deleteCollection,
+    renameCollection,
   }
 }

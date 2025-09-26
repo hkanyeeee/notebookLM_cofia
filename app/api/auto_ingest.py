@@ -18,6 +18,7 @@ from ..models import Source, Chunk, WorkflowExecution
 from ..database import get_db
 from ..fetch_parse import fetch_then_extract, fetch_html
 from ..utils.link_extractor import extract_links_from_html
+from ..utils.url_grouping import determine_parent_url
 from ..utils.task_status import ingest_task_manager, TaskStatus
 from ..config import DEFAULT_INGEST_MODEL, SUBDOC_MAX_CONCURRENCY
 from ..chunking import chunk_text
@@ -44,6 +45,7 @@ class WebhookResponseData(BaseModel):
     request_id: Optional[str] = None  # 请求ID
     webhook_url: Optional[str] = None  # webhook URL
     is_recursive: Optional[bool] = False  # 添加递归标记字段，默认为False
+    collection_id: Optional[str] = None  # 新增：稳定集合ID
     
     @field_validator('total_chunks', mode='before')
     @classmethod
@@ -99,7 +101,8 @@ async def process_sub_docs_concurrent(
     db: AsyncSession,
     parent_doc_name: Optional[str] = None,
     parent_collection_name: Optional[str] = None,
-    parent_source_id: Optional[int] = None
+    parent_source_id: Optional[int] = None,
+    parent_collection_id: Optional[str] = None
 ) -> List[dict]:
     """
     并发处理子文档的递归摄取函数
@@ -145,7 +148,8 @@ async def process_sub_docs_concurrent(
                         "is_recursive": True,  # 标记为递归调用
                         "document_name": parent_doc_name,  # 传递父级文档名称
                         "collection_name": parent_collection_name,  # 传递父级collection名称
-                        "parent_source_id": parent_source_id  # 传递父级Source ID
+                        "parent_source_id": parent_source_id,  # 传递父级Source ID
+                        "collection_id": parent_collection_id  # 传递稳定集合ID
                     }
                     
                     # 创建一个虚拟的BackgroundTasks实例用于递归调用
@@ -208,7 +212,8 @@ async def process_sub_docs_concurrent_with_tracking(
     parent_doc_name: Optional[str] = None,
     parent_collection_name: Optional[str] = None,
     parent_source_id: Optional[int] = None,
-    task_id: Optional[str] = None
+    task_id: Optional[str] = None,
+    parent_collection_id: Optional[str] = None
 ) -> List[dict]:
     """
     并发处理子文档的递归摄取函数（带状态追踪）
@@ -251,7 +256,8 @@ async def process_sub_docs_concurrent_with_tracking(
                             "is_recursive": True,  # 标记为递归调用
                             "document_name": parent_doc_name,  # 传递父级文档名称
                             "collection_name": parent_collection_name,  # 传递父级collection名称
-                            "parent_source_id": parent_source_id  # 传递父级Source ID
+                            "parent_source_id": parent_source_id,  # 传递父级Source ID
+                            "collection_id": parent_collection_id  # 传递稳定集合ID
                         }
                         
                         # 创建一个虚拟的BackgroundTasks实例用于递归调用
@@ -329,7 +335,8 @@ async def process_sub_docs_background(
     parent_doc_name: Optional[str] = None,
     parent_collection_name: Optional[str] = None,
     parent_source_id: Optional[int] = None,
-    parent_url: Optional[str] = None  # 新增：父文档URL，用于任务追踪
+    parent_url: Optional[str] = None,  # 新增：父文档URL，用于任务追踪
+    parent_collection_id: Optional[str] = None
 ):
     """
     后台异步处理子文档的函数 - 不阻塞主响应
@@ -362,7 +369,7 @@ async def process_sub_docs_background(
         # 🔥 修复：不再需要共享数据库会话，每个子文档使用独立会话
         results = await process_sub_docs_concurrent_with_tracking(
             sub_docs_urls, recursive_depth, None, parent_doc_name, 
-            parent_collection_name, parent_source_id, task_id
+            parent_collection_name, parent_source_id, task_id, parent_collection_id
         )
 
         success_count = len([r for r in results if r.get('success')])
@@ -622,20 +629,9 @@ async def auto_ingest(
     if is_webhook_callback:
         # 处理 webhook 回调
         print("检测到webhook回调请求")
-        try:
-            # 如果数据嵌套在body中，提取body内容
-            webhook_request_data = data
-            if 'body' in data and isinstance(data.get('body'), dict) and 'task_name' in data['body']:
-                print("检测到嵌套在body中的webhook数据，正在提取...")
-                webhook_request_data = data['body']
-            
-            webhook_data = WebhookResponseData(**webhook_request_data)
-            return await process_webhook_response(webhook_data, db, background_tasks)
-        except Exception as e:
-            error_message = f"Webhook回调处理失败: {e.__class__.__name__}: {str(e)}"
-            print(error_message)
-            print(f"原始数据: {data}")  # 添加原始数据日志以便调试
-            raise HTTPException(status_code=500, detail=error_message)
+        # 保留接口，但不执行任何递归/存储逻辑（预留未来用途）
+        print("检测到webhook回调请求（占位实现，不执行业务逻辑）")
+        return {"success": True, "message": "webhook endpoint reserved"}
     
     # 处理客户端请求
     print("检测到客户端摄取请求")
@@ -658,11 +654,17 @@ async def auto_ingest(
             # 递归调用时，从数据中获取已有的文档名称和collection名称
             document_name = data.get("document_name")
             collection_name = data.get("collection_name")
+            collection_id = data.get("collection_id")
             if not document_name or not collection_name:
                 # 如果递归调用时缺少文档名称或collection名称，使用默认值
                 document_name = document_name or f"子文档_{url.split('/')[-1] or '未命名'}"
                 url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
                 collection_name = collection_name or f"subdoc_{url_hash}"
+            # 如果递归未传递 collection_id，则基于父URL规则回退计算
+            if not collection_id:
+                parent_url = determine_parent_url(url)
+                parent_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+                collection_id = f"collection_{parent_hash}"
             print(f"检测到递归调用，使用已有的文档名称: {document_name}, collection名称: {collection_name}")
         else:
             # 非递归调用时，正常生成文档名称和collection名称
@@ -671,6 +673,10 @@ async def auto_ingest(
             # 使用URL的hash生成稳定的collection名称，确保同一URL总是得到相同的collection_name
             url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
             collection_name = f"collection_{url_hash}"
+            # 统一：基于 determine_parent_url(entry_url) 生成稳定集合ID
+            parent_url = determine_parent_url(url)
+            parent_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+            collection_id = f"collection_{parent_hash}"
         
         print(f"文档名称: {document_name}")
         print(f"Collection名称: {collection_name}")
@@ -690,7 +696,7 @@ async def auto_ingest(
         total_chunks = len(chunks)
         print(f"总共生成了 {total_chunks} 个文本块")
 
-        # 4. 创建或获取Source对象 (支持UPSERT操作)
+        # 4. 创建或获取Source对象 (支持UPSERT操作)，并持久化 collection_id
         FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
         
         # 首先检查是否已存在相同URL的Source记录（全局唯一约束，不考虑session_id）
@@ -711,6 +717,7 @@ async def auto_ingest(
                 # 更新现有记录的信息
                 existing_source.title = document_name
                 existing_source.session_id = FIXED_SESSION_ID
+                existing_source.collection_id = collection_id
                 existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 source = existing_source
                 
@@ -720,7 +727,7 @@ async def auto_ingest(
                 await db.flush()
             else:
                 print(f"为子文档创建新的Source记录: {document_name}")
-                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
+                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID, collection_id=collection_id)
         else:
             # 非递归调用时，检查是否存在相同URL的Source (UPSERT逻辑)
             if existing_source:
@@ -728,6 +735,7 @@ async def auto_ingest(
                 # 更新现有记录的所有信息
                 existing_source.title = document_name
                 existing_source.session_id = FIXED_SESSION_ID  # 更新 session_id
+                existing_source.collection_id = collection_id
                 existing_source.created_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 source = existing_source
                 
@@ -737,7 +745,7 @@ async def auto_ingest(
                 await db.flush()
             else:
                 print("非递归调用：创建新的Source对象")
-                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID)
+                source = Source(url=url, title=document_name, session_id=FIXED_SESSION_ID, collection_id=collection_id)
         
         # 创建Chunk对象列表
         chunk_objects = []
@@ -824,21 +832,8 @@ async def auto_ingest(
         print("正在本地解析子文档URL...")
         try:
             extracted_sub_docs = extract_links_from_html(raw_html, url)
-            # 严格过滤仅保留子路径，排除兄弟文档
-            from urllib.parse import urlparse
-            def is_strict_child(child: str, base: str) -> bool:
-                try:
-                    cu = urlparse(child)
-                    bu = urlparse(base)
-                    if cu.netloc != bu.netloc:
-                        return False
-                    base_path = bu.path.rstrip('/')
-                    url_path = cu.path.rstrip('/')
-                    return url_path.startswith(base_path + '/')
-                except Exception:
-                    return False
-            extracted_sub_docs = [u for u in extracted_sub_docs if is_strict_child(u, url)]
-            # 去重
+            # 依赖统一的 is_potential_sub_doc 规则（在 link_extractor 中）
+            # extract_links_from_html 已经按规则筛过；此处仅去重与日志
             extracted_sub_docs = list(dict.fromkeys(extracted_sub_docs))
             print(f"本地解析到 {len(extracted_sub_docs)} 个潜在子文档URL")
         except Exception as e:
@@ -861,7 +856,8 @@ async def auto_ingest(
                     document_name,
                     collection_name,
                     source.id,
-                    url  # 添加parent_url参数
+                    url,  # 添加parent_url参数
+                    collection_id
                 )
             else:
                 asyncio.create_task(
@@ -872,97 +868,20 @@ async def auto_ingest(
                         document_name,
                         collection_name,
                         source.id,
-                        url  # 添加parent_url参数
+                        url,  # 添加parent_url参数
+                        collection_id
                     )
                 )
 
-        # 9. 准备webhook数据（作为回退/补充渠道）
-        import uuid
-        from datetime import datetime
-        
-        # 生成request_id: url + 当前日期 + uuid
-        # 对URL进行编码以处理特殊字符
-        import urllib.parse
-        encoded_url = urllib.parse.quote(url, safe=':/')
-        request_id = f"{encoded_url}_{datetime.now().strftime('%Y%m%d')}_{str(uuid.uuid4())}"
-        
-        # 如果需要webhook识别子文档，临时分块HTML（不保存到数据库）
-        temp_html_chunks = chunk_text(raw_html) if raw_html else []
-        
-        webhook_data = {
-            "document_name": document_name,
-            "collection_name": collection_name,
-            "url": url,
-            "total_chunks": total_chunks,
-            "task_name": "auto_ingest",
-            "prompt": 
-            f"你正在阅读一个网页的部分html，这个网页的url是{url}，内容是某个开源框架文档。现在我需要你识别这个文档下面的的子文档。比如：https://lmstudio.ai/docs/python/getting-started/project-setup是https://lmstudio.ai/docs/python的子文档。子文档的URL有可能在HTML中以a标签的href，button的跳转link等等形式存在，你需要调用你的编程知识进行识别，使用{url}进行拼接。最终将识别出来的子文档URL以数组的形式放在sub_docs属性联合chunk_id、index返回，注意：如果没有发现任何子文档，那么返回空数组",
-            "data_list": [
-                {
-                    "chunk_id": f"temp_html_{idx}",
-                    "content": html_chunk,
-                    "index": idx
-                }
-                for idx, html_chunk in enumerate(temp_html_chunks)
-            ],
-            "request_id": request_id,
-            "recursive_depth": recursive_depth,  # 添加递归深度参数
-        }
+        # 9. 移除 webhook 回退逻辑：不再发送/依赖 webhook 识别
 
-        # 10. 发送webhook（仅在递归深度大于0、且需要补充识别、且启用兜底时）
-        if recursive_depth > 0 and not extracted_sub_docs and use_webhook_fallback:
-            print("正在发送webhook进行子文档识别...")
-            
-            # 创建工作流执行记录
-            try:
-                workflow_execution = WorkflowExecution(
-                    execution_id=request_id,  # 使用request_id作为临时execution_id
-                    document_name=document_name,
-                    status="running",
-                    session_id=FIXED_SESSION_ID
-                )
-                db.add(workflow_execution)
-                await db.commit()
-                print(f"工作流执行记录已创建: {request_id}")
-            except Exception as e:
-                print(f"创建工作流执行记录失败: {e}")
-                # 不阻塞webhook发送，继续执行
-            
-            # 直接向指定的webhook URL发送POST请求
-            try:
-                async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
-                    response = await client.post(webhook_url, json=webhook_data)
-                    response.raise_for_status()
-                    print("Webhook发送成功")
-            except Exception as e:
-                print(f"Webhook发送失败: {e}")
-                # 如果webhook发送失败，更新执行记录状态
-                try:
-                    from sqlalchemy import update
-                    stmt = update(WorkflowExecution).where(
-                        WorkflowExecution.execution_id == request_id
-                    ).values(
-                        status="error",
-                        stopped_at=datetime.now(pytz.timezone('Asia/Shanghai'))
-                    )
-                    await db.execute(stmt)
-                    await db.commit()
-                except Exception as update_error:
-                    print(f"更新工作流执行状态失败: {update_error}")
-        else:
-            if recursive_depth <= 0:
-                print(f"递归深度为0，跳过子文档识别webhook")
-            elif not use_webhook_fallback and not extracted_sub_docs:
-                print("配置禁止 webhook 兜底，且本地未解析到子文档URL")
-            else:
-                print("已通过本地解析获得子文档URL，跳过webhook识别")
-
-        # 准备返回结果
+        # 准备返回结果（返回稳定 collection_id 供前端/调用方使用）
         result = {
             "success": True,
             "message": f"成功摄取文档，共处理了 {total_chunks} 个文本块",
             "document_name": document_name,
             "collection_name": collection_name,
+            "collection_id": collection_id,
             "total_chunks": total_chunks,
             "source_id": source.id  # 返回Source ID用于递归调用
         }

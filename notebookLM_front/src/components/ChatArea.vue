@@ -319,6 +319,7 @@ onMounted(async () => {
         @update:auto-ingest-url="(value) => store.autoIngestUrl = value"
         @trigger-auto-ingest="handleTriggerAutoIngest"
         @delete-collection="handleDeleteCollection"
+        @rename-collection="async (collectionId: string) => { const { ElMessageBox, ElMessage } = await import('element-plus'); try { const { value } = await ElMessageBox.prompt('输入新的名称', '重命名 Collection', { confirmButtonText: '确定', cancelButtonText: '取消', inputPlaceholder: '新的名称' }); await store.renameCollection(collectionId, value); ElMessage.success('重命名成功'); } catch (e) {} }"
         @clear-collection-results="store.clearCollectionResults"
       />
     </div>

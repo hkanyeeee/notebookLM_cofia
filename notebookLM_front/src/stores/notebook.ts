@@ -218,6 +218,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     queryCollection: collectionStore.queryCollection,
     clearCollectionResults: collectionStore.clearCollectionResults,
     deleteCollection: collectionStore.deleteCollection,
+    renameCollection: collectionStore.renameCollection,
     
     // 模型方法
     loadModels: modelStore.loadModels,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption, ElMessageBox } from 'element-plus'
-import { Promotion, Plus, Tools, Delete, Folder, ArrowRight, Document, Link, Tickets, Loading } from '@element-plus/icons-vue'
+import { Promotion, Plus, Tools, Delete, Folder, ArrowRight, Document, Link, Tickets, Loading, ArrowDown } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import type { Message } from '../stores/notebook'
 import type { AutoCollection, CollectionResult } from '../api/notebook'
@@ -37,6 +37,7 @@ const emit = defineEmits<{
   (e: 'triggerAutoIngest'): void
   (e: 'clearCollectionResults'): void
   (e: 'deleteCollection', collectionId: string): void
+  (e: 'renameCollection', collectionId: string): void
 }>()
 
 // 查询输入
@@ -46,6 +47,25 @@ const messageContainer = ref<HTMLElement>()
 const activeNames = ref([])
 // 向量修复对话框
 const showVectorFixDialog = ref(false)
+
+// 移动端判断与 Auto Ingest 折叠控制（移动端默认收起）
+const isMobile = ref(false)
+const autoIngestCollapsed = ref(true)
+
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768
+  // 移动端默认收起，桌面端默认展开
+  autoIngestCollapsed.value = isMobile.value
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // 监听消息变化，自动滚动到底部
 watch(() => props.messages.length, async () => {
@@ -149,7 +169,7 @@ function isQueryDisabled() {
 // 获取输入框placeholder
 function getInputPlaceholder() {
   return props.selectedCollection 
-    ? `在 '${props.collections.find(c => c.collection_id === props.selectedCollection)?.document_title}' 中查询...`
+    ? `在 '${props.collections.find(c => c.collection_id === props.selectedCollection)?.display_name || props.collections.find(c => c.collection_id === props.selectedCollection)?.document_title}' 中查询...`
     : '请先选择Collection，然后输入问题...'
 }
 
@@ -187,8 +207,8 @@ async function handleDeleteCollection(collectionId: string) {
         
         <!-- 没有任何Collection时 - 引导添加 -->
         <div v-if="collections.length === 0 && !loadingCollections">
-          <div class="mb-8">
-            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
+          <div class="mb-8 mt-14 md:mt-8">
+            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed text-center font-medium" style="color: var(--color-text-secondary)">欢迎使用Collection问答</div>
             <p class="text-gray-600 mb-8 max-w-lg mx-auto">
               通过添加URL创建您的第一个Collection，或者选择现有的Collection开始对话。
             </p>
@@ -206,8 +226,8 @@ async function handleDeleteCollection(collectionId: string) {
 
         <!-- 有Collection但未选择时 - 显示可选择的Collection -->
         <div v-else-if="collections.length > 0 && !selectedCollection">
-          <div class="mb-8">
-            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
+          <div class="mb-8 mt-14 md:mt-8">
+            <div class="mx-auto mt-8 mb-10 text-base leading-relaxed text-center font-medium" style="color: var(--color-text-secondary)">选择一个Collection开始对话</div>
             <p class="text-gray-600 mb-6 text-center">
               您有 {{ collections.length }} 个可用的Collection，请选择一个开始智能问答。
             </p>
@@ -215,7 +235,7 @@ async function handleDeleteCollection(collectionId: string) {
           </div>
 
           <!-- Collection卡片列表 -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 h-[350px] overflow-y-auto scroll-smooth">
             <div 
               v-for="collection in collections" 
               :key="collection.collection_id"
@@ -234,7 +254,7 @@ async function handleDeleteCollection(collectionId: string) {
                   </div>
                 </div>
                 <h3 class="font-semibold text-gray-900 mb-2 text-sm text-ellipsis-2">
-                  {{ collection.document_title || '未命名Collection' }}
+                  {{ collection.display_name || collection.document_title || '未命名Collection' }}
                 </h3>
                 <p class="text-xs text-gray-600 mb-3 text-ellipsis-3">
                   {{ collection.url || '无描述' }}
@@ -252,19 +272,19 @@ async function handleDeleteCollection(collectionId: string) {
         </div>
 
         <!-- 已选择Collection时 - 显示Collection信息 -->
-        <div v-else-if="selectedCollection" class="text-center">
-          <div class="mb-8">
+        <div v-else-if="selectedCollection" class="text-left">
+          <div class="mb-8 mt-14 md:mt-8">
             <div class="mx-auto mt-8 mb-10 text-base leading-relaxed pl-4 border-l-4 border-indigo-600" style="color: var(--color-text-secondary)">
-              {{ collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
+              {{ collections.find(c => c.collection_id === selectedCollection)?.display_name || collections.find(c => c.collection_id === selectedCollection)?.document_title || 'Collection' }}
             </div>
             <div class="max-w-2xl mx-auto">
               <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 mb-6">
-                <div class="text-left space-y-3">
+                <div class="text-left space-y-2">
                   <div class="flex items-center">
                     <span class="text-indigo-600 font-medium w-16 flex items-center">
                       <ElIcon class="mr-1"><Document /></ElIcon> 标题:
                     </span>
-                    <span class="text-gray-700">{{ collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知' }}</span>
+                    <span class="text-gray-700 text-sm font-medium">{{ collections.find(c => c.collection_id === selectedCollection)?.display_name || collections.find(c => c.collection_id === selectedCollection)?.document_title || '未知' }}</span>
                   </div>
                   <div class="flex items-center">
                     <span class="text-indigo-600 font-medium w-16 flex items-center">
@@ -279,7 +299,7 @@ async function handleDeleteCollection(collectionId: string) {
                     </a>
                   </div>
                   <div class="flex items-center">
-                    <span class="text-blue-600 font-medium w-16 flex items-center">
+                    <span class="text-indigo-600 font-medium w-16 flex items-center">
                       <ElIcon class="mr-1"><Tickets /></ElIcon> ID:
                     </span>
                     <span class="text-gray-600 font-mono text-sm">{{ selectedCollection }}</span>
@@ -288,6 +308,13 @@ async function handleDeleteCollection(collectionId: string) {
                 
                 <!-- Collection操作按钮 -->
                 <div class="flex justify-end mt-4 space-x-2">
+                  <el-button 
+                    type="primary" 
+                    size="small"
+                    @click="() => $emit('renameCollection', selectedCollection!)"
+                  >
+                    重命名
+                  </el-button>
                   <el-button 
                     type="danger" 
                     :icon="Delete"
@@ -387,22 +414,40 @@ async function handleDeleteCollection(collectionId: string) {
 
     <!-- 输入区域 -->
     <div class="p-4 border-t bg-[var(--color-surface)] border-[var(--color-border)]">
+      <!-- 移动端：Auto Ingest 折叠开关 -->
+      <div v-if="isMobile" class="max-w-3xl mx-auto mb-2">
+        <button
+          class="w-full flex items-center justify-between text-sm px-3 py-2 rounded-md border bg-[var(--color-surface)] border-[var(--color-border)] hover:bg-[var(--color-surface-light)] transition shadow-sm font-medium"
+          @click="autoIngestCollapsed = !autoIngestCollapsed"
+        >
+          <span class="text-[var(--color-text)]">Collection 选择（可选）</span>
+          <el-icon :class="[{ 'rotate-180': !autoIngestCollapsed }, 'transition-transform']">
+            <ArrowDown />
+          </el-icon>
+        </button>
+      </div>
+
       <!-- Collection与Auto Ingest 控制区 -->
-      <div class="flex items-center mb-3 gap-3 max-w-3xl mx-auto">
+      <div
+        class="flex flex-col sm:flex-row sm:items-center mb-2 gap-2 max-w-3xl mx-auto"
+        v-show="!isMobile || !autoIngestCollapsed"
+      >
         <!-- Collection选择下拉框和删除按钮 -->
-        <div class="flex items-center gap-1 w-58">
+        <div class="flex items-center gap-1 w-full sm:w-auto">
           <el-select
             :model-value="selectedCollection"
             @update:model-value="handleCollectionChange"
             placeholder="选择Collection"
-            class="w-48"
+            class="w-full sm:w-80 md:w-96 lg:w-[420px]"
             :loading="loadingCollections"
+            size="small"
+            filterable
             clearable
           >
             <el-option
               v-for="collection in collections"
               :key="collection.collection_id"
-              :label="collection.document_title"
+              :label="collection.display_name || collection.document_title"
               :value="collection.collection_id"
             />
           </el-select>
@@ -413,7 +458,8 @@ async function handleDeleteCollection(collectionId: string) {
           :model-value="autoIngestUrl"
           @update:model-value="handleAutoIngestUrlUpdate"
           placeholder="输入URL进行Auto Ingest"
-          class="flex-1 min-w-[100px]"
+          class="flex-1 min-w-0 w-full sm:w-auto"
+          size="small"
           clearable
         />
         
@@ -423,7 +469,8 @@ async function handleDeleteCollection(collectionId: string) {
           @click="handleTriggerAutoIngest"
           :loading="triggeringAutoIngest"
           :disabled="!autoIngestUrl.trim() || triggeringAutoIngest"
-          class="whitespace-nowrap"
+          class="whitespace-nowrap sm:shrink-0 w-full sm:w-auto"
+          size="small"
         >
           <el-icon>
             <plus />
@@ -432,11 +479,11 @@ async function handleDeleteCollection(collectionId: string) {
         </el-button>
       </div>
       
-      <div class="flex gap-3 max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
+      <div class="flex flex-col sm:flex-row gap-3 max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
         <el-input
           v-model="queryInput"
           :placeholder="getInputPlaceholder()"
-          class="flex-1"
+          class="flex-1 w-full"
           type="textarea"
           :rows="2"
         />
@@ -445,7 +492,7 @@ async function handleDeleteCollection(collectionId: string) {
           @click="handleSendQuery"
           :disabled="isQueryDisabled()"
           :loading="loading"
-          class="h-10 w-10 p-0 rounded-lg"
+          class="h-10 w-full sm:w-10 p-0 rounded-lg sm:shrink-0"
         >
           <el-icon>
             <promotion />

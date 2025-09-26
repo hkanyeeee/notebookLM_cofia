@@ -684,6 +684,7 @@ html.dark .chat-message-content blockquote {
 
 /* Collection 项目 */
 .collection-item {
+  height: 160px;
   background-color: var(--color-surface);
   border-color: var(--color-border);
 }

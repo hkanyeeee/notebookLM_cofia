@@ -22,6 +22,7 @@ import json
 
 # 导入项目的获取和解析模块
 from app.fetch_parse import fetch_html, fetch_then_extract, extract_text
+from app.utils.link_extractor import is_potential_sub_doc
 
 
 def extract_links_from_html(html: str, base_url: str) -> List[Tuple[str, str]]:
@@ -69,41 +70,7 @@ def extract_links_from_html(html: str, base_url: str) -> List[Tuple[str, str]]:
     return links
 
 
-def is_potential_sub_doc(url: str, base_url: str) -> bool:
-    """
-    判断是否可能是子文档链接
-    
-    Args:
-        url: 要检查的URL
-        base_url: 基础URL
-        
-    Returns:
-        bool: 是否可能是子文档
-    """
-    try:
-        parsed_url = urlparse(url)
-        parsed_base = urlparse(base_url)
-        
-        # 必须是同域名
-        if parsed_url.netloc != parsed_base.netloc:
-            return False
-            
-        # URL路径应该以基础路径开头（表示是子路径）
-        base_path = parsed_base.path.rstrip('/')
-        url_path = parsed_url.path.rstrip('/')
-        
-        # 如果是更深层的路径，可能是子文档
-        if url_path.startswith(base_path) and len(url_path) > len(base_path):
-            return True
-            
-        # 如果在同一层级但不同文件，也可能是子文档
-        if base_path and url_path.startswith(base_path.rsplit('/', 1)[0]):
-            return True
-            
-        return False
-        
-    except Exception:
-        return False
+## 统一从 app.utils.link_extractor 复用 is_potential_sub_doc
 
 
 def display_content_preview(content: str, max_length: int = 1000) -> None:

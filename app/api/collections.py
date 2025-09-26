@@ -5,14 +5,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import distinct
+from sqlalchemy import distinct, func
 import json
 from urllib.parse import urlparse
 from ..utils.url_grouping import determine_parent_url
 
 from app.config import EMBEDDING_BATCH_SIZE, EMBEDDING_DIMENSIONS
 
-from ..models import Source, Chunk
+from ..models import Source, Chunk, CollectionMeta
 from ..database import get_db
 from ..vector_db_client import query_hybrid
 from ..embedding_client import embed_texts
@@ -34,6 +34,7 @@ class AutoCollection(BaseModel):
     document_title: str  # 原始文档标题
     url: str
     created_at: Optional[str] = None
+    display_name: Optional[str] = None  # 可编辑的展示名称
 
 
 class CollectionQueryRequest(BaseModel):
@@ -53,6 +54,34 @@ class CollectionQueryResponse(BaseModel):
     llm_answer: Optional[str] = None  # LLM生成的智能回答
 
 
+class RenameCollectionRequest(BaseModel):
+    collection_id: str
+    display_name: str
+
+
+@router.post("/collections/rename", summary="重命名指定Collection")
+async def rename_collection(
+    request: RenameCollectionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        # upsert CollectionMeta 记录
+        stmt = select(CollectionMeta).where(CollectionMeta.collection_id == request.collection_id)
+        result = await db.execute(stmt)
+        meta = result.scalar_one_or_none()
+        if meta:
+            meta.display_name = request.display_name
+        else:
+            meta = CollectionMeta(collection_id=request.collection_id, display_name=request.display_name)
+            db.add(meta)
+        await db.commit()
+        return {"success": True, "message": "重命名成功"}
+    except Exception as e:
+        await db.rollback()
+        error_message = f"重命名Collection失败: {e.__class__.__name__}: {str(e)}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
 @router.get("/collections", summary="获取所有可用的Collection列表")
 async def get_collections_list(
     db: AsyncSession = Depends(get_db)
@@ -70,14 +99,18 @@ async def get_collections_list(
             result = await db.execute(stmt)
             sources.extend(result.scalars().all())
         
-        # 按collection进行分组：子文档归属到父文档的collection
+        # 按collection进行分组：优先使用持久化的 collection_id；缺失则回退到父URL分组
         collection_groups = {}
         
         for source in sources:
             # 为每个source确定其所属的collection
-            parent_url = determine_parent_url(source.url)
-            parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
-            collection_name = f"collection_{parent_url_hash}"
+            if getattr(source, 'collection_id', None):
+                collection_name = source.collection_id
+                parent_url = determine_parent_url(source.url)
+            else:
+                parent_url = determine_parent_url(source.url)
+                parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
+                collection_name = f"collection_{parent_url_hash}"
             
             if collection_name not in collection_groups:
                 collection_groups[collection_name] = {
@@ -87,6 +120,12 @@ async def get_collections_list(
             
             collection_groups[collection_name]['sources'].append(source)
         
+        # 一次性查询所有分组的自定义展示名
+        group_ids = list(collection_groups.keys())
+        metas_stmt = select(CollectionMeta).where(CollectionMeta.collection_id.in_(group_ids))
+        metas_result = await db.execute(metas_stmt)
+        metas = {m.collection_id: m for m in metas_result.scalars().all()}
+
         collections = []
         for collection_name, group_data in collection_groups.items():
             # 找到主文档（URL最短的通常是父文档）
@@ -101,12 +140,14 @@ async def get_collections_list(
             chunks_result = await db.execute(chunks_stmt)
             chunks_count = len(chunks_result.scalars().all())
 
+            meta = metas.get(collection_name)
             collections.append(AutoCollection(
-                collection_id=collection_name,  # 使用collection_name作为ID
+                collection_id=collection_name,  # 使用持久化/回退的分组名作为ID
                 collection_name=collection_name,
                 document_title=f"{main_source.title} ({chunks_count}个文档块)",
                 url=main_source.url,
-                created_at=main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None
+                created_at=main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None,
+                display_name=meta.display_name if meta else None
             ))
         
         return {
@@ -138,7 +179,7 @@ async def query_collection(
             all_sources_result = await db.execute(all_sources_stmt)
             all_sources.extend(all_sources_result.scalars().all())
         
-        # 找到属于指定collection的所有sources（兼容数值ID）
+        # 找到属于指定collection的所有sources（兼容数值ID与持久化的 collection_id）
         collection_sources = []
         if request.collection_id.isdigit():
             # 视作父source.id，找到其父分组
@@ -146,14 +187,20 @@ async def query_collection(
             if parent_source:
                 parent_url = determine_parent_url(parent_source.url)
                 for s in all_sources:
-                    if determine_parent_url(s.url) == parent_url:
+                    # 优先同一 collection_id，其次父URL回退
+                    if (getattr(s, 'collection_id', None) and getattr(parent_source, 'collection_id', None) and s.collection_id == parent_source.collection_id) or (determine_parent_url(s.url) == parent_url):
                         collection_sources.append(s)
         else:
             for source in all_sources:
+                # 优先匹配持久化的 collection_id
+                if getattr(source, 'collection_id', None) == request.collection_id:
+                    collection_sources.append(source)
+                    continue
+                # 回退到父URL分组ID
                 parent_url = determine_parent_url(source.url)
                 parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
-                collection_name = f"collection_{parent_url_hash}"
-                if collection_name == request.collection_id:
+                fallback_id = f"collection_{parent_url_hash}"
+                if fallback_id == request.collection_id:
                     collection_sources.append(source)
         
         if not collection_sources:
@@ -311,11 +358,15 @@ async def get_collection_detail(
         # 找到属于指定collection的所有sources
         collection_sources = []
         for source in all_sources:
+            # 优先匹配持久化的 collection_id
+            if getattr(source, 'collection_id', None) == collection_id:
+                collection_sources.append(source)
+                continue
+            # 回退到父URL分组ID
             parent_url = determine_parent_url(source.url)
             parent_url_hash = hashlib.md5(parent_url.encode()).hexdigest()[:8]
-            collection_name = f"collection_{parent_url_hash}"
-            
-            if collection_name == collection_id:
+            fallback_id = f"collection_{parent_url_hash}"
+            if fallback_id == collection_id:
                 collection_sources.append(source)
         
         if not collection_sources:
@@ -337,6 +388,11 @@ async def get_collection_detail(
         # 找到主文档（URL最短的通常是父文档）
         main_source = min(collection_sources, key=lambda s: len(s.url))
         
+        # 读取自定义名称
+        meta_stmt = select(CollectionMeta).where(CollectionMeta.collection_id == collection_id)
+        meta_result = await db.execute(meta_stmt)
+        meta = meta_result.scalar_one_or_none()
+
         return {
             "success": True,
             "collection": {
@@ -346,7 +402,8 @@ async def get_collection_detail(
                 "url": main_source.url,
                 "chunks_count": chunks_count,
                 "source_count": len(collection_sources),
-                "created_at": main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None
+                "created_at": main_source.created_at.isoformat() if hasattr(main_source, 'created_at') and main_source.created_at else None,
+                "display_name": meta.display_name if meta else None
             }
         }
     
@@ -367,16 +424,18 @@ async def delete_collection(
     删除指定的collection，包括相关的source和chunks数据
     """
     try:
-        FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
+        # 统一获取所有已知的 auto-ingest 会话ID（兼容历史与当前）
+        session_ids = get_known_auto_ingest_session_ids()
         
         # 根据ID类型删除：
-        # - 如果是数值（老格式）：删除该source
-        # - 如果是分组ID（如 collection_xxx）：删除该分组下所有sources
-        sources_to_delete = []
+        # - 如果是数值（老格式）：删除该source（限定在已知会话中）
+        # - 如果是分组ID（如 collection_xxx 或持久化的 collection_id）：删除该分组下所有sources
+        sources_to_delete: List[Source] = []
         if collection_id.isdigit():
+            # 在所有已知会话中查找该 Source
             source_stmt = select(Source).where(
                 Source.id == int(collection_id),
-                Source.session_id == FIXED_SESSION_ID
+                Source.session_id.in_(session_ids)
             )
             source_result = await db.execute(source_stmt)
             source = source_result.scalar_one_or_none()
@@ -384,19 +443,23 @@ async def delete_collection(
                 raise HTTPException(status_code=404, detail=f"Collection ID {collection_id} 不存在")
             sources_to_delete = [source]
         else:
-            # 分组删除：找到所有属于该collection_id的sources
+            # 分组删除：找到所有属于该 collection_id 的 sources
             # 合并多会话下的 sources
             all_sources: List[Source] = []
-            for sid in ["fixed_session_id_for_agenttic_ingest", "fixed_session_id_for_auto_ingest"]:
-                all_stmt = select(Source).where(Source.session_id == sid)
-                all_result = await db.execute(all_stmt)
-                all_sources.extend(all_result.scalars().all())
+            all_stmt = select(Source).where(Source.session_id.in_(session_ids))
+            all_result = await db.execute(all_stmt)
+            all_sources.extend(all_result.scalars().all())
 
-            # 使用统一工具函数
+            # 优先用持久化的 Source.collection_id；若为空则回退到父URL哈希的 collection_xxx
             from ..utils.url_grouping import determine_parent_url
-
             import hashlib
+
             for s in all_sources:
+                # 1) 持久化ID精确匹配
+                if getattr(s, 'collection_id', None) == collection_id:
+                    sources_to_delete.append(s)
+                    continue
+                # 2) 回退分组ID匹配（collection_xxx）
                 parent = determine_parent_url(s.url)
                 parent_hash = hashlib.md5(parent.encode()).hexdigest()[:8]
                 name = f"collection_{parent_hash}"
@@ -406,23 +469,44 @@ async def delete_collection(
             if not sources_to_delete:
                 raise HTTPException(status_code=404, detail=f"Collection ID {collection_id} 不存在")
 
-        # 删除相关chunks与sources
-        deleted_chunks = 0
-        source_ids_for_vector_cleanup = []
-        
-        for src in sources_to_delete:
-            chunks_stmt = select(Chunk).where(
-                Chunk.source_id == src.id,
-                Chunk.session_id == FIXED_SESSION_ID
+        # 批量删除相关 chunks 与 sources
+        source_ids_for_vector_cleanup: List[int] = [s.id for s in sources_to_delete]
+
+        # 先统计待删除的 chunk 数量（用于响应返回）
+        count_stmt = select(func.count(Chunk.id)).where(
+            Chunk.source_id.in_(source_ids_for_vector_cleanup),
+            Chunk.session_id.in_(session_ids)
+        )
+        count_result = await db.execute(count_stmt)
+        deleted_chunks = int(count_result.scalar() or 0)
+
+        # 批量删除 chunks
+        await db.execute(
+            Chunk.__table__.delete().where(
+                Chunk.source_id.in_(source_ids_for_vector_cleanup),
+                Chunk.session_id.in_(session_ids)
             )
-            chunks_result = await db.execute(chunks_stmt)
-            chunks = chunks_result.scalars().all()
-            for chunk in chunks:
-                await db.delete(chunk)
-            deleted_chunks += len(chunks)
-            source_ids_for_vector_cleanup.append(src.id)
-            await db.delete(src)
+        )
+
+        # 批量删除 sources（限定在已知 session 范围）
+        await db.execute(
+            Source.__table__.delete().where(
+                Source.id.in_(source_ids_for_vector_cleanup),
+                Source.session_id.in_(session_ids)
+            )
+        )
         
+        # 删除对应的自定义名称元数据（若存在）
+        try:
+            meta_stmt = select(CollectionMeta).where(CollectionMeta.collection_id == collection_id)
+            meta_result = await db.execute(meta_stmt)
+            meta = meta_result.scalar_one_or_none()
+            if meta:
+                await db.delete(meta)
+        except Exception as meta_err:
+            # 元数据删除失败不应阻止主删除流程，记录日志继续
+            print(f"删除CollectionMeta失败: {meta_err}")
+
         # 在提交数据库事务之前，先删除向量库中的对应数据
         if source_ids_for_vector_cleanup:
             from ..vector_db_client import delete_vector_db_data

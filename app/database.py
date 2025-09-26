@@ -51,6 +51,16 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # 若使用 SQLite，则创建 FTS5 表及触发器用于稀疏（BM25）检索
         if is_sqlite:
+            # 动态为 sources 表添加 collection_id 列（若不存在）
+            try:
+                res = await conn.exec_driver_sql("PRAGMA table_info(sources);")
+                cols = [row[1] for row in res.fetchall()]
+                if "collection_id" not in cols:
+                    await conn.exec_driver_sql("ALTER TABLE sources ADD COLUMN collection_id TEXT;")
+                    await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_sources_collection_id ON sources(collection_id);")
+                    print("Added column 'collection_id' to sources table.")
+            except Exception as e:
+                print(f"Check/Add column collection_id failed: {e}")
             # 创建基于 content 的 FTS5 虚表，使用外部内容模式，rowid 映射 chunks.id
             await conn.exec_driver_sql(
                 """

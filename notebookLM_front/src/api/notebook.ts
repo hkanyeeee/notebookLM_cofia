@@ -136,6 +136,7 @@ export interface AutoCollection {
   document_title: string
   url: string
   created_at: string | null
+  display_name?: string | null
 }
 
 export interface CollectionQueryRequest {
@@ -354,6 +355,19 @@ export const notebookApi = {
         success: false,
         collections: [],
         total: 0
+      }
+    }
+  },
+
+  // 重命名指定 collection（设置 display_name）
+  async renameCollection(collectionId: string, displayName: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await api.post('/collections/rename', { collection_id: collectionId, display_name: displayName })
+      return response.data
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.message
       }
     }
   },
@@ -589,6 +603,8 @@ export const notebookApi = {
           if (!line.startsWith('data:')) continue
           const jsonStr = line.slice(5).trim()
           if (!jsonStr) continue
+          // 跳过 OpenAI 风格的 [DONE]
+          if (jsonStr === '[DONE]') continue
           try {
             const evt = JSON.parse(jsonStr)
             onData(evt)
