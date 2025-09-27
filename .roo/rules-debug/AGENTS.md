@@ -11,3 +11,4 @@
 - Vector database operations require QDRANT_HOST and QDRANT_PORT configuration
 - Tool registration happens in orchestrator initialization to avoid circular imports
 - Chunk IDs must be globally unique across sessions for proper deduplication
+- use ssh to debug docker: ssh hewenxin@192.168.31.125 "/usr/bin/docker XXXXXXXXXXX " password is gggg
