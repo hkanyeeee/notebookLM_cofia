@@ -458,19 +458,18 @@ class WebSearchTool:
         return content
     
     async def process_single_document(
-        self, 
-        doc: Dict[str, str], 
-        session_id: str, 
-        global_chunk_index: int,
+        self,
+        doc: Dict[str, str],
+        session_id: str,
         db: AsyncSession
-    ) -> Tuple[Optional[int], List[Chunk], int]:
+    ) -> Tuple[Optional[int], List[Chunk]]:
         """处理单个文档：切分、创建chunks、返回source_id和chunks"""
         url = doc["url"]
         title = doc["title"]
         content = doc.get("content", "")
         
         if not content:
-            return None, [], global_chunk_index
+            return None, []
         
         # 规范化 URL，避免重复的 Source
         normalized_url = self._normalize_url_for_dedup(url)
@@ -508,9 +507,9 @@ class WebSearchTool:
         import time
         timestamp_ms = int(time.time() * 1000)
         for idx, chunk_content in enumerate(chunks_text):
-            # 生成更加唯一的chunk_id，包含时间戳和URL哈希
+            # 生成唯一 chunk_id：基于 session、URL 哈希、时间戳与文档内序号
             url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()[:8]
-            chunk_id = f"{session_id}_{url_hash}_{global_chunk_index}_{timestamp_ms}_{idx}"
+            chunk_id = f"{session_id}_{url_hash}_{timestamp_ms}_{idx}"
             chunk = Chunk(
                 content=chunk_content,
                 source_id=source.id,
@@ -518,57 +517,68 @@ class WebSearchTool:
                 chunk_id=chunk_id
             )
             chunks.append(chunk)
-            global_chunk_index += 1
         
         try:
             db.add_all(chunks)
             await db.commit()
-            
+
             # 刷新以获取 ID 并确保chunks在session中
             for chunk in chunks:
                 await db.refresh(chunk)
                 # 确保source关系正确加载
                 if not chunk.source:
                     chunk.source = source
-            
-            return source.id, chunks, global_chunk_index
+
+            return source.id, chunks
         except Exception as e:
             await db.rollback()
             print(f"[WebSearch] 数据库操作失败，回滚事务: {e}")
-            # 如果是重复键错误，尝试重新生成chunk_id
-            if "UNIQUE constraint failed: chunks.id" in str(e):
-                print(f"[WebSearch] 检测到ID冲突，尝试重新创建chunks...")
-                # 清除之前的chunks，重新创建
+
+            err_str = str(e)
+            # 如果是 Source.url 唯一冲突（并发写），重查已存在的 Source 并继续
+            if "UNIQUE constraint failed: sources.url" in err_str or "UNIQUE constraint failed: chunks.chunk_id" in err_str:
+                # 重新获取已存在的 source（处理 sources.url 冲突场景）
+                try:
+                    from sqlalchemy import select
+                    existing_source = await db.execute(
+                        select(Source).where(Source.url == normalized_url)
+                    )
+                    existing = existing_source.scalar_one_or_none()
+                    if existing:
+                        source = existing
+                except Exception:
+                    # 忽略重查错误，继续以当前 source 尝试写入 chunks
+                    pass
+
+                # 重新生成 chunks 的 chunk_id（处理 chunk_id 冲突场景）
                 chunks.clear()
-                retry_timestamp = int(time.time() * 1000000)  # 更高精度的时间戳
+                retry_timestamp = int(time.time() * 1000000)  # 更高精度时间戳，降低碰撞概率
                 for idx, chunk_content in enumerate(chunks_text):
-                    # 使用更随机的chunk_id来避免冲突
                     url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()[:8]
-                    chunk_id = f"{session_id}_{url_hash}_{global_chunk_index}_retry_{retry_timestamp}_{idx}"
-                    chunk = Chunk(
+                    chunk_id = f"{session_id}_{url_hash}_retry_{retry_timestamp}_{idx}"
+                    chunks.append(Chunk(
                         content=chunk_content,
                         source_id=source.id,
                         session_id=session_id,
                         chunk_id=chunk_id
-                    )
-                    chunks.append(chunk)
-                
+                    ))
+
                 try:
                     db.add_all(chunks)
                     await db.commit()
-                    
+
                     for chunk in chunks:
                         await db.refresh(chunk)
                         if not chunk.source:
                             chunk.source = source
-                    
-                    return source.id, chunks, global_chunk_index
+
+                    return source.id, chunks
                 except Exception as retry_e:
                     await db.rollback()
                     print(f"[WebSearch] 重试后仍失败: {retry_e}")
                     raise retry_e
-            else:
-                raise e
+
+            raise e
 
     async def process_chunk_batch(
         self, 
@@ -801,117 +811,107 @@ class WebSearchTool:
                 FLUSH_CHUNK_COUNT = 20  # 达到20个chunk就flush
                 FLUSH_TIMEOUT_MS = 500  # 或者500ms超时就flush
                 
-                # 使用数据库会话
-                async with AsyncSessionLocal() as db:
-                    source_ids = []
-                    processed_documents = []
-                    global_chunk_index = 0
-                    
-                    # 微批缓冲区
-                    pending_chunks = []  # List[Tuple[Chunk, int]]  # (chunk, embedding_index)
-                    pending_embeddings = []  # List[str]  # chunk contents for embedding
+                # 初始化容器与缓冲（不共享数据库会话）
+                source_ids = []
+                processed_documents = []
+
+                # 微批缓冲区
+                pending_chunks = []  # List[Tuple[Chunk, int]]  # (chunk, embedding_index)
+                pending_embeddings = []  # List[str]  # chunk contents for embedding
+                last_flush_time = time.perf_counter()
+
+                async def flush_pending():
+                    nonlocal pending_chunks, pending_embeddings, last_flush_time
+                    if not pending_chunks:
+                        return
+
+                    print(f"[WebSearch] 触发微批flush: {len(pending_chunks)} chunks")
+                    source_chunk_embeddings = await self.process_chunk_batch(pending_chunks, pending_embeddings)
+                    await self.flush_to_vector_db(source_chunk_embeddings)
+
+                    # 清空缓冲区
+                    pending_chunks.clear()
+                    pending_embeddings.clear()
                     last_flush_time = time.perf_counter()
-                    
-                    async def flush_pending():
-                        nonlocal pending_chunks, pending_embeddings, last_flush_time
-                        if not pending_chunks:
-                            return
-                        
-                        print(f"[WebSearch] 触发微批flush: {len(pending_chunks)} chunks")
-                        source_chunk_embeddings = await self.process_chunk_batch(pending_chunks, pending_embeddings)
-                        await self.flush_to_vector_db(source_chunk_embeddings)
-                        
-                        # 清空缓冲区
-                        pending_chunks.clear()
-                        pending_embeddings.clear()
-                        last_flush_time = time.perf_counter()
-                    
-                    # 创建并发爬取任务
-                    crawl_semaphore = asyncio.Semaphore(WEB_SEARCH_CONCURRENT_REQUESTS)
-                    
-                    async def crawl_and_process(item):
-                        nonlocal global_chunk_index
-                        async with crawl_semaphore:
-                            try:
-                                content = await self.fetch_web_content(item["url"])
-                                if isinstance(content, str) and content:
-                                    doc = {
-                                        "url": item["url"],
-                                        "title": item["title"],
-                                        "content": content,
-                                        "snippet": item.get("snippet", "")
-                                    }
-                                    
-                                    # 立即处理单个文档
-                                    source_id, chunks, new_global_index = await self.process_single_document(
-                                        doc, session_id, global_chunk_index, db
-                                    )
-                                    global_chunk_index = new_global_index
-                                    
-                                    if source_id and chunks:
-                                        print(f"[WebSearch] ✓ 成功处理: {item['url']} -> {len(chunks)} chunks")
-                                        return source_id, doc, chunks
-                                    else:
-                                        print(f"[WebSearch] ✗ 处理失败: {item['url']} - 无内容")
-                                        return None, None, []
-                                else:
-                                    print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}")
-                                    return None, None, []
-                            except Exception as e:
-                                # 如果遇到数据库错误，确保session状态正常
-                                if "constraint" in str(e).lower() or "rollback" in str(e).lower():
-                                    try:
-                                        await db.rollback()
-                                        print(f"[WebSearch] 数据库错误后执行回滚: {item['url']}")
-                                    except Exception as rollback_e:
-                                        print(f"[WebSearch] 回滚失败: {rollback_e}")
-                                print(f"[WebSearch] ✗ 处理异常: {item['url']} - {e}")
-                                return None, None, []
-                    
-                    # 并发处理所有URL
-                    tasks = [crawl_and_process(item) for item in all_results]
-                    
-                    # 使用as_completed逐个处理完成的任务
-                    completed_count = 0
-                    for coro in asyncio.as_completed(tasks):
+
+                # 创建并发爬取任务
+                crawl_semaphore = asyncio.Semaphore(WEB_SEARCH_CONCURRENT_REQUESTS)
+
+                async def crawl_and_process(item):
+                    async with crawl_semaphore:
                         try:
-                            source_id, doc, chunks = await coro
-                            completed_count += 1
-                            
-                            if source_id and doc and chunks:
-                                source_ids.append(source_id)
-                                processed_documents.append(doc)
-                                
-                                # 添加到微批缓冲区
-                                for chunk in chunks:
-                                    pending_chunks.append((chunk, len(pending_embeddings)))
-                                    pending_embeddings.append(chunk.content)
-                                
-                                # 检查是否需要flush
-                                current_time = time.perf_counter()
-                                should_flush = (
-                                    len(pending_chunks) >= FLUSH_CHUNK_COUNT or
-                                    (current_time - last_flush_time) * 1000 >= FLUSH_TIMEOUT_MS
-                                )
-                                
-                                if should_flush:
-                                    await flush_pending()
-                            
-                            # 每处理5个页面输出一次进度
-                            if completed_count % 5 == 0:
-                                print(f"[WebSearch] 进度: {completed_count}/{len(tasks)} 页面已处理")
-                                
+                            content = await self.fetch_web_content(item["url"])
+                            if isinstance(content, str) and content:
+                                doc = {
+                                    "url": item["url"],
+                                    "title": item["title"],
+                                    "content": content,
+                                    "snippet": item.get("snippet", "")
+                                }
+
+                                # 为每个并发任务创建独立会话
+                                async with AsyncSessionLocal() as task_db:
+                                    source_id, chunks = await self.process_single_document(
+                                        doc, session_id, task_db
+                                    )
+
+                                if source_id and chunks:
+                                    print(f"[WebSearch] ✓ 成功处理: {item['url']} -> {len(chunks)} chunks")
+                                    return source_id, doc, chunks
+                                else:
+                                    print(f"[WebSearch] ✗ 处理失败: {item['url']} - 无内容")
+                                    return None, None, []
+                            else:
+                                print(f"[WebSearch] ✗ 爬取失败: {item['url']} - {type(content).__name__}")
+                                return None, None, []
                         except Exception as e:
-                            print(f"[WebSearch] 处理任务异常: {e}")
-                            completed_count += 1
-                    
-                    # 最后flush剩余的chunks
-                    if pending_chunks:
-                        print("[WebSearch] 最终flush剩余chunks")
-                        await flush_pending()
-                    
-                    result["source_ids"] = source_ids
-                    result["search_results"] = processed_documents
+                            print(f"[WebSearch] ✗ 处理异常: {item['url']} - {e}")
+                            return None, None, []
+
+                # 并发处理所有URL
+                tasks = [crawl_and_process(item) for item in all_results]
+
+                # 使用as_completed逐个处理完成的任务
+                completed_count = 0
+                for coro in asyncio.as_completed(tasks):
+                    try:
+                        source_id, doc, chunks = await coro
+                        completed_count += 1
+
+                        if source_id and doc and chunks:
+                            source_ids.append(source_id)
+                            processed_documents.append(doc)
+
+                            # 添加到微批缓冲区
+                            for chunk in chunks:
+                                pending_chunks.append((chunk, len(pending_embeddings)))
+                                pending_embeddings.append(chunk.content)
+
+                            # 检查是否需要flush
+                            current_time = time.perf_counter()
+                            should_flush = (
+                                len(pending_chunks) >= FLUSH_CHUNK_COUNT or
+                                (current_time - last_flush_time) * 1000 >= FLUSH_TIMEOUT_MS
+                            )
+
+                            if should_flush:
+                                await flush_pending()
+
+                        # 每处理5个页面输出一次进度
+                        if completed_count % 5 == 0:
+                            print(f"[WebSearch] 进度: {completed_count}/{len(tasks)} 页面已处理")
+
+                    except Exception as e:
+                        print(f"[WebSearch] 处理任务异常: {e}")
+                        completed_count += 1
+
+                # 最后flush剩余的chunks
+                if pending_chunks:
+                    print("[WebSearch] 最终flush剩余chunks")
+                    await flush_pending()
+
+                result["source_ids"] = source_ids
+                result["search_results"] = processed_documents
                 
                 crawl_time = (time.perf_counter() - t2) * 1000.0
                 result["metrics"]["step_durations_ms"]["incremental_process_total"] = crawl_time
