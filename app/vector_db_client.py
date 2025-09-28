@@ -141,13 +141,29 @@ def escape_fts5_query(query: str) -> str:
     转义 FTS5 查询中的特殊字符，避免语法错误。
     FTS5 特殊字符包括: " * : ( ) / \\ [ ] $ 等
     """
-    # 对于包含特殊字符的查询，使用双引号包围进行精确匹配
-    # 这样可以避免特殊字符被误解为 FTS5 操作符
-    if any(char in query for char in ['/', '*', ':', '(', ')', '\\', '[', ']', '"', '$']):
-        # 转义查询中的双引号，然后用双引号包围整个查询
-        escaped_query = query.replace('"', '""')
-        return f'"{escaped_query}"'
-    return query
+    # 将查询按空白分词，仅对包含特殊字符的词项逐个加引号，避免整体短语匹配降低召回
+    # 主要处理连字符日期等（如 2025-09-28），以及 FTS5 的保留/特殊符号
+    if not query:
+        return query
+
+    special_chars = set(['/','*',':','(',')','\\','[',']','"','$','-','+','~','^'])
+    boolean_ops = {"AND", "OR", "NOT", "NEAR"}
+
+    tokens = query.split()
+    escaped_tokens = []
+    for tok in tokens:
+        # 保留布尔操作符不加引号
+        if tok.upper() in boolean_ops:
+            escaped_tokens.append(tok)
+            continue
+        # 若词项包含任何特殊字符，则用双引号包裹，并转义内部引号
+        if any(ch in tok for ch in special_chars):
+            escaped_tok = tok.replace('"', '""')
+            escaped_tokens.append(f'"{escaped_tok}"')
+        else:
+            escaped_tokens.append(tok)
+
+    return " ".join(escaped_tokens)
 
 
 async def query_bm25(
