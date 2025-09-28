@@ -1,4 +1,6 @@
 import asyncio
+import atexit
+import weakref
 from typing import Optional
 
 import httpx
@@ -18,6 +20,10 @@ _httpx_client: Optional[httpx.AsyncClient] = None
 _playwright: Optional[Playwright] = None
 _browser: Optional[Browser] = None
 _playwright_semaphore: Optional[asyncio.Semaphore] = None
+
+# 追踪所有创建的 httpx 客户端，确保都能被关闭
+_created_clients: weakref.WeakSet[httpx.AsyncClient] = weakref.WeakSet()
+_shutdown_registered = False
 
 
 async def initialize_network_resources() -> None:
@@ -57,31 +63,70 @@ async def shutdown_network_resources() -> None:
     """关闭并清理全局 httpx 客户端与 Playwright 浏览器。"""
     global _httpx_client, _playwright, _browser, _playwright_semaphore
 
+    # 关闭主要的 httpx 客户端
     if _httpx_client is not None:
         try:
             await _httpx_client.aclose()
+        except Exception as e:
+            print(f"Error closing main httpx client: {e}")
         finally:
             _httpx_client = None
+
+    # 关闭所有可能的懒加载客户端
+    clients_to_close = list(_created_clients)
+    for client in clients_to_close:
+        try:
+            if not client.is_closed:
+                await client.aclose()
+        except Exception as e:
+            print(f"Error closing httpx client: {e}")
 
     if _browser is not None:
         try:
             await _browser.close()
+        except Exception as e:
+            print(f"Error closing Playwright browser: {e}")
         finally:
             _browser = None
 
     if _playwright is not None:
         try:
             await _playwright.stop()
+        except Exception as e:
+            print(f"Error stopping Playwright: {e}")
         finally:
             _playwright = None
 
     _playwright_semaphore = None
 
 
+def _register_emergency_cleanup():
+    """注册紧急清理函数，在进程退出时确保资源被释放"""
+    global _shutdown_registered
+    if _shutdown_registered:
+        return
+    
+    def emergency_cleanup():
+        """同步版本的紧急清理，仅用于进程退出时"""
+        clients_to_close = list(_created_clients)
+        for client in clients_to_close:
+            try:
+                if hasattr(client, '_transport') and client._transport:
+                    # 强制关闭传输层，释放连接
+                    if hasattr(client._transport, 'close'):
+                        client._transport.close()
+            except Exception:
+                pass
+    
+    atexit.register(emergency_cleanup)
+    _shutdown_registered = True
+
+
 def get_httpx_client() -> httpx.AsyncClient:
     global _httpx_client
     if _httpx_client is None:
         # 懒加载：在未经过 lifespan 初始化时，也提供可用客户端
+        print("[Network] Warning: Creating httpx client outside of lifespan, ensure proper cleanup")
         _httpx_client = httpx.AsyncClient(
             trust_env=True,
             http2=HTTPX_HTTP2_ENABLED,
@@ -99,6 +144,10 @@ def get_httpx_client() -> httpx.AsyncClient:
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             },
         )
+        # 追踪这个客户端以确保能被清理
+        _created_clients.add(_httpx_client)
+        # 注册紧急清理
+        _register_emergency_cleanup()
     return _httpx_client
 
 
@@ -112,5 +161,35 @@ def get_playwright_semaphore() -> asyncio.Semaphore:
     if _playwright_semaphore is None:
         raise RuntimeError("Playwright semaphore is not initialized. Ensure lifespan has started.")
     return _playwright_semaphore
+
+
+class NetworkResourcesManager:
+    """上下文管理器，用于在独立脚本中安全管理网络资源"""
+    
+    def __init__(self):
+        self._initialized = False
+    
+    async def __aenter__(self):
+        await initialize_network_resources()
+        self._initialized = True
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self._initialized:
+            await shutdown_network_resources()
+            self._initialized = False
+
+
+# 便利函数：用于独立脚本
+async def with_network_resources():
+    """
+    便利函数，用于在独立脚本中使用网络资源
+    
+    Example:
+        async with with_network_resources():
+            client = get_httpx_client()
+            response = await client.get("https://example.com")
+    """
+    return NetworkResourcesManager()
 
 
