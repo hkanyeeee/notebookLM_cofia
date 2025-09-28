@@ -157,6 +157,8 @@ class ToolRegistry:
                         success=False,
                         error="circuit_open",
                         call_id=tool_call.call_id,
+                        latency_ms=0.0,
+                        retries=attempt,
                     )
             while attempt <= max_retries:
                 try:
@@ -175,6 +177,8 @@ class ToolRegistry:
                         result=result,
                         success=True,
                         call_id=tool_call.call_id,
+                        latency_ms=latency_ms,
+                        retries=attempt,
                     )
                     
                     # 缓存功能已简化
@@ -227,6 +231,8 @@ class ToolRegistry:
             success=False,
             error=str(last_error) if last_error else 'Unknown',
             call_id=tool_call.call_id,
+            latency_ms=latency_ms,
+            retries=attempt,
         )
 
 

@@ -40,6 +40,9 @@ class ToolResult(BaseModel):
     success: bool = True
     error: Optional[str] = None
     call_id: Optional[str] = None
+    # 可观测性字段（可选）
+    latency_ms: Optional[float] = None
+    retries: int = 0
     
     class Config:
         extra = "forbid"

@@ -167,7 +167,9 @@ async def _handle_normal_query(
                             "name": event.get("name"),
                             "tool_name": event.get("tool_name") or event.get("name"),
                             "result": event.get("result"),
-                            "success": event.get("success", True)
+                            "success": event.get("success", True),
+                            "latency_ms": event.get("latency_ms"),
+                            "retries": event.get("retries")
                         }, ensure_ascii=False) + "\n\n"
                     elif et == "final_answer":
                         yield "data: " + json.dumps({
