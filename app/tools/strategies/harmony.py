@@ -46,12 +46,16 @@ class HarmonyStrategy(BaseStrategy):
             tools_desc += "2. 一次精准的工具调用通常就足够了\n"
             tools_desc += "3. 工具调用后立即基于结果回答，不要再次搜索相同或相似信息\n"
             tools_desc += "4. 对于简单查询（如天气、新闻），一次搜索即可\n"
-            tools_desc += "工具调用格式：\n"
-            tools_desc += '<tool name="工具名称">{"参数名": "参数值"}</tool>\n\n'
+            tools_desc += "\n首选输出以下 XML 工具调用格式（强烈推荐）：\n"
+            tools_desc += '<tool name="web_search">{"query": "..."}</tool>\n\n'
+            tools_desc += "兼容的备用格式（仅当模型必须使用 Channel 时）：\n"
+            tools_desc += '<|channel|>commentary to=web_search <|constrain|>json<|message|>{"query": "..."}\n\n'
             tools_desc += "重要注意事项：\n"
             tools_desc += "- 每个工具调用必须包含所有必需参数\n"
             tools_desc += "- web_search 工具必须包含 'query' 参数\n"
             tools_desc += "- 不要生成无效的参数如 'id', 'cursor' 等\n"
+            tools_desc += "- 严禁输出未注册或未列出的工具名称（如 websearch/search 等别名），只能使用：web_search\n"
+            tools_desc += "- 如使用 Channel Commentary，不要输出 'code' 标记或多余文本；严格遵循上面的格式\n"
             tools_desc += "- 工具执行完成后，基于结果直接给出最终答案，不要再次调用工具\n\n"
         else:
             tools_desc = "当前没有可用工具，请直接根据提供的参考资料回答问题。\n\n"

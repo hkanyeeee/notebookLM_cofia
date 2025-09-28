@@ -91,7 +91,14 @@ class HarmonyParser:
     TOOL_TAG_PATTERN = re.compile(r'<tool\s+name\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</tool>', re.DOTALL | re.IGNORECASE)
     
     # Channel Commentary 格式（GPT OSS特有格式）
-    CHANNEL_PATTERN = re.compile(r'<\|channel\|>commentary\s+to\s*=\s*(\w+)\s*<\|constrain\|>json<\|message\|>(\{.*?\})', re.DOTALL | re.IGNORECASE)
+    # 兼容多种变体，例如：
+    # <|channel|>commentary to=web_search code<|message|>{...}
+    # <|channel|>commentary to=web_search<|constrain|>json<|message|>{...}
+    # 可选的 <|constrain|>json 与可选的 "code" 标记
+    CHANNEL_PATTERN = re.compile(
+        r'<\|channel\|>\s*commentary\s+to\s*=\s*([\w.-]+)\s*(?:code)?\s*(?:<\|constrain\|>\s*json)?\s*<\|message\|>\s*(\{[\s\S]*?\})',
+        re.DOTALL | re.IGNORECASE
+    )
     
     @classmethod
     def parse_xml_tools(cls, text: str) -> List[ToolCall]:
@@ -200,6 +207,13 @@ class HarmonyParser:
                         if param in arguments:
                             removed_value = arguments.pop(param)
                             print(f"[HarmonyParser] 移除无效参数: {param} = {removed_value}")
+                else:
+                    # 将可能的别名规范化为实际注册名（未来可扩展）
+                    alias_map = {
+                        "websearch": "web_search",
+                        "search": "web_search",
+                    }
+                    tool_name = alias_map.get(tool_name.lower(), tool_name)
                 
                 tool_calls.append(ToolCall(
                     name=tool_name,
