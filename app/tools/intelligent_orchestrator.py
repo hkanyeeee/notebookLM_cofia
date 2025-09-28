@@ -1010,7 +1010,11 @@ class IntelligentOrchestrator:
         """
         try:
             # 准备综合信息
-            reasoning_summary = OutputFormatter.format_reasoning_summary(thoughts)
+            try:
+                reasoning_summary = json.dumps(thoughts or [], ensure_ascii=False, indent=2)
+            except Exception:
+                # 回退为简单字符串拼接
+                reasoning_summary = "\n\n".join([str(t) for t in (thoughts or [])]) or ""
             tool_summary = OutputFormatter.format_tool_results(tool_results)
             context_str = "\n".join(contexts) if contexts else "无特定上下文"
             
