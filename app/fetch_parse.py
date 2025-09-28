@@ -2,8 +2,14 @@ import re
 import asyncio
 import httpx
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from app.config import PROXY_URL
+from app.services.network import (
+    get_httpx_client,
+    get_playwright_browser,
+    get_playwright_semaphore,
+    initialize_network_resources,
+)
 
 # =========================
 # 1) 原有：抓原始 HTML（轻改：更稳的等待 & UA）
@@ -18,33 +24,35 @@ async def fetch_html(url: str, timeout: float = 10.0) -> str:
                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36)"),
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     }
+    client = get_httpx_client()
     try:
-        proxy = PROXY_URL if PROXY_URL else None
-        async with httpx.AsyncClient(trust_env=True, headers=headers, proxies=proxy) as client:
-            resp = await client.get(url, timeout=timeout)
-            resp.raise_for_status()
-            return resp.text
+        resp = await client.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.text
     except Exception:
         # httpx 获取失败，使用 Playwright 进行渲染（静态 DOM）
-        async with async_playwright() as p:
-            launch_kwargs = {"headless": True}
-            browser = await p.chromium.launch(**launch_kwargs)
+        try:
+            browser = get_playwright_browser()
+            semaphore = get_playwright_semaphore()
+        except Exception:
+            # 懒加载初始化网络资源（例如在独立脚本/任务中直接调用而未启动应用）
+            await initialize_network_resources()
+            browser = get_playwright_browser()
+            semaphore = get_playwright_semaphore()
+        async with semaphore:
             context_kwargs = {"user_agent": headers["User-Agent"]}
             if PROXY_URL:
                 context_kwargs["proxy"] = {"server": PROXY_URL}
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
             try:
-                # 不用 networkidle（WS 永远忙），用 domcontentloaded
                 await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
-                # 稍等一会儿让同步脚本跑完
                 await page.wait_for_timeout(800)
                 content = await page.content()
             except PlaywrightTimeoutError:
                 content = await page.content()
             finally:
                 await context.close()
-                await browser.close()
             return content
 
 # =========================
@@ -68,11 +76,16 @@ async def fetch_rendered_text(
                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36)"),
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     }
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+    try:
+        browser = get_playwright_browser()
+        semaphore = get_playwright_semaphore()
+    except Exception:
+        await initialize_network_resources()
+        browser = get_playwright_browser()
+        semaphore = get_playwright_semaphore()
+    async with semaphore:
         context_kwargs = {"user_agent": headers["User-Agent"]}
         if PROXY_URL:
-            # Playwright 代理应设置在 context 层
             context_kwargs["proxy"] = {"server": PROXY_URL}
         context = await browser.new_context(**context_kwargs)
         page = await context.new_page()
@@ -133,7 +146,6 @@ async def fetch_rendered_text(
             raise ValueError("Rendered but empty text.")
         finally:
             await context.close()
-            await browser.close()
 
 # =========================
 # 3) 你的正文提取器（保留 selector 语义 + 回退策略）

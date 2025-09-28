@@ -8,6 +8,7 @@ from .config import DATABASE_URL, LLM_SERVICE_URL
 from .database import init_db
 from .tools.orchestrator import initialize_orchestrator
 from .utils.task_status import ingest_task_manager
+from .services.network import initialize_network_resources, shutdown_network_resources
 
 
 async def cleanup_tasks_periodically():
@@ -29,6 +30,13 @@ async def app_lifespan(app: FastAPI):
     print(f"Using DATABASE_URL: {DATABASE_URL}")
     print(f"Using LLM_SERVICE_URL: {LLM_SERVICE_URL}")
     
+    # 初始化网络资源（httpx/Playwright 单例）
+    try:
+        await initialize_network_resources()
+        print("Network resources initialized successfully")
+    except Exception as e:
+        print(f"Network resources initialization failed: {e}")
+
     # 初始化数据库
     try:
         await init_db()
@@ -64,6 +72,13 @@ async def app_lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         print("任务清理定时器已停止")
+
+    # 关闭网络资源
+    try:
+        await shutdown_network_resources()
+        print("Network resources shutdown successfully")
+    except Exception as e:
+        print(f"Network resources shutdown failed: {e}")
 
 
 app = FastAPI(title="NotebookLM-Py Backend", lifespan=app_lifespan)
