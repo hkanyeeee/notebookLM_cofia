@@ -146,7 +146,41 @@ class QueryDecomposer:
                     # 确保sub_queries是列表
                     if not isinstance(decomposition.get("sub_queries"), list):
                         raise ValueError("sub_queries必须是列表")
-                    
+
+                    # 硬性数量上限裁剪：按重要性优先，稳定保序
+                    sub_queries = decomposition.get("sub_queries", [])
+
+                    def importance_rank(val: str) -> int:
+                        # 数值越小优先级越高
+                        mapping = {"高": 0, "中": 1, "低": 2}
+                        return mapping.get(str(val).strip(), 1)
+
+                    # 创建带原始索引的列表以便稳定排序
+                    indexed_items = []
+                    for idx, item in enumerate(sub_queries):
+                        if isinstance(item, dict):
+                            imp = item.get("importance", "中")
+                        else:
+                            imp = "中"
+                        indexed_items.append((importance_rank(imp), idx, item))
+
+                    # 按重要性升序，其次保持原始顺序
+                    indexed_items.sort(key=lambda x: (x[0], x[1]))
+
+                    # 裁剪到上限
+                    trimmed = [it[2] for it in indexed_items[:NORMAL_MAX_SUB_QUERIES]]
+
+                    # 若裁剪后为空，兜底保留原始问题
+                    if not trimmed:
+                        trimmed = [{
+                            "id": 1,
+                            "question": query,
+                            "importance": "高",
+                            "requires_external_info": True,
+                            "reasoning": "裁剪后兜底保留原始问题"
+                        }]
+
+                    decomposition["sub_queries"] = trimmed
                     return decomposition
                     
                 except json.JSONDecodeError as e:
@@ -157,6 +191,35 @@ class QueryDecomposer:
                         if repaired_content:
                             decomposition = json.loads(repaired_content)
                             print(f"JSON修复成功")
+
+                            # 同步应用硬性数量上限裁剪
+                            sub_queries = decomposition.get("sub_queries", [])
+
+                            def importance_rank(val: str) -> int:
+                                mapping = {"高": 0, "中": 1, "低": 2}
+                                return mapping.get(str(val).strip(), 1)
+
+                            indexed_items = []
+                            for idx, item in enumerate(sub_queries):
+                                if isinstance(item, dict):
+                                    imp = item.get("importance", "中")
+                                else:
+                                    imp = "中"
+                                indexed_items.append((importance_rank(imp), idx, item))
+
+                            indexed_items.sort(key=lambda x: (x[0], x[1]))
+                            trimmed = [it[2] for it in indexed_items[:NORMAL_MAX_SUB_QUERIES]]
+
+                            if not trimmed:
+                                trimmed = [{
+                                    "id": 1,
+                                    "question": query,
+                                    "importance": "高",
+                                    "requires_external_info": True,
+                                    "reasoning": "裁剪后兜底保留原始问题"
+                                }]
+
+                            decomposition["sub_queries"] = trimmed
                             return decomposition
                     except Exception as repair_e:
                         print(f"JSON修复失败: {repair_e}")
