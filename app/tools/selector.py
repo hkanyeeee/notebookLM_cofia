@@ -25,10 +25,13 @@ class StrategySelector:
         if not tool_registry.has_tools():
             return ToolMode.OFF
         
-        # AUTO 模式下的自动选择逻辑
-        # 所有模型优先使用 JSON Function Calling
-        # 这里假设大部分现代模型都支持 JSON FC
-        # 如果不支持，可以在具体策略中处理回退逻辑
+        # AUTO 模式下的自动选择逻辑（依据模型名称进行启发式选择）
+        model_name = (model or "").lower()
+        # 优先为 GPT-OSS 系列或带有 "oss" 标识的模型启用 Harmony（支持 Channel Commentary / DSL 标注）
+        if "oss" in model_name or "gpt-oss" in model_name:
+            return ToolMode.HARMONY
+        
+        # 其他模型默认使用 JSON Function Calling
         return ToolMode.JSON
     
     @staticmethod
@@ -67,7 +70,11 @@ class StrategySelector:
         Returns:
             是否适用
         """
-        # 所有策略适用于所有模型
+        model_name = (model or "").lower()
+        # Harmony 更适合支持 Channel Commentary 的模型（如 GPT-OSS 家族）。
+        if strategy == ToolMode.HARMONY:
+            return ("oss" in model_name or "gpt-oss" in model_name)
+        # JSON / ReAct 视为通用可用
         return True
     
     @staticmethod
@@ -82,5 +89,8 @@ class StrategySelector:
         Returns:
             回退策略
         """
-        # 所有模型的回退策略: JSON -> ReAct
-        return ToolMode.REACT
+        model_name = (model or "").lower()
+        # 对非 OSS 模型回退到 JSON；对 OSS 模型回退到 Harmony
+        if "oss" in model_name or "gpt-oss" in model_name:
+            return ToolMode.HARMONY
+        return ToolMode.JSON
