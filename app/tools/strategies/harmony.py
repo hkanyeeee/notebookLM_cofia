@@ -107,6 +107,25 @@ class HarmonyStrategy(BaseStrategy):
         """
         tool_calls = HarmonyParser.parse_tool_calls(response_text)
         
+        # 若未解析出工具但文本疑似包含工具片段，进行一次性修复重试
+        if not tool_calls:
+            try:
+                # 清理常见围栏和噪声，兼容 Channel Commentary 漏写 constrain/json 的情况
+                cleaned = response_text.strip()
+                # 去除尾随的解释性自然语言，保留可能的工具块片段
+                # 简单启发：截到最后一个 '}' 或 '</tool>' 之后
+                last_brace = cleaned.rfind('}')
+                last_tool = cleaned.lower().rfind('</tool>')
+                cut = max(last_brace, last_tool)
+                if cut != -1:
+                    cleaned = cleaned[:cut+1]
+                retry_calls = HarmonyParser.parse_tool_calls(cleaned)
+                if retry_calls:
+                    print("[Harmony Strategy] 一次性修复重试成功，解析到工具调用")
+                    tool_calls = retry_calls
+            except Exception as e:
+                print(f"[Harmony Strategy] 修复重试失败: {e}")
+
         # 移除工具标签，保留其他内容
         remaining_content = response_text
         for tool_call in tool_calls:

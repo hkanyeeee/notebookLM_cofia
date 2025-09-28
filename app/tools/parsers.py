@@ -100,6 +100,82 @@ class HarmonyParser:
         re.DOTALL | re.IGNORECASE
     )
     
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """去除可能的 ``` 或 ```json 代码块包裹"""
+        try:
+            s = text.strip()
+            if s.startswith("```") and s.endswith("```"):
+                # 去除开头结尾围栏
+                s = re.sub(r"^```(?:json)?\s*", "", s)
+                s = re.sub(r"\s*```$", "", s)
+            return s.strip()
+        except Exception:
+            return text
+
+    @staticmethod
+    def _extract_balanced_json(text: str, start_pos: int = 0) -> Optional[str]:
+        """从 text[start_pos:] 位置开始，找到第一个 '{'，并基于花括号平衡提取完整 JSON 对象字符串。
+        若失败返回 None。
+        """
+        try:
+            i = text.find('{', start_pos)
+            if i == -1:
+                return None
+            brace = 0
+            in_str = False
+            esc = False
+            for j in range(i, len(text)):
+                ch = text[j]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\':
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                else:
+                    if ch == '"':
+                        in_str = True
+                    elif ch == '{':
+                        brace += 1
+                    elif ch == '}':
+                        brace -= 1
+                        if brace == 0:
+                            return text[i:j+1]
+            return None
+        except Exception:
+            return None
+
+    @classmethod
+    def _apply_web_search_whitelist(cls, args: Dict[str, Any]) -> Dict[str, Any]:
+        """对 web_search 参数进行白名单过滤与最小清理"""
+        try:
+            allowed = {"query", "filter_list", "model", "is_simple_query"}
+            cleaned = {k: v for k, v in (args or {}).items() if k in allowed}
+            return cleaned
+        except Exception:
+            return args or {}
+
+    @classmethod
+    def _normalize_tool_name(cls, name: str) -> str:
+        try:
+            if not isinstance(name, str):
+                return name
+            alias_map = {
+                "websearch": "web_search",
+                "search": "web_search",
+                "web-search": "web_search",
+                "WebSearch": "web_search",
+                "internet_search": "web_search",
+                "internet": "web_search",
+                "browse": "web_search",
+                "web": "web_search",
+            }
+            return alias_map.get(name, alias_map.get(name.lower(), name))
+        except Exception:
+            return name
+
     @classmethod
     def parse_xml_tools(cls, text: str) -> List[ToolCall]:
         """使用 XML 解析器提取工具调用（优先方法）"""
@@ -117,18 +193,32 @@ class HarmonyParser:
                 if not name:
                     continue
                 
+                name = cls._normalize_tool_name(name)
                 # 获取工具参数
                 content = root.text or ""
                 content = content.strip()
+                content = cls._strip_code_fences(content)
                 
                 if content:
                     try:
+                        # 先尝试直接解析
                         arguments = json.loads(content)
                     except json.JSONDecodeError:
-                        # 如果不是 JSON，作为简单字符串处理
-                        arguments = {"input": content}
+                        # 退化：尝试从中抽取平衡 JSON
+                        candidate = cls._extract_balanced_json(content, 0)
+                        if candidate:
+                            try:
+                                arguments = json.loads(candidate)
+                            except Exception:
+                                arguments = {"input": content}
+                        else:
+                            # 如果不是 JSON，作为简单字符串处理
+                            arguments = {"input": content}
                 else:
                     arguments = {}
+                
+                if name == "web_search" and isinstance(arguments, dict):
+                    arguments = cls._apply_web_search_whitelist(arguments)
                 
                 tool_calls.append(ToolCall(
                     name=name,
@@ -150,14 +240,26 @@ class HarmonyParser:
         
         for name, content in matches:
             content = content.strip()
+            name = cls._normalize_tool_name(name)
+            content = cls._strip_code_fences(content)
             
             if content:
                 try:
                     arguments = json.loads(content)
                 except json.JSONDecodeError:
-                    arguments = {"input": content}
+                    candidate = cls._extract_balanced_json(content, 0)
+                    if candidate:
+                        try:
+                            arguments = json.loads(candidate)
+                        except Exception:
+                            arguments = {"input": content}
+                    else:
+                        arguments = {"input": content}
             else:
                 arguments = {}
+            
+            if name == "web_search" and isinstance(arguments, dict):
+                arguments = cls._apply_web_search_whitelist(arguments)
             
             tool_calls.append(ToolCall(
                 name=name,
@@ -170,75 +272,94 @@ class HarmonyParser:
     def parse_channel_commentary(cls, text: str) -> List[ToolCall]:
         """解析 Channel Commentary 格式（GPT OSS特有）"""
         tool_calls = []
-        
-        matches = cls.CHANNEL_PATTERN.findall(text)
-        
-        for tool_name, json_content in matches:
-            try:
-                arguments = json.loads(json_content)
-                
-                # 对web_search工具进行参数映射兼容和验证
-                if tool_name == "web_search":
-                    # 检查必需参数
-                    if "query" not in arguments:
-                        # 检查是否包含明显无效的参数组合
-                        invalid_params = {"id", "cursor", "index", "page"}
-                        if any(param in arguments for param in invalid_params):
-                            print(f"[HarmonyParser] 检测到无效的web_search工具调用，缺少query参数，包含无效参数: {list(arguments.keys())}")
-                            continue  # 跳过此无效工具调用
-                    
-                    # 映射旧参数名到新参数名
+
+        # 优先：更稳健的扫描与平衡抽取
+        try:
+            # 允许出现多个 Channel Commentary 片段
+            channel_start_re = re.compile(r'<\|channel\|>\s*commentary\s+to\s*=\s*([\w\.-]+)[^<]*<\|message\|>', re.IGNORECASE)
+            pos = 0
+            while True:
+                m = channel_start_re.search(text, pos)
+                if not m:
+                    break
+                tool_name = m.group(1)
+                tool_name = cls._normalize_tool_name(tool_name)
+                # 从 <|message|> 后开始提取 JSON
+                msg_pos = text.find('<|message|>', m.start())
+                if msg_pos == -1:
+                    pos = m.end()
+                    continue
+                json_start = msg_pos + len('<|message|>')
+                json_block = text[json_start:]
+                json_block = cls._strip_code_fences(json_block)
+                candidate = cls._extract_balanced_json(json_block, 0)
+                if not candidate:
+                    pos = m.end()
+                    continue
+                try:
+                    arguments = json.loads(candidate)
+                except Exception:
+                    pos = m.end()
+                    continue
+
+                if tool_name == "web_search" and isinstance(arguments, dict):
+                    # 兼容清洗与白名单
                     if "topn" in arguments:
-                        # topn在web_search中没有直接对应，移除该参数
-                        topn_value = arguments.pop("topn")
-                        print(f"[HarmonyParser] 移除不支持的topn参数: {topn_value}")
+                        _ = arguments.pop("topn", None)
+                        print("[HarmonyParser] 移除不支持的topn参数")
                     if "source" in arguments:
-                        # 移除source参数，不再映射到categories
-                        source_value = arguments.pop("source", "")
-                        print(f"[HarmonyParser] 移除source参数: {source_value}，由外部SearxNG控制")
+                        _ = arguments.pop("source", None)
+                        print("[HarmonyParser] 移除source参数，由外部SearxNG控制")
                     if "categories" in arguments:
-                        # 移除categories参数
-                        categories_value = arguments.pop("categories", "")
-                        print(f"[HarmonyParser] 移除categories参数: {categories_value}，由外部SearxNG控制")
-                    
-                    # 移除明显无效的参数
-                    invalid_params = {"id", "cursor", "index", "page"}
-                    for param in invalid_params:
-                        if param in arguments:
-                            removed_value = arguments.pop(param)
-                            print(f"[HarmonyParser] 移除无效参数: {param} = {removed_value}")
-                else:
-                    # 将可能的别名规范化为实际注册名（未来可扩展）
-                    alias_map = {
-                        "websearch": "web_search",
-                        "search": "web_search",
-                    }
-                    tool_name = alias_map.get(tool_name.lower(), tool_name)
-                
-                tool_calls.append(ToolCall(
-                    name=tool_name,
-                    arguments=arguments
-                ))
-                
-            except json.JSONDecodeError:
-                # JSON解析失败，跳过
-                continue
+                        _ = arguments.pop("categories", None)
+                        print("[HarmonyParser] 移除categories参数，由外部SearxNG控制")
+                    for invalid in ("id", "cursor", "index", "page"):
+                        if invalid in arguments:
+                            _ = arguments.pop(invalid, None)
+                            print(f"[HarmonyParser] 移除无效参数: {invalid}")
+                    arguments = cls._apply_web_search_whitelist(arguments)
+
+                tool_calls.append(ToolCall(name=tool_name, arguments=arguments))
+                # 移动搜索位置，避免死循环
+                pos = json_start + len(candidate)
+        except Exception as e:
+            print(f"[HarmonyParser] Channel Commentary 扫描异常: {e}")
+
+        # 回退：原有的正则一次性匹配（可能会误切）
+        if not tool_calls:
+            matches = cls.CHANNEL_PATTERN.findall(text)
+            for tool_name, json_content in matches:
+                try:
+                    tool_name = cls._normalize_tool_name(tool_name)
+                    json_content = cls._strip_code_fences(json_content)
+                    arguments = json.loads(json_content)
+                    if tool_name == "web_search" and isinstance(arguments, dict):
+                        for invalid in ("id", "cursor", "index", "page"):
+                            if invalid in arguments:
+                                _ = arguments.pop(invalid, None)
+                                print(f"[HarmonyParser] 移除无效参数: {invalid}")
+                        arguments = cls._apply_web_search_whitelist(arguments)
+                    tool_calls.append(ToolCall(name=tool_name, arguments=arguments))
+                except json.JSONDecodeError:
+                    continue
         
         return tool_calls
     
     @classmethod
     def parse_tool_calls(cls, text: str) -> List[ToolCall]:
         """从文本中解析工具调用"""
+        # 统一预处理：去围栏
+        pre = cls._strip_code_fences(text or "")
         # 先尝试 Channel Commentary 格式（GPT OSS）
-        tool_calls = cls.parse_channel_commentary(text)
+        tool_calls = cls.parse_channel_commentary(pre)
         
         if not tool_calls:
             # 优先使用 XML 解析
-            tool_calls = cls.parse_xml_tools(text)
+            tool_calls = cls.parse_xml_tools(pre)
         
         # 如果 XML 解析失败，使用正则表达式
         if not tool_calls:
-            tool_calls = cls.parse_regex_tools(text)
+            tool_calls = cls.parse_regex_tools(pre)
         
         return tool_calls
     
