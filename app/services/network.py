@@ -31,15 +31,14 @@ async def initialize_network_resources() -> None:
     global _httpx_client, _playwright, _browser, _playwright_semaphore
 
     if _httpx_client is None:
-        _httpx_client = httpx.AsyncClient(
-            trust_env=True,
-            http2=HTTPX_HTTP2_ENABLED,
-            proxy=PROXY_URL,
-            limits=httpx.Limits(
+        client_kwargs = {
+            "trust_env": True,
+            "http2": HTTPX_HTTP2_ENABLED,
+            "limits": httpx.Limits(
                 max_keepalive_connections=HTTPX_MAX_KEEPALIVE_CONNECTIONS,
                 max_connections=HTTPX_MAX_CONNECTIONS,
             ),
-            headers={
+            "headers": {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -47,7 +46,10 @@ async def initialize_network_resources() -> None:
                 ),
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             },
-        )
+        }
+        if PROXY_URL:
+            client_kwargs["proxy"] = PROXY_URL
+        _httpx_client = httpx.AsyncClient(**client_kwargs)
 
     if _playwright is None:
         _playwright = await async_playwright().start()
@@ -127,15 +129,14 @@ def get_httpx_client() -> httpx.AsyncClient:
     if _httpx_client is None:
         # 懒加载：在未经过 lifespan 初始化时，也提供可用客户端
         print("[Network] Warning: Creating httpx client outside of lifespan, ensure proper cleanup")
-        _httpx_client = httpx.AsyncClient(
-            trust_env=True,
-            http2=HTTPX_HTTP2_ENABLED,
-            proxy=PROXY_URL,
-            limits=httpx.Limits(
+        client_kwargs = {
+            "trust_env": True,
+            "http2": HTTPX_HTTP2_ENABLED,
+            "limits": httpx.Limits(
                 max_keepalive_connections=HTTPX_MAX_KEEPALIVE_CONNECTIONS,
                 max_connections=HTTPX_MAX_CONNECTIONS,
             ),
-            headers={
+            "headers": {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -143,7 +144,10 @@ def get_httpx_client() -> httpx.AsyncClient:
                 ),
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             },
-        )
+        }
+        if PROXY_URL:
+            client_kwargs["proxy"] = PROXY_URL
+        _httpx_client = httpx.AsyncClient(**client_kwargs)
         # 追踪这个客户端以确保能被清理
         _created_clients.add(_httpx_client)
         # 注册紧急清理

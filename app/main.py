@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import DATABASE_URL, LLM_SERVICE_URL
+from .config import DATABASE_URL, LLM_SERVICE_URL, TIKTOKEN_CACHE_DIR
 from .database import init_db
 from .tools.orchestrator import initialize_orchestrator
 from .utils.task_status import ingest_task_manager
@@ -29,6 +29,11 @@ async def cleanup_tasks_periodically():
 async def app_lifespan(app: FastAPI):
     print(f"Using DATABASE_URL: {DATABASE_URL}")
     print(f"Using LLM_SERVICE_URL: {LLM_SERVICE_URL}")
+    
+    # 设置 tiktoken 缓存目录
+    import os
+    os.environ["TIKTOKEN_CACHE_DIR"] = TIKTOKEN_CACHE_DIR
+    print(f"Set TIKTOKEN_CACHE_DIR: {TIKTOKEN_CACHE_DIR}")
     
     # 初始化网络资源（httpx/Playwright 单例）
     try:
