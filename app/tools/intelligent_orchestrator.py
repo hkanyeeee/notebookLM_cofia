@@ -595,9 +595,14 @@ class IntelligentOrchestrator:
                             pass
                     # 基于知识缺口进行无搜索综合（流式）
                     context_str = "\n".join(contexts) if contexts else "无特定上下文"
+                    # 使用完整思考结果（JSON）作为上下文，而非摘要
+                    try:
+                        reasoning_summary_stream = json.dumps(thoughts or [], ensure_ascii=False, indent=2)
+                    except Exception:
+                        reasoning_summary_stream = "\n\n".join([str(t) for t in (thoughts or [])]) or ""
                     user_prompt = SYNTHESIS_USER_PROMPT_TEMPLATE.format(
                         original_query=query,
-                        reasoning_summary=OutputFormatter.format_reasoning_summary(thoughts),
+                        reasoning_summary=reasoning_summary_stream,
                         tool_results="未进行外部搜索。",
                         context=context_str
                     ) + "\n\n注意：外部搜索工具不可用。请：\n- 基于已有信息尽力回答\n- 明确列出关键缺失信息与建议的下一步（但不要杜撰）"
@@ -644,7 +649,11 @@ class IntelligentOrchestrator:
             # 直接进行流式答案综合，不使用统一方法的回调机制
             
             # 准备综合信息
-            reasoning_summary = OutputFormatter.format_reasoning_summary(thoughts)
+            # 使用完整思考结果（JSON）作为上下文，而非摘要
+            try:
+                reasoning_summary = json.dumps(thoughts or [], ensure_ascii=False, indent=2)
+            except Exception:
+                reasoning_summary = "\n\n".join([str(t) for t in (thoughts or [])]) or ""
             tool_summary = OutputFormatter.format_tool_results(tool_results)
             context_str = "\n".join(contexts) if contexts else "无特定上下文"
             
