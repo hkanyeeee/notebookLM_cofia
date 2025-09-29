@@ -26,7 +26,7 @@ class StrategySelector:
             return ToolMode.OFF
         
         # AUTO 模式下的自动选择逻辑（依据模型名称进行启发式选择）
-        model_name = (model or "").lower()
+        # model_name = (model or "").lower()
         # 优先为 GPT-OSS 系列或带有 "oss" 标识的模型启用 Harmony（支持 Channel Commentary / DSL 标注）
         # 暂时禁用
         # if "oss" in model_name or "gpt-oss" in model_name:
