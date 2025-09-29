@@ -73,8 +73,8 @@ class StrategySelector:
         """
         model_name = (model or "").lower()
         # Harmony 更适合支持 Channel Commentary 的模型（如 GPT-OSS 家族）。
-        if strategy == ToolMode.HARMONY:
-            return ("oss" in model_name or "gpt-oss" in model_name)
+        # if strategy == ToolMode.HARMONY:
+        #     return ("oss" in model_name or "gpt-oss" in model_name)
         # JSON / ReAct 视为通用可用
         return True
     
@@ -92,6 +92,6 @@ class StrategySelector:
         """
         model_name = (model or "").lower()
         # 对非 OSS 模型回退到 JSON；对 OSS 模型回退到 Harmony
-        if "oss" in model_name or "gpt-oss" in model_name:
-            return ToolMode.HARMONY
+        # if "oss" in model_name or "gpt-oss" in model_name:
+        #     return ToolMode.HARMONY
         return ToolMode.JSON
