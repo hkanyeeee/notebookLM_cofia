@@ -1,47 +1,52 @@
-# AGENTS.md
+# Repository Guidelines
 
-This file provides guidance to agents when working with code in this repository.
+This document provides a quick reference for contributors working on the **NotebookLM** project. It covers the repository layout, build and test commands, coding style, testing conventions, and pull‑request workflow.
 
-## Build/Lint/Test Commands
+## Project Structure & Module Organization
+- `app/` – Python FastAPI backend (models, routers, services).  All API endpoints live under `app/api`.  Configuration lives in `app/config.py`.
+- `notebookLM_front/` – Vue 3 + TypeScript front‑end.  Source files are in `src/`, build artifacts go to `dist/`.
+- `data/` – SQLite database used by the backend (created at runtime).
+- `scripts/` – helper utilities and Docker compose definitions.
 
-- `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` - Run development server
-- `docker compose build && docker-compose up -d` - Docker deployment
-- `pip install -r requirements.txt` - Install Python dependencies
-- `npm run dev` (in notebookLM_front/) - Run frontend development server
-- `npm run build` (in notebookLM_front/) - Build frontend application
+## Build, Test, Development Commands
+### Backend (Python)
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-## Code Style Guidelines
+# Run locally with auto‑reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+Or build via Docker:
+```bash
+docker-compose up --build
+```
 
-- Use snake_case for Python files and variables
-- Use CamelCase for class names
-- All async functions should use type hints
-- Configuration is driven by environment variables and .env file
-- Database operations use SQLAlchemy async ORM with proper session management
-- Tools are registered via register_all_tools() to avoid circular imports
+### Frontend (Vue)
+```bash
+cd notebookLM_front
+npm install   # or pnpm i
+npm run dev   # hot‑reload development server
+npm run build # production assets in dist/
+```
 
-## Project-Specific Patterns
+### Tests
+Backend tests use **pytest**.  From the repo root:
+```bash
+pytest            # runs all Python tests
+# or for a specific module
+pytest app/api/test_auto_ingest.py
+```
+## Coding Style & Naming Conventions
+- **Python**: 4‑space indentation, PEP 8 compliant.  Use type hints where appropriate.  File names are snake_case; modules under `app/` mirror the API structure (`api/*.py`).
+- **Vue/TS**: Single‑file components in `src/components`.  Class names use PascalCase, props and data camelCase.  Run `npm run format` (Prettier) before committing.
 
-- Session ID management for context isolation across all operations
-- Chunk ID generation using session_id + url + index for global uniqueness
-- Hybrid search combining vector and BM25 retrieval for better recall
-- Tool orchestration supports multiple strategies (JSON FC, ReAct, Harmony)
-- Web search uses both Searxng and Playwright with fallback mechanisms
-- Caching implemented for web content with configurable TTL and size limits
-- Circuit breaker pattern in tool execution to prevent cascading failures
-- Database uses SQLite with FTS5 for sparse (BM25) retrieval in addition to vector search
-- All API endpoints use session_id for request context management
+## Commit & Pull Request Guidelines
+- Follow **Conventional Commits**: `feat:`, `fix:`, `docs:`, etc.
+- Include a concise description and link to the related issue (e.g., `#123`).
+- For UI changes, attach screenshots or a short GIF.
+- PRs should be reviewed by at least one other contributor before merging.  Ensure tests pass locally.
 
-## Testing
+## Environment Variables
+Most configuration is injected via Docker Compose (`docker-compose.yml`) or an optional `.env` file in the repo root.  Refer to `app/config.py` for supported keys and defaults.
 
-- Tests use pytest framework (tests/ directory exists but no specific test files provided)
-- Core functionality tested through integration tests
-- Tool execution and API endpoints are key test targets
-
-## Key Gotchas
-
-- Tool orchestrator must be initialized with LLM_SERVICE_URL before use
-- Database initialization happens in app_lifespan context manager
-- Web search tool requires SEARXNG_QUERY_URL to be configured
-- Vector database operations require QDRANT_HOST and QDRANT_PORT configuration
-- Tool registration happens in orchestrator initialization to avoid circular imports
-- Chunk IDs must be globally unique across sessions for proper deduplication
