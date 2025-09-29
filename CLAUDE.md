@@ -2,100 +2,72 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## sub agents 相关
-前端：vue-developer
-后端：python-fastapi-developer、database-admin
-每一个 sub agent 结束后都会输出一个markdown 文件，后续工作需要阅读它
-**直接**将相关文档交给sub agents阅读，不需要前置分析
-
 ## Project Overview
 
-This is a Python-based backend service built with FastAPI that provides document processing, retrieval-augmented generation (RAG), and intelligent tool orchestration capabilities for applications similar to NotebookLM.
+This is a Python/FastAPI backend service designed for NotebookLM-like applications, providing document processing, Retrieval-Augmented Generation (RAG), and intelligent tool orchestration capabilities.
 
 Key features include:
-- Document ingestion from URLs with automatic chunking and vector embeddings
-- Vector storage using Qdrant database
-- Retrieval-augmented generation (RAG) for context-aware responses
-- Intelligent tool orchestration (ReAct/JSON FC) allowing LLM to call external tools
+- Document ingestion from URLs with content extraction, chunking, and embedding generation
+- Vector storage using Qdrant for efficient similarity search
+- RAG implementation that retrieves relevant document chunks based on user queries
+- Tool orchestration framework supporting multiple modes (JSON Function Calling, ReAct, Harmony)
 - Integration with n8n workflow automation platform via webhooks
 
 ## Architecture & Structure
 
-The codebase is organized into the following main components:
+The application follows a modular FastAPI structure:
 
-### Core Application Structure
-- `app/main.py`: FastAPI application entry point with lifespan manager
-- `app/config.py`: Configuration loading from .env files and environment variables
-- `app/database.py`: Database connection and initialization using SQLAlchemy async ORM
-- `app/models.py`: SQLAlchemy data models
-
-### API Routes
-- `app/api/ingest.py`: Document ingestion endpoints
-- `app/api/auto_ingest.py`: Auto-specific ingestion
-- `app/api/collections.py`: Collection management
-- `app/api/search.py`: Search functionality
-- `app/api/documents.py`: Document operations
-- `app/api/query.py`: Query processing
-- `app/api/models.py`: Model endpoints
-- `app/api/webhook.py`: Webhook handling for n8n integration
-- `app/api/n8n_workflow.py`: n8n workflow integration
-- `app/api/vector_fix.py`: Vector database fix operations
-
-### Core Processing Modules
-- `app/fetch_parse.py`: Web content fetching and parsing
-- `app/chunking.py`: Document chunking logic
-- `app/embedding_client.py`: Embedding generation client
-- `app/vector_db_client.py`: Qdrant vector database interactions
-
-### Tool Orchestration System
-- `app/tools/` directory contains the tool orchestration framework:
-  - `orchestrator.py`: Main orchestrator managing tool execution cycles
-  - `models.py`: Tool execution models and data structures
-  - `selector.py`: Strategy selection logic
-  - `registry.py`: Tool registration system
-  - Strategies: `json_fc.py`, `react.py`, `harmony.py` for different execution approaches
-
-## Development Commands
-
-### Setup & Installation
-```bash
-# Create virtual environment
-conda create -n notebooklm python=3.10
-conda activate notebooklm
-
-# Install dependencies
-pip install -r requirements.txt
 ```
+app/
+├── main.py              # FastAPI app entry point and lifespan management
+├── config.py            # Configuration loading from .env file
+├── database.py          # Database initialization with SQLAlchemy async ORM
+├── models.py            # SQLAlchemy data models (Source, Chunk, etc.)
+├── api/                 # API routes organized by functionality:
+│   ├── ingest.py        # Document ingestion endpoints
+│   ├── auto_ingest.py   # Auto ingestion endpoints
+│   ├── collections.py   # Collection management
+│   ├── search.py        # Search endpoints
+│   ├── documents.py     # Document management
+│   ├── query.py         # Query processing with RAG and tools
+│   ├── models.py        # Model information endpoints
+│   ├── webhook.py       # Webhook handling for n8n integration
+│   └── n8n_workflow.py  # N8N workflow endpoints
+├── tools/               # Tool orchestration system:
+│   ├── orchestrator.py  # Main tool orchestrator with strategies
+│   ├── models.py        # Tool execution models and data structures
+│   ├── registry.py      # Tool registration and management
+│   ├── selector.py      # Strategy selection logic
+│   ├── strategies/      # Different execution strategies (JSON FC, ReAct, Harmony)
+│   └── utils/           # Utility functions for tools
+├── fetch_parse.py       # Web content fetching and parsing utilities
+├── chunking.py          # Document chunking logic
+├── embedding_client.py  # Embedding generation client
+└── vector_db_client.py  # Qdrant vector database operations
+```
+
+## Common Development Tasks
 
 ### Running the Application
-```bash
-# Development mode with hot-reload
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+1. Set up Python virtual environment (conda or venv)
+2. Install dependencies: `pip install -r requirements.txt`
+3. Create `.env` file with required configuration variables
+4. Start development server: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
 
-# Access API documentation at http://localhost:8000/docs
-```
+### Key Configuration Variables
+- DATABASE_URL: SQLite database connection string
+- EMBEDDING_SERVICE_URL: URL for embedding generation service
+- LLM_SERVICE_URL: URL for large language model service
+- QDRANT_HOST/QDRANT_PORT: Qdrant vector DB configuration
+- SEARXNG_QUERY_URL: Searxng search engine endpoint
 
-### Configuration
-Create a `.env` file in the project root with required variables:
-- `DATABASE_URL`: Database connection string
-- `EMBEDDING_SERVICE_URL`: Embedding service address
-- `LLM_SERVICE_URL`: LLM service address
-- `QDRANT_HOST`, `QDRANT_PORT`: Qdrant vector database configuration
-- `SEARXNG_QUERY_URL`: Searxng search engine address
+### Testing & Debugging
+- Tests are typically run with pytest or similar frameworks (not explicitly configured in this project)
+- Use `http://localhost:8000/docs` to access interactive API documentation
+- Check logs for runtime errors and initialization issues
 
-### Docker Deployment
-```bash
-# Build and start services
-docker compose build
-docker-compose up -d
-```
+## Development Notes
 
-## Key Technical Details
+This is an asynchronous FastAPI application using SQLAlchemy async ORM. The tool orchestration system implements multiple execution strategies including JSON Function Calling, ReAct, and Harmony modes. Vector operations are handled via Qdrant client with optimized configurations.
 
-The system uses async/await patterns throughout for efficient I/O operations. It integrates with several external services:
-- Qdrant for vector storage and similarity search
-- Searxng for web search capabilities
-- Various LLM services for embeddings, reasoning, and tool calling
-- n8n for workflow automation integration
-
-The tool orchestration system supports multiple execution strategies (JSON Function Calling, ReAct, Harmony) and can dynamically select the appropriate strategy based on the LLM model being used.
+The codebase has a strong focus on RAG capabilities with hybrid dense/sparse retrieval using both vector search and BM25.
