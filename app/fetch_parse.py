@@ -9,6 +9,9 @@ from app.services.network import (
     get_playwright_browser,
     get_playwright_semaphore,
     initialize_network_resources,
+    get_playwright_context,
+    is_playwright_persistent_enabled,
+    apply_stealth_if_enabled,
 )
 
 # =========================
@@ -32,27 +35,42 @@ async def fetch_html(url: str, timeout: float = 10.0) -> str:
     except Exception:
         # httpx 获取失败，使用 Playwright 进行渲染（静态 DOM）
         try:
+            # 懒加载初始化网络资源（例如在独立脚本/任务中直接调用而未启动应用）
             browser = get_playwright_browser()
             semaphore = get_playwright_semaphore()
         except Exception:
-            # 懒加载初始化网络资源（例如在独立脚本/任务中直接调用而未启动应用）
             await initialize_network_resources()
-            browser = get_playwright_browser()
             semaphore = get_playwright_semaphore()
         async with semaphore:
-            context_kwargs = {"user_agent": headers["User-Agent"]}
-            if PROXY_URL:
-                context_kwargs["proxy"] = {"server": PROXY_URL}
-            context = await browser.new_context(**context_kwargs)
+            context = await get_playwright_context()
             page = await context.new_page()
             try:
+                await apply_stealth_if_enabled(page)
+            except Exception:
+                pass
+            try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
+                # 轻量滚动以触发懒加载
+                try:
+                    for _ in range(2):
+                        await page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.8))")
+                        await page.wait_for_timeout(500)
+                except Exception:
+                    pass
                 await page.wait_for_timeout(800)
                 content = await page.content()
             except PlaywrightTimeoutError:
                 content = await page.content()
             finally:
-                await context.close()
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+                if not is_playwright_persistent_enabled():
+                    try:
+                        await context.close()
+                    except Exception:
+                        pass
             return content
 
 # =========================
@@ -81,45 +99,64 @@ async def fetch_rendered_text(
         semaphore = get_playwright_semaphore()
     except Exception:
         await initialize_network_resources()
-        browser = get_playwright_browser()
         semaphore = get_playwright_semaphore()
     async with semaphore:
-        context_kwargs = {"user_agent": headers["User-Agent"]}
-        if PROXY_URL:
-            context_kwargs["proxy"] = {"server": PROXY_URL}
-        context = await browser.new_context(**context_kwargs)
+        context = await get_playwright_context()
         page = await context.new_page()
+        try:
+            await apply_stealth_if_enabled(page)
+        except Exception:
+            pass
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
 
+            # 轻量滚动触发懒加载
+            try:
+                for _ in range(3):
+                    await page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.9))")
+                    await page.wait_for_timeout(500)
+            except Exception:
+                pass
+
+            # 等待候选选择器之一；若未提供 selector，使用候选列表
+            candidate_selectors = []
             if selector:
+                candidate_selectors.append(selector)
+            candidate_selectors.extend(["article", "main", "[role=main]"])
+            waited = False
+            for sel in candidate_selectors:
                 try:
-                    await page.wait_for_selector(selector, timeout=timeout * 1000)
+                    await page.wait_for_selector(sel, timeout=int(timeout * 500))
+                    waited = True
+                    break
                 except PlaywrightTimeoutError:
-                    # 没等到也继续，走通用读取
-                    pass
+                    continue
 
             async def read_text() -> str:
-                if selector:
-                    loc = page.locator(selector)
-                    count = await loc.count()
-                    if count == 0:
-                        return ""
-                    texts = []
-                    limit = min(count, max_nodes_check)
-                    for i in range(limit):
-                        try:
-                            t = await loc.nth(i).inner_text()
-                            if t:
-                                texts.append(t)
-                        except Exception:
-                            pass
-                    return max(texts, key=len, default="").strip()
-                else:
+                # 优先尝试候选选择器
+                for sel in candidate_selectors:
                     try:
-                        return (await page.locator("body").inner_text()).strip()
+                        loc = page.locator(sel)
+                        count = await loc.count()
+                        if count and count > 0:
+                            texts = []
+                            limit = min(count, max_nodes_check)
+                            for i in range(limit):
+                                try:
+                                    t = await loc.nth(i).inner_text()
+                                    if t:
+                                        texts.append(t)
+                                except Exception:
+                                    pass
+                            if texts:
+                                return max(texts, key=len, default="").strip()
                     except Exception:
-                        return ""
+                        pass
+                # 兜底 body
+                try:
+                    return (await page.locator("body").inner_text()).strip()
+                except Exception:
+                    return ""
 
             # 文本稳定：每 500ms 检查一次，连续 3 次长度不变且达到最小长度
             stable = 0
@@ -145,7 +182,15 @@ async def fetch_rendered_text(
                 return txt
             raise ValueError("Rendered but empty text.")
         finally:
-            await context.close()
+            try:
+                await page.close()
+            except Exception:
+                pass
+            if not is_playwright_persistent_enabled():
+                try:
+                    await context.close()
+                except Exception:
+                    pass
 
 # =========================
 # 3) 你的正文提取器（保留 selector 语义 + 回退策略）

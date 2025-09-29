@@ -62,6 +62,25 @@ WEB_LOADER_ENGINE = get_config_value("WEB_LOADER_ENGINE", "safe_web")  # safe_we
 PLAYWRIGHT_TIMEOUT = float(get_config_value("PLAYWRIGHT_TIMEOUT", "10.0"))
 PLAYWRIGHT_MAX_CONCURRENCY = int(get_config_value("PLAYWRIGHT_MAX_CONCURRENCY", "4"))
 
+# Playwright 拟真/持久化/stealth 配置
+PLAYWRIGHT_HEADLESS = get_config_value("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
+PLAYWRIGHT_PERSISTENT = get_config_value("PLAYWRIGHT_PERSISTENT", "false").lower() == "true"
+PLAYWRIGHT_USER_DATA_DIR = get_config_value("PLAYWRIGHT_USER_DATA_DIR", ".pw_profile")
+PLAYWRIGHT_STEALTH = get_config_value("PLAYWRIGHT_STEALTH", "false").lower() == "true"
+PLAYWRIGHT_USER_AGENT = get_config_value("PLAYWRIGHT_USER_AGENT", (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+))
+PLAYWRIGHT_LOCALE = get_config_value("PLAYWRIGHT_LOCALE", "zh-CN")
+PLAYWRIGHT_TIMEZONE = get_config_value("PLAYWRIGHT_TIMEZONE", "Asia/Shanghai")
+PLAYWRIGHT_VIEWPORT_WIDTH = int(get_config_value("PLAYWRIGHT_VIEWPORT_WIDTH", "1366"))
+PLAYWRIGHT_VIEWPORT_HEIGHT = int(get_config_value("PLAYWRIGHT_VIEWPORT_HEIGHT", "814"))
+# 以逗号分隔的额外 Chromium 启动参数
+PLAYWRIGHT_EXTRA_ARGS = [
+    arg.strip() for arg in (get_config_value("PLAYWRIGHT_EXTRA_ARGS", "--disable-blink-features=AutomationControlled,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream")).split(",")
+    if arg.strip()
+]
+
 # httpx 连接池/HTTP2 配置
 HTTPX_HTTP2_ENABLED = get_config_value("HTTPX_HTTP2_ENABLED", "true").lower() == "true"
 HTTPX_MAX_KEEPALIVE_CONNECTIONS = int(get_config_value("HTTPX_MAX_KEEPALIVE_CONNECTIONS", "32"))

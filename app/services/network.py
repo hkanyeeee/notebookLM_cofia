@@ -1,10 +1,11 @@
 import asyncio
 import atexit
 import weakref
+import random
 from typing import Optional
 
 import httpx
-from playwright.async_api import async_playwright, Browser, Playwright
+from playwright.async_api import async_playwright, Browser, Playwright, BrowserContext
 
 from app.config import (
     PROXY_URL,
@@ -12,6 +13,16 @@ from app.config import (
     HTTPX_MAX_KEEPALIVE_CONNECTIONS,
     HTTPX_MAX_CONNECTIONS,
     PLAYWRIGHT_MAX_CONCURRENCY,
+    PLAYWRIGHT_HEADLESS,
+    PLAYWRIGHT_PERSISTENT,
+    PLAYWRIGHT_USER_DATA_DIR,
+    PLAYWRIGHT_STEALTH,
+    PLAYWRIGHT_USER_AGENT,
+    PLAYWRIGHT_LOCALE,
+    PLAYWRIGHT_TIMEZONE,
+    PLAYWRIGHT_VIEWPORT_WIDTH,
+    PLAYWRIGHT_VIEWPORT_HEIGHT,
+    PLAYWRIGHT_EXTRA_ARGS,
 )
 
 
@@ -20,6 +31,7 @@ _httpx_client: Optional[httpx.AsyncClient] = None
 _playwright: Optional[Playwright] = None
 _browser: Optional[Browser] = None
 _playwright_semaphore: Optional[asyncio.Semaphore] = None
+_persistent_context: Optional[BrowserContext] = None
 
 # 追踪所有创建的 httpx 客户端，确保都能被关闭
 _created_clients: weakref.WeakSet[httpx.AsyncClient] = weakref.WeakSet()
@@ -28,7 +40,7 @@ _shutdown_registered = False
 
 async def initialize_network_resources() -> None:
     """初始化全局 httpx 客户端与 Playwright 浏览器。"""
-    global _httpx_client, _playwright, _browser, _playwright_semaphore
+    global _httpx_client, _playwright, _browser, _playwright_semaphore, _persistent_context
 
     if _httpx_client is None:
         client_kwargs = {
@@ -53,9 +65,34 @@ async def initialize_network_resources() -> None:
 
     if _playwright is None:
         _playwright = await async_playwright().start()
-    if _browser is None:
-        # 代理在 context 级别设置，这里保持浏览器干净
-        _browser = await _playwright.chromium.launch(headless=True)
+    # 根据是否启用持久化上下文决定启动方式
+    if PLAYWRIGHT_PERSISTENT:
+        if _persistent_context is None:
+            launch_kwargs = {
+                "headless": PLAYWRIGHT_HEADLESS,
+                "args": PLAYWRIGHT_EXTRA_ARGS,
+                "viewport": {
+                    "width": PLAYWRIGHT_VIEWPORT_WIDTH + random.randint(0, 48),
+                    "height": PLAYWRIGHT_VIEWPORT_HEIGHT + random.randint(0, 48),
+                },
+                "locale": PLAYWRIGHT_LOCALE,
+                "timezone_id": PLAYWRIGHT_TIMEZONE,
+                "user_agent": PLAYWRIGHT_USER_AGENT,
+            }
+            if PROXY_URL:
+                launch_kwargs["proxy"] = {"server": PROXY_URL}
+            _persistent_context = await _playwright.chromium.launch_persistent_context(
+                PLAYWRIGHT_USER_DATA_DIR,
+                **launch_kwargs,
+            )
+        # 非持久化浏览器对象保持为空，防止误用
+        _browser = None
+    else:
+        if _browser is None:
+            _browser = await _playwright.chromium.launch(
+                headless=PLAYWRIGHT_HEADLESS,
+                args=PLAYWRIGHT_EXTRA_ARGS,
+            )
 
     if _playwright_semaphore is None:
         _playwright_semaphore = asyncio.Semaphore(max(1, PLAYWRIGHT_MAX_CONCURRENCY))
@@ -63,7 +100,7 @@ async def initialize_network_resources() -> None:
 
 async def shutdown_network_resources() -> None:
     """关闭并清理全局 httpx 客户端与 Playwright 浏览器。"""
-    global _httpx_client, _playwright, _browser, _playwright_semaphore
+    global _httpx_client, _playwright, _browser, _playwright_semaphore, _persistent_context
 
     # 关闭主要的 httpx 客户端
     if _httpx_client is not None:
@@ -82,6 +119,14 @@ async def shutdown_network_resources() -> None:
                 await client.aclose()
         except Exception as e:
             print(f"Error closing httpx client: {e}")
+
+    if _persistent_context is not None:
+        try:
+            await _persistent_context.close()
+        except Exception as e:
+            print(f"Error closing Playwright persistent context: {e}")
+        finally:
+            _persistent_context = None
 
     if _browser is not None:
         try:
@@ -157,7 +202,7 @@ def get_httpx_client() -> httpx.AsyncClient:
 
 def get_playwright_browser() -> Browser:
     if _browser is None:
-        raise RuntimeError("Playwright browser is not initialized. Ensure lifespan has started.")
+        raise RuntimeError("Playwright browser is not initialized (non-persistent mode). Ensure lifespan has started.")
     return _browser
 
 
@@ -165,6 +210,61 @@ def get_playwright_semaphore() -> asyncio.Semaphore:
     if _playwright_semaphore is None:
         raise RuntimeError("Playwright semaphore is not initialized. Ensure lifespan has started.")
     return _playwright_semaphore
+
+
+def is_playwright_persistent_enabled() -> bool:
+    return PLAYWRIGHT_PERSISTENT and _persistent_context is not None
+
+
+async def get_playwright_context() -> BrowserContext:
+    """获取一个可用的 BrowserContext。
+    - 如果启用持久化上下文：返回全局持久化 context
+    - 否则：在全局 Browser 上创建新 context 并按配置拟真
+    """
+    if PLAYWRIGHT_PERSISTENT:
+        if _persistent_context is None:
+            raise RuntimeError("Persistent context is not initialized. Ensure lifespan has started.")
+        # 可设置额外头部
+        try:
+            await _persistent_context.set_extra_http_headers({
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" if PLAYWRIGHT_LOCALE.startswith("zh") else "en-US,en;q=0.9",
+            })
+        except Exception:
+            pass
+        return _persistent_context
+    else:
+        browser = get_playwright_browser()
+        context_kwargs = {
+            "user_agent": PLAYWRIGHT_USER_AGENT,
+            "locale": PLAYWRIGHT_LOCALE,
+            "timezone_id": PLAYWRIGHT_TIMEZONE,
+            "viewport": {
+                "width": PLAYWRIGHT_VIEWPORT_WIDTH + random.randint(0, 48),
+                "height": PLAYWRIGHT_VIEWPORT_HEIGHT + random.randint(0, 48),
+            },
+        }
+        if PROXY_URL:
+            context_kwargs["proxy"] = {"server": PROXY_URL}
+        context = await browser.new_context(**context_kwargs)
+        try:
+            await context.set_extra_http_headers({
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" if PLAYWRIGHT_LOCALE.startswith("zh") else "en-US,en;q=0.9",
+            })
+        except Exception:
+            pass
+        return context
+
+
+async def apply_stealth_if_enabled(page) -> None:
+    """在可用时应用 playwright-stealth。失败时静默跳过。"""
+    if not PLAYWRIGHT_STEALTH:
+        return
+    try:
+        from playwright_stealth import stealth_async
+        await stealth_async(page)
+    except Exception as e:
+        # 插件缺失或失败时不影响主流程
+        print(f"[Network] Stealth 插件未启用或应用失败: {e}")
 
 
 class NetworkResourcesManager:
