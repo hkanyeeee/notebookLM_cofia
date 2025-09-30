@@ -96,10 +96,22 @@ async def fetch_rendered_text(
     max_nodes_check: int | None = None,
 ) -> str:
     """
-    用 Playwright 真渲染并直接读取可见文本（包括 Shadow DOM 渲染后的文本）。
-    - 若提供 selector：优先返回该元素（或其中文本最长的一个）的 innerText
-    - 否则：返回 body.innerText
-    - 采用“文本长度稳定”策略等待前端/WS 异步渲染完成
+    使用 Playwright 渲染并提取页面“可见文本”（优先正文区域），面向通用爬取。
+
+    参数说明：
+    - url: 目标地址
+    - selector: 优先选择器。若提供，将被加入候选选择器列表的首位；否则仅使用配置项 PLAYWRIGHT_CANDIDATE_SELECTORS。
+    - timeout: 总等待时长（秒），影响“文本稳定”轮询次数。
+    - min_chars: 文本长度阈值。None 时采用配置 PLAYWRIGHT_MIN_CHARS。
+    - max_nodes_check: 每个选择器最多检查的节点数。None 时采用配置 PLAYWRIGHT_MAX_NODES_CHECK。
+
+    配置交互：
+    - PLAYWRIGHT_WAIT_FOR_FONTS: 若开启，等待 document.fonts.ready 防止 FOIT 导致 innerText 为空。
+    - PLAYWRIGHT_WAIT_FOR_DOM_STABLE + PLAYWRIGHT_DOM_STABLE_MS: 通过 MutationObserver 等待 DOM 子树在指定毫秒内无变更。
+    - PLAYWRIGHT_CANDIDATE_SELECTORS: 候选正文选择器列表；本函数不再硬编码默认候选，全部来源于配置（加上可选的 selector）。
+    - PLAYWRIGHT_TEXT_STABLE_CHECKS / PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS: 文本稳定性判定（连续 N 次长度不变）。
+    - PLAYWRIGHT_SCROLL_STEPS / PLAYWRIGHT_SCROLL_INTERVAL_MS: 轻量滚动触发懒加载。
+    - 其他拟真/上下文/并发配置由 app.services.network 管理。
     """
     headers = {
         "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -175,30 +187,37 @@ async def fetch_rendered_text(
                     continue
 
             async def read_text() -> str:
-                # 优先尝试候选选择器
-                for sel in candidate_selectors:
-                    try:
-                        loc = page.locator(sel)
-                        count = await loc.count()
-                        if count and count > 0:
-                            texts = []
-                            limit = min(count, (max_nodes_check or PLAYWRIGHT_MAX_NODES_CHECK))
-                            for i in range(limit):
-                                try:
-                                    t = await loc.nth(i).inner_text()
-                                    if t:
-                                        texts.append(t)
-                                except Exception:
-                                    pass
-                            if texts:
-                                return max(texts, key=len, default="").strip()
-                    except Exception:
-                        pass
-                # 兜底 body
+                # 将多次 inner_text 跨进程调用合并为一次 evaluate，减少往返开销
                 try:
-                    return (await page.locator("body").inner_text()).strip()
+                    return await page.evaluate(
+                        "(selectors, maxNodes) => {\n"
+                        "  const safeText = (el) => (el && el.innerText ? el.innerText.trim() : '');\n"
+                        "  let best = '';\n"
+                        "  for (const sel of selectors) {\n"
+                        "    try {\n"
+                        "      const nodes = Array.from(document.querySelectorAll(sel));\n"
+                        "      const limit = Math.min(nodes.length, Math.max(1, maxNodes));\n"
+                        "      for (let i = 0; i < limit; i++) {\n"
+                        "        const t = safeText(nodes[i]);\n"
+                        "        if (t && t.length > best.length) best = t;\n"
+                        "      }\n"
+                        "    } catch (e) { /* ignore */ }\n"
+                        "  }\n"
+                        "  if (!best) {\n"
+                        "    const body = document.body;\n"
+                        "    best = safeText(body);\n"
+                        "  }\n"
+                        "  return best || '';\n"
+                        "}",
+                        candidate_selectors,
+                        (max_nodes_check or PLAYWRIGHT_MAX_NODES_CHECK),
+                    )
                 except Exception:
-                    return ""
+                    # 兜底：仍尝试 body.innerText（极端情况下 evaluate 不可用）
+                    try:
+                        return (await page.locator("body").inner_text()).strip()
+                    except Exception:
+                        return ""
 
             # 文本稳定：每 interval 检查一次，连续 checks 次长度不变且达到最小长度
             stable = 0
