@@ -4,6 +4,18 @@ import httpx
 from bs4 import BeautifulSoup
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from app.config import PROXY_URL
+from app.config import (
+    PLAYWRIGHT_WAIT_FOR_FONTS,
+    PLAYWRIGHT_WAIT_FOR_DOM_STABLE,
+    PLAYWRIGHT_DOM_STABLE_MS,
+    PLAYWRIGHT_TEXT_STABLE_CHECKS,
+    PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS,
+    PLAYWRIGHT_MIN_CHARS,
+    PLAYWRIGHT_MAX_NODES_CHECK,
+    PLAYWRIGHT_SCROLL_STEPS,
+    PLAYWRIGHT_SCROLL_INTERVAL_MS,
+    PLAYWRIGHT_CANDIDATE_SELECTORS,
+)
 from app.services.network import (
     get_httpx_client,
     get_playwright_browser,
@@ -80,8 +92,8 @@ async def fetch_rendered_text(
     url: str,
     selector: str | None = "article",
     timeout: float = 10.0,
-    min_chars: int = 200,
-    max_nodes_check: int = 200,
+    min_chars: int | None = None,
+    max_nodes_check: int | None = None,
 ) -> str:
     """
     用 Playwright 真渲染并直接读取可见文本（包括 Shadow DOM 渲染后的文本）。
@@ -110,19 +122,49 @@ async def fetch_rendered_text(
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
 
+            # 等待 Web 字体（可选，防止 FOIT 导致 innerText 为空）
+            if PLAYWRIGHT_WAIT_FOR_FONTS:
+                try:
+                    await page.evaluate("document.fonts && document.fonts.ready")
+                except Exception:
+                    pass
+
             # 轻量滚动触发懒加载
             try:
-                for _ in range(3):
+                steps = max(1, PLAYWRIGHT_SCROLL_STEPS)
+                for _ in range(steps):
                     await page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.9))")
-                    await page.wait_for_timeout(500)
+                    await page.wait_for_timeout(max(0, PLAYWRIGHT_SCROLL_INTERVAL_MS))
             except Exception:
                 pass
+
+            # 等待 DOM 子树稳定（与接口无关，避免永远等待 networkidle）
+            if PLAYWRIGHT_WAIT_FOR_DOM_STABLE:
+                try:
+                    await page.evaluate(
+                        "(stableMs) => new Promise((resolve) => {\n"
+                        "  const target = document.body;\n"
+                        "  let timer;\n"
+                        "  timer = setTimeout(() => { obs.disconnect(); resolve(true); }, stableMs);\n"
+                        "  const obs = new MutationObserver(() => {\n"
+                        "    if (timer) clearTimeout(timer);\n"
+                        "    timer = setTimeout(() => { obs.disconnect(); resolve(true); }, stableMs);\n"
+                        "  });\n"
+                        "  obs.observe(target, { subtree: true, childList: true, attributes: true, characterData: true });\n"
+                        "})",
+                        PLAYWRIGHT_DOM_STABLE_MS,
+                    )
+                except Exception:
+                    pass
 
             # 等待候选选择器之一；若未提供 selector，使用候选列表
             candidate_selectors = []
             if selector:
                 candidate_selectors.append(selector)
-            candidate_selectors.extend(["article", "main", "[role=main]"])
+            # 合并配置中的候选选择器，去重
+            for sel in PLAYWRIGHT_CANDIDATE_SELECTORS:
+                if sel not in candidate_selectors:
+                    candidate_selectors.append(sel)
             waited = False
             for sel in candidate_selectors:
                 try:
@@ -140,7 +182,7 @@ async def fetch_rendered_text(
                         count = await loc.count()
                         if count and count > 0:
                             texts = []
-                            limit = min(count, max_nodes_check)
+                            limit = min(count, (max_nodes_check or PLAYWRIGHT_MAX_NODES_CHECK))
                             for i in range(limit):
                                 try:
                                     t = await loc.nth(i).inner_text()
@@ -158,25 +200,29 @@ async def fetch_rendered_text(
                 except Exception:
                     return ""
 
-            # 文本稳定：每 500ms 检查一次，连续 3 次长度不变且达到最小长度
+            # 文本稳定：每 interval 检查一次，连续 checks 次长度不变且达到最小长度
             stable = 0
             last_len = -1
-            # 最多等待 timeout 秒（*2 是因为 0.5s 一次）
-            for _ in range(int(timeout * 2)):
+            checks = max(1, PLAYWRIGHT_TEXT_STABLE_CHECKS)
+            interval_ms = max(0, PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS)
+            # 根据间隔计算循环次数
+            max_loops = max(1, int((timeout * 1000) / max(1, interval_ms)))
+            for _ in range(max_loops):
                 txt = await read_text()
                 L = len(txt)
                 if L == last_len:
                     stable += 1
-                    if stable >= 3 and L >= min_chars:
+                    if stable >= checks and L >= (min_chars or PLAYWRIGHT_MIN_CHARS):
                         return txt
                 else:
                     stable = 0
                     last_len = L
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(interval_ms)
 
             # 超时兜底
             txt = await read_text()
-            if txt and len(txt) >= min_chars:
+            final_min = (min_chars or PLAYWRIGHT_MIN_CHARS)
+            if txt and len(txt) >= final_min:
                 return txt
             if txt:
                 return txt
