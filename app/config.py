@@ -151,6 +151,23 @@ HTTP_PROXY = get_config_value("HTTP_PROXY")
 HTTPS_PROXY = get_config_value("HTTPS_PROXY")
 PROXY_URL = get_config_value("PROXY_URL") or HTTP_PROXY or HTTPS_PROXY
 
+# Reddit API configuration
+# Enable to use OAuth API instead of HTML scraping for Reddit URLs
+REDDIT_USE_API = get_config_value("REDDIT_USE_API", "true").lower() == "true"
+REDDIT_CLIENT_ID = get_config_value("REDDIT_CLIENT_ID")
+REDDIT_CLIENT_SECRET = get_config_value("REDDIT_CLIENT_SECRET")
+REDDIT_USERNAME = get_config_value("REDDIT_USERNAME")
+REDDIT_PASSWORD = get_config_value("REDDIT_PASSWORD")
+REDDIT_USER_AGENT = get_config_value(
+    "REDDIT_USER_AGENT",
+    "notebookLM-cofia/0.1 by u/your_reddit_username",
+)
+# Space-separated or comma-separated scopes; default to minimal read scopes
+REDDIT_SCOPES = get_config_value("REDDIT_SCOPES", "read history identity")
+# Optional: two-factor OTP for accounts with 2FA enabled (dynamic value)
+REDDIT_OTP = get_config_value("REDDIT_OTP")
+REDDIT_TIMEOUT = float(get_config_value("REDDIT_TIMEOUT", "15.0"))
+
 # N8N Configuration
 N8N_BASE_URL = get_config_value("N8N_BASE_URL", "http://localhost:5678/api/v1")
 N8N_API_KEY = get_config_value("N8N_API_KEY")
@@ -181,6 +198,7 @@ print(f"PROXY_URL: {PROXY_URL}")
 print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
 print(f"WEBHOOK_PREFIX: {WEBHOOK_PREFIX}")
 print(f"SUBDOC_USE_WEBHOOK_FALLBACK: {SUBDOC_USE_WEBHOOK_FALLBACK}")
+print(f"REDDIT_USE_API: {REDDIT_USE_API}")
 
 # 工具相关配置
 print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")

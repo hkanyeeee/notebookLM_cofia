@@ -25,6 +25,8 @@ from app.services.network import (
     is_playwright_persistent_enabled,
     apply_stealth_if_enabled,
 )
+from app.services.reddit import reddit_client
+from app.config import REDDIT_USE_API
 
 # =========================
 # 1) 原有：抓原始 HTML（轻改：更稳的等待 & UA）
@@ -372,6 +374,16 @@ async def fetch_then_extract(url: str, selector: str = "article", timeout: float
       1) httpx 抓原始 HTML + extract_text 解析
       2) 如果失败或为空，再用 Playwright 渲染 innerText（方案 A）
     """
+    # Special handling for Reddit via OAuth API
+    try:
+        if REDDIT_USE_API and reddit_client.is_reddit_url(url):
+            api_text = await reddit_client.fetch_text_from_url(url)
+            if isinstance(api_text, str) and api_text.strip():
+                return api_text
+    except Exception:
+        # Fall back to generic path on any Reddit API error
+        pass
+
     html = ""
     try:
         html = await fetch_html(url, timeout=timeout)

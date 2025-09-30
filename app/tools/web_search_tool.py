@@ -28,6 +28,7 @@ from ..config import (
 )
 from ..fetch_parse import fetch_then_extract, fetch_rendered_text
 from ..services.network import get_httpx_client
+from ..services.reddit import reddit_client
 from ..chunking import chunk_text
 from ..embedding_client import embed_texts, DEFAULT_EMBEDDING_MODEL
 from ..vector_db_client import add_embeddings, query_hybrid
@@ -35,6 +36,7 @@ from ..rerank_client import rerank
 from ..models import Chunk, Source
 from ..database import AsyncSessionLocal
 from ..cache import get_web_content_cache
+from ..config import REDDIT_USE_API
 
 
 # === 相似度计算的模块级辅助函数（可被多进程安全调用） ===
@@ -387,6 +389,16 @@ class WebSearchTool:
             if cached_content is not None:
                 return cached_content
         
+        # 优先处理 Reddit：使用官方 API，避免网页端风控/验证码
+        try:
+            if REDDIT_USE_API and reddit_client.is_reddit_url(url):
+                api_text = await reddit_client.fetch_text_from_url(url)
+                if isinstance(api_text, str) and api_text:
+                    return api_text
+        except Exception:
+            # 忽略 API 失败，继续通用流程
+            pass
+
         # 检测特殊文件类型
         url_lower = url.lower()
         is_pdf = url_lower.endswith('.pdf') or '.pdf?' in url_lower
