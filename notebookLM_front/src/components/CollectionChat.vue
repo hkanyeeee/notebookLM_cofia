@@ -215,6 +215,8 @@ function exportToMarkdown() {
   markdown += `导出时间：${new Date().toLocaleString('zh-CN')}\n\n`
   markdown += '---\n\n'
 
+  const escapeBackticks = (text: string) => (typeof text === 'string' ? text.replace(/`/g, '\\`') : '')
+
   props.messages.forEach((message, index) => {
     const timeStr = formatTime(message.timestamp)
     
@@ -227,7 +229,7 @@ function exportToMarkdown() {
       // 添加分析过程（如果有）
       if (message.reasoning) {
         markdown += `### 🔍 分析过程\n\n`
-        markdown += `\`\`\`\n${message.reasoning}\n\`\`\`\n\n`
+        markdown += `\`\`\`\n${escapeBackticks(message.reasoning)}\n\`\`\`\n\n`
       }
       
       // 添加回答内容
@@ -236,13 +238,15 @@ function exportToMarkdown() {
       }
       
       // 添加参考来源（如果有）
-      if (message.sources && message.sources.length > 0) {
-        markdown += `### 📚 参考来源 (${message.sources.length})\n\n`
-        message.sources.forEach((source, idx) => {
+      const sources = Array.isArray(message.sources) ? message.sources : []
+      if (sources.length > 0) {
+        markdown += `### 📚 参考来源 (${sources.length})\n\n`
+        sources.forEach((source, idx) => {
           markdown += `${idx + 1}. **来源**: [${source.url}](${source.url})\n`
           markdown += `   - **相关度分数**: ${source.score.toFixed(4)}\n`
           markdown += `   - **内容摘要**:\n`
-          markdown += `   \`\`\`\n   ${source.content}\n   \`\`\`\n\n`
+          const content = typeof source.content === 'string' ? source.content : ''
+          markdown += `   \`\`\`\n   ${escapeBackticks(content)}\n   \`\`\`\n\n`
         })
       }
     }
@@ -255,7 +259,7 @@ function exportToMarkdown() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `对话历史_${new Date().toISOString().split('T')[0]}.md`
+  link.download = encodeURIComponent(`对话历史_${new Date().toISOString().split('T')[0]}.md`)
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

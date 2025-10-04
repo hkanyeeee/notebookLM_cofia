@@ -13,3 +13,9 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
+
+// Type shim for marked-katex-extension (no official types)
+declare module 'marked-katex-extension' {
+  import type { MarkedExtension } from 'marked'
+  export function markedKatex(options?: any): MarkedExtension
+}
