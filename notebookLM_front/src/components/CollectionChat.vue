@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption, ElMessageBox } from 'element-plus'
-import { Promotion, Plus, Tools, Delete, Folder, ArrowRight, Document, Link, Tickets, Loading, ArrowDown } from '@element-plus/icons-vue'
+import { Promotion, Plus, Tools, Delete, Folder, ArrowRight, Document, Link, Tickets, Loading, ArrowDown, Download } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { markedKatex } from 'marked-katex-extension'
 import type { Message } from '../stores/notebook'
 import type { AutoCollection, CollectionResult } from '../api/notebook'
 import VectorFixDialog from './VectorFixDialog.vue'
 import IngestTaskMonitor from './IngestTaskMonitor.vue'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    output: 'html',
+    displayMode: true,
+  })
+)
 marked.setOptions({
   gfm: true,
   breaks: true,
@@ -194,6 +202,66 @@ async function handleDeleteCollection(collectionId: string) {
   } catch {
     // 用户取消删除
   }
+}
+
+// 导出对话历史为 Markdown
+function exportToMarkdown() {
+  if (props.messages.length === 0) {
+    ElMessage.warning('暂无对话历史可导出')
+    return
+  }
+
+  let markdown = '# 对话历史\n\n'
+  markdown += `导出时间：${new Date().toLocaleString('zh-CN')}\n\n`
+  markdown += '---\n\n'
+
+  props.messages.forEach((message, index) => {
+    const timeStr = formatTime(message.timestamp)
+    
+    if (message.type === 'user') {
+      markdown += `## 用户 [${timeStr}]\n\n`
+      markdown += `${message.content}\n\n`
+    } else {
+      markdown += `## 助手 [${timeStr}]\n\n`
+      
+      // 添加分析过程（如果有）
+      if (message.reasoning) {
+        markdown += `### 🔍 分析过程\n\n`
+        markdown += `\`\`\`\n${message.reasoning}\n\`\`\`\n\n`
+      }
+      
+      // 添加回答内容
+      if (message.content) {
+        markdown += `${message.content}\n\n`
+      }
+      
+      // 添加参考来源（如果有）
+      if (message.sources && message.sources.length > 0) {
+        markdown += `### 📚 参考来源 (${message.sources.length})\n\n`
+        message.sources.forEach((source, idx) => {
+          markdown += `${idx + 1}. **来源**: [${source.url}](${source.url})\n`
+          markdown += `   - **相关度分数**: ${source.score.toFixed(4)}\n`
+          markdown += `   - **内容摘要**:\n`
+          markdown += `   \`\`\`\n   ${source.content}\n   \`\`\`\n\n`
+        })
+      }
+    }
+    
+    markdown += '---\n\n'
+  })
+
+  // 创建 Blob 并下载
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `对话历史_${new Date().toISOString().split('T')[0]}.md`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  
+  ElMessage.success('对话历史已导出')
 }
 </script>
 
@@ -479,25 +547,48 @@ async function handleDeleteCollection(collectionId: string) {
         </el-button>
       </div>
       
-      <div class="flex flex-col sm:flex-row gap-3 max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
-        <el-input
-          v-model="queryInput"
-          :placeholder="getInputPlaceholder()"
-          class="flex-1 w-full"
-          type="textarea"
-          :rows="2"
-        />
-        <el-button
-          type="primary"
-          @click="handleSendQuery"
-          :disabled="isQueryDisabled()"
-          :loading="loading"
-          class="h-10 w-full sm:w-10 p-0 rounded-lg sm:shrink-0"
-        >
-          <el-icon>
-            <promotion />
-          </el-icon>
-        </el-button>
+      <div class="max-w-3xl mx-auto">
+        <div class="flex flex-col sm:flex-row gap-3" @keydown.shift.enter.prevent="handleSendQuery">
+          <el-input
+            v-model="queryInput"
+            :placeholder="getInputPlaceholder()"
+            class="flex-1 w-full"
+            type="textarea"
+            :rows="2"
+          />
+          <el-button
+            type="primary"
+            @click="handleSendQuery"
+            :disabled="isQueryDisabled()"
+            :loading="loading"
+            class="h-10 w-full sm:w-10 p-0 rounded-lg sm:shrink-0"
+          >
+            <el-icon>
+              <promotion />
+            </el-icon>
+          </el-button>
+        </div>
+        
+        <!-- 导出按钮 -->
+        <div class="flex justify-end mt-2">
+          <ElTooltip
+            content="导出对话历史为 Markdown 文件"
+            placement="top"
+            effect="dark"
+          >
+            <ElButton
+              text
+              @click="exportToMarkdown"
+              :disabled="messages.length === 0"
+              class="export-btn"
+            >
+              <ElIcon class="mr-1">
+                <Download />
+              </ElIcon>
+              <span class="text-sm">导出对话</span>
+            </ElButton>
+          </ElTooltip>
+        </div>
       </div>
     </div>
 
@@ -508,3 +599,29 @@ async function handleDeleteCollection(collectionId: string) {
     />
   </div>
 </template>
+
+<style scoped>
+/* 导出按钮样式 */
+.export-btn {
+  color: #6b7280;
+  transition: all 0.3s ease;
+  padding: 4px 12px;
+}
+
+.export-btn:hover:not(:disabled) {
+  color: #4f46e5;
+  background-color: rgba(79, 70, 229, 0.05);
+}
+
+.export-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .export-btn span {
+    font-size: 12px;
+  }
+}
+</style>

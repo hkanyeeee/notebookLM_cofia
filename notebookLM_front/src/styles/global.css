@@ -644,6 +644,18 @@ html.dark .chat-message-content tbody tr:hover td {
   color: var(--color-text) !important;
 }
 
+/* KaTeX 数学公式样式优化 */
+.chat-message-content .katex {
+  font-size: 1.05em !important;
+}
+.chat-message-content .katex-display {
+  margin: 12px 0 !important;
+  overflow-x: auto !important;
+}
+.chat-message-content .katex-display > .katex {
+  white-space: normal !important;
+}
+
 /* 暗色主题代码块样式 */
 html.dark .chat-message-content pre {
   background-color: var(--color-surface-light) !important;

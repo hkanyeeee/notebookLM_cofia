@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
-import { Promotion, MagicStick, Reading, Search } from '@element-plus/icons-vue'
+import { Promotion, MagicStick, Reading, Search, Download } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { markedKatex } from 'marked-katex-extension'
 import type { Message, Document, IngestionProgress } from '../stores/notebook'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    output: 'html',
+    displayMode: true,
+  })
+)
 marked.setOptions({
   gfm: true,
   breaks: true,
@@ -135,6 +143,66 @@ function isQueryDisabled() {
   if (!queryInput.value.trim()) return true
   if (props.loading) return true
   return props.documents.length === 0 || props.ingestionStatus.size > 0
+}
+
+// 导出对话历史为 Markdown
+function exportToMarkdown() {
+  if (props.messages.length === 0) {
+    ElMessage.warning('暂无对话历史可导出')
+    return
+  }
+
+  let markdown = '# 对话历史\n\n'
+  markdown += `导出时间：${new Date().toLocaleString('zh-CN')}\n\n`
+  markdown += '---\n\n'
+
+  props.messages.forEach((message, index) => {
+    const timeStr = formatTime(message.timestamp)
+    
+    if (message.type === 'user') {
+      markdown += `## 用户 [${timeStr}]\n\n`
+      markdown += `${message.content}\n\n`
+    } else {
+      markdown += `## 助手 [${timeStr}]\n\n`
+      
+      // 添加分析过程（如果有）
+      if (message.reasoning) {
+        markdown += `### 🔍 分析过程\n\n`
+        markdown += `\`\`\`\n${message.reasoning}\n\`\`\`\n\n`
+      }
+      
+      // 添加回答内容
+      if (message.content) {
+        markdown += `${message.content}\n\n`
+      }
+      
+      // 添加参考来源（如果有）
+      if (message.sources && message.sources.length > 0) {
+        markdown += `### 📚 参考来源 (${message.sources.length})\n\n`
+        message.sources.forEach((source, idx) => {
+          markdown += `${idx + 1}. **来源**: [${source.url}](${source.url})\n`
+          markdown += `   - **相关度分数**: ${source.score.toFixed(4)}\n`
+          markdown += `   - **内容摘要**:\n`
+          markdown += `   \`\`\`\n   ${source.content}\n   \`\`\`\n\n`
+        })
+      }
+    }
+    
+    markdown += '---\n\n'
+  })
+
+  // 创建 Blob 并下载
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `对话历史_${new Date().toISOString().split('T')[0]}.md`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  
+  ElMessage.success('对话历史已导出')
 }
 </script>
 
@@ -305,25 +373,48 @@ function isQueryDisabled() {
 
     <!-- 输入区域 -->
     <div class="p-4 border-t bg-[var(--color-surface)] border-[var(--color-border)]">
-      <div class="flex gap-3 items-center max-w-3xl mx-auto" @keydown.shift.enter.prevent="handleSendQuery">
-        <ElInput
-          v-model="queryInput"
-          placeholder="请输入关于文档的问题..."
-          class="flex-1 query-input"
-          type="textarea"
-          :rows="2"
-        />
-        <ElButton
-          type="primary"
-          @click="handleSendQuery"
-          :disabled="isQueryDisabled()"
-          :loading="loading || ingestionStatus.size > 0"
-          class="h-10 w-10 p-0 rounded-lg"
-        >
-          <ElIcon>
-            <Promotion />
-          </ElIcon>
-        </ElButton>
+      <div class="max-w-3xl mx-auto">
+        <div class="flex gap-3 items-center" @keydown.shift.enter.prevent="handleSendQuery">
+          <ElInput
+            v-model="queryInput"
+            placeholder="请输入关于文档的问题..."
+            class="flex-1 query-input"
+            type="textarea"
+            :rows="2"
+          />
+          <ElButton
+            type="primary"
+            @click="handleSendQuery"
+            :disabled="isQueryDisabled()"
+            :loading="loading || ingestionStatus.size > 0"
+            class="h-10 w-10 p-0 rounded-lg"
+          >
+            <ElIcon>
+              <Promotion />
+            </ElIcon>
+          </ElButton>
+        </div>
+        
+        <!-- 导出按钮 -->
+        <div class="flex justify-end mt-2">
+          <ElTooltip
+            content="导出对话历史为 Markdown 文件"
+            placement="top"
+            effect="dark"
+          >
+            <ElButton
+              text
+              @click="exportToMarkdown"
+              :disabled="messages.length === 0"
+              class="export-btn"
+            >
+              <ElIcon class="mr-1">
+                <Download />
+              </ElIcon>
+              <span class="text-sm">导出对话</span>
+            </ElButton>
+          </ElTooltip>
+        </div>
       </div>
     </div>
   </div>
@@ -394,6 +485,23 @@ function isQueryDisabled() {
 }
 
 /* welcomeMessage 已迁移至 Tailwind 类（pl-4 + border-l-4 + border-indigo-600） */
+
+/* 导出按钮样式 */
+.export-btn {
+  color: #6b7280;
+  transition: all 0.3s ease;
+  padding: 4px 12px;
+}
+
+.export-btn:hover:not(:disabled) {
+  color: #4f46e5;
+  background-color: rgba(79, 70, 229, 0.05);
+}
+
+.export-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
