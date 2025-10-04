@@ -101,6 +101,36 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
+// 将 \[...\]、\(...\) 以及以单独方括号包围的公式块 [ ... ] 转为 KaTeX 可识别的 $...$ / $$...$$
+function preprocessMathMarkdown(input: string) {
+  if (!input) return ''
+
+  // 跳过代码块内容，仅处理非代码块片段
+  const codeFenceRegex = /```[\s\S]*?```/g
+  let lastIndex = 0
+  let result = ''
+  let match: RegExpExecArray | null
+
+  const transform = (text: string) => {
+    // \[ ... \] -> $$ ... $$
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, p1) => `$$${p1}$$`)
+    // \( ... \) -> $ ... $
+    text = text.replace(/\\\(([^\n]*?)\\\)/g, (_m, p1) => `$${p1}$`)
+    // 以单独一行 [ 开始、单独一行 ] 结束的显示公式块，转换为 $$...$$
+    text = text.replace(/(^|\n)\[\s*\n([\s\S]*?)\n\]\s*(?=\n|$)/g, (_m, lead, body) => `${lead}$$${body}$$`)
+    return text
+  }
+
+  while ((match = codeFenceRegex.exec(input)) !== null) {
+    const segment = input.slice(lastIndex, match.index)
+    result += transform(segment)
+    result += match[0] // 保留代码块原样
+    lastIndex = match.index + match[0].length
+  }
+  result += transform(input.slice(lastIndex))
+  return result
+}
+
 // 判断消息是否为状态消息
 function isStatusMessage(content: string) {
   const statusPatterns = [
@@ -316,7 +346,7 @@ function exportToMarkdown() {
             </div>
             <!-- 普通显示模式 -->
             <div v-else @click="handleMessageClick(message.id)" class="cursor-pointer">
-              <div class="chat-message-content" v-html="marked(message.content)"></div>
+              <div class="chat-message-content" v-html="marked(preprocessMathMarkdown(message.content))"></div>
               <div class="text-xs opacity-70 mt-2 text-right">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -325,7 +355,7 @@ function exportToMarkdown() {
           <div v-else>
             <div 
               v-if="message.content" 
-              v-html="marked(message.content)"
+              v-html="marked(preprocessMathMarkdown(message.content))"
               class="chat-message-content"
               :class="{ 'status-message bg-gray-50': isStatusMessage(message.content) }">
             </div>

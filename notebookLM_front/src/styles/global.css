@@ -651,10 +651,14 @@ html.dark .chat-message-content tbody tr:hover td {
 .chat-message-content .katex-display {
   margin: 12px 0 !important;
   overflow-x: auto !important;
+  /* 让显示公式与正文左对齐，且避免过宽时居中空白 */
+  text-align: left !important;
 }
 .chat-message-content .katex-display > .katex {
   white-space: normal !important;
 }
+/* 行内公式的行高与文本对齐优化 */
+.chat-message-content .katex .mord.text { line-height: 1.2 !important; }
 
 /* 暗色主题代码块样式 */
 html.dark .chat-message-content pre {

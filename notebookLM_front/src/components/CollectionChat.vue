@@ -135,6 +135,31 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
+// 转换 \[...\]、\(...\) 与 bracket 显示块到 $/$$ 语法，同时跳过 ``` 代码块
+function preprocessMathMarkdown(input: string) {
+  if (!input) return ''
+  const codeFenceRegex = /```[\s\S]*?```/g
+  let lastIndex = 0
+  let result = ''
+  let match: RegExpExecArray | null
+
+  const transform = (text: string) => {
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, p1) => `$$${p1}$$`)
+    text = text.replace(/\\\(([^\n]*?)\\\)/g, (_m, p1) => `$${p1}$`)
+    text = text.replace(/(^|\n)\[\s*\n([\s\S]*?)\n\]\s*(?=\n|$)/g, (_m, lead, body) => `${lead}$$${body}$$`)
+    return text
+  }
+
+  while ((match = codeFenceRegex.exec(input)) !== null) {
+    const segment = input.slice(lastIndex, match.index)
+    result += transform(segment)
+    result += match[0]
+    lastIndex = match.index + match[0].length
+  }
+  result += transform(input.slice(lastIndex))
+  return result
+}
+
 // 判断消息是否为状态消息
 function isStatusMessage(content: string) {
   const statusPatterns = [
@@ -457,7 +482,7 @@ function exportToMarkdown() {
             v-if="message.content" 
             class="chat-message-content" 
             :class="{ 'status-message': isStatusMessage(message.content) }" 
-            v-html="marked(message.content)"
+            v-html="marked(preprocessMathMarkdown(message.content))"
           ></div>
           <div v-else>思考中...</div>
           <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">{{ formatTime(message.timestamp) }}</div>
