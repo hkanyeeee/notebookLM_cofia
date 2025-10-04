@@ -3,7 +3,7 @@ import { ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem, ElSelect, ElOption, ElMessageBox } from 'element-plus'
 import { Promotion, Plus, Tools, Delete, Folder, ArrowRight, Document, Link, Tickets, Loading, ArrowDown, Download } from '@element-plus/icons-vue'
 import { marked } from 'marked'
-import { markedKatex } from 'marked-katex-extension'
+import katexExtension from 'marked-katex-extension'
 import type { Message } from '../stores/notebook'
 import type { AutoCollection, CollectionResult } from '../api/notebook'
 import VectorFixDialog from './VectorFixDialog.vue'
@@ -11,10 +11,8 @@ import IngestTaskMonitor from './IngestTaskMonitor.vue'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.use(
-  markedKatex({
+  katexExtension({
     throwOnError: false,
-    output: 'html',
-    displayMode: true,
   })
 )
 marked.setOptions({

@@ -3,16 +3,14 @@ import { ref, nextTick, watch } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElSwitch, ElTooltip } from 'element-plus'
 import { Promotion, Edit, Check, Close, ArrowDown, ArrowUp, Tools, Download } from '@element-plus/icons-vue'
 import { marked } from 'marked'
-import { markedKatex } from 'marked-katex-extension'
+import katexExtension from 'marked-katex-extension'
 import type { Message } from '../stores/notebook'
 import { QueryType } from '../stores/types'
 
 // 启用 GitHub 风格 Markdown（GFM），支持表格等语法
 marked.use(
-  markedKatex({
+  katexExtension({
     throwOnError: false,
-    output: 'html',
-    displayMode: true,
   })
 )
 marked.setOptions({
