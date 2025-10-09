@@ -367,11 +367,21 @@ async def _handle_document_query(
                     elif delta["type"] == "content":
                         yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
                 
-                # 输出 sources
-                sources = [
-                    {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-                    for chunk, score in final_hits
-                ]
+                # 输出 sources（防御性：chunk.source 可能为 None）
+                sources = []
+                for chunk, score in final_hits:
+                    src = getattr(chunk, "source", None)
+                    if not src:
+                        # 跳过无来源的孤立 chunk，避免 AttributeError
+                        continue
+                    sources.append({
+                        "id": chunk.id,
+                        "chunk_id": chunk.chunk_id,
+                        "url": src.url,
+                        "title": src.title,
+                        "content": chunk.content,
+                        "score": score,
+                    })
                 yield "data: " + json.dumps({
                     "type": "sources",
                     "sources": sources,
@@ -389,10 +399,19 @@ async def _handle_document_query(
         # 非流式响应
         # 使用传统问答，不传入对话历史
         answer = await generate_answer(q, contexts, model=llm_model)
-        sources = [
-            {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-            for chunk, score in final_hits
-        ]
+        sources = []
+        for chunk, score in final_hits:
+            src = getattr(chunk, "source", None)
+            if not src:
+                continue
+            sources.append({
+                "id": chunk.id,
+                "chunk_id": chunk.chunk_id,
+                "url": src.url,
+                "title": src.title,
+                "content": chunk.content,
+                "score": score,
+            })
         return {
             "answer": answer,
             "sources": sources,
@@ -520,11 +539,20 @@ async def _handle_collection_query(
                     elif delta["type"] == "content":
                         yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
                 
-                # 输出 sources
-                sources = [
-                    {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-                    for chunk, score in final_hits
-                ]
+                # 输出 sources（防御性：chunk.source 可能为 None）
+                sources = []
+                for chunk, score in final_hits:
+                    src = getattr(chunk, "source", None)
+                    if not src:
+                        continue
+                    sources.append({
+                        "id": chunk.id,
+                        "chunk_id": chunk.chunk_id,
+                        "url": src.url,
+                        "title": src.title,
+                        "content": chunk.content,
+                        "score": score,
+                    })
                 yield "data: " + json.dumps({
                     "type": "sources",
                     "sources": sources,
@@ -542,10 +570,19 @@ async def _handle_collection_query(
         # 非流式响应
         # 使用传统问答，不传入对话历史
         answer = await generate_answer(q, contexts, model=llm_model)
-        sources = [
-            {"id": chunk.id, "chunk_id": chunk.chunk_id, "url": chunk.source.url, "title": chunk.source.title, "content": chunk.content, "score": score}
-            for chunk, score in final_hits
-        ]
+        sources = []
+        for chunk, score in final_hits:
+            src = getattr(chunk, "source", None)
+            if not src:
+                continue
+            sources.append({
+                "id": chunk.id,
+                "chunk_id": chunk.chunk_id,
+                "url": src.url,
+                "title": src.title,
+                "content": chunk.content,
+                "score": score,
+            })
         return {
             "answer": answer,
             "sources": sources,
