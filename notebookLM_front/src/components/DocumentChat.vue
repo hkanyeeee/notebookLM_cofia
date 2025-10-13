@@ -1,21 +1,10 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, computed } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElCollapse, ElCollapseItem } from 'element-plus'
 import { Promotion, MagicStick, Reading, Search, Download } from '@element-plus/icons-vue'
-import { marked } from 'marked'
-import katexExtension from 'marked-katex-extension'
 import type { Message, Document, IngestionProgress } from '../stores/notebook'
-
-// 启用 GitHub 风格 Markdown（GFM），支持表格等语法
-marked.use(
-  katexExtension({
-    throwOnError: false,
-  })
-)
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-})
+import { lexMarkdown, isStatusMessage } from '../utils/markdown'
+import MarkdownTokens from './markdown/MarkdownTokens.vue'
 
 // Props
 interface Props {
@@ -110,39 +99,9 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
-// 转换 \[...\]、\(...\) 与 bracket 显示块到 $/$$ 语法，同时跳过 ``` 代码块
-function preprocessMathMarkdown(input: string) {
-  if (!input) return ''
-  const codeFenceRegex = /```[\s\S]*?```/g
-  let lastIndex = 0
-  let result = ''
-  let match: RegExpExecArray | null
-
-  const transform = (text: string) => {
-    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, p1) => `$$${p1}$$`)
-    text = text.replace(/\\\(([^\n]*?)\\\)/g, (_m, p1) => `$${p1}$`)
-    text = text.replace(/(^|\n)\[\s*\n([\s\S]*?)\n\]\s*(?=\n|$)/g, (_m, lead, body) => `${lead}$$${body}$$`)
-    return text
-  }
-
-  while ((match = codeFenceRegex.exec(input)) !== null) {
-    const segment = input.slice(lastIndex, match.index)
-    result += transform(segment)
-    result += match[0]
-    lastIndex = match.index + match[0].length
-  }
-  result += transform(input.slice(lastIndex))
-  return result
-}
-
-// 判断消息是否为状态消息
-function isStatusMessage(content: string) {
-  const statusPatterns = [
-    /正在思考\.\.\./,
-    /搜索中\.\.\./,
-    /再次思考中\.\.\./,
-  ]
-  return statusPatterns.some(pattern => pattern.test(content))
+// 为消息内容生成 tokens
+function getMessageTokens(content: string) {
+  return computed(() => lexMarkdown(content))
 }
 
 // 处理课题输入变化
@@ -356,19 +315,19 @@ function exportToMarkdown() {
                 name="reasoning"
                 class="text-sm font-medium text-gray-700"
               >
-                <div
-                  class="text-xs text-gray-700 leading-relaxed p-3 rounded-lg border border-gray-200 chat-message-content"
-                  v-html="marked(message.reasoning)"
-                ></div>
+                <div class="text-xs text-gray-700 leading-relaxed p-3 rounded-lg border border-gray-200 chat-message-content">
+                  <MarkdownTokens :tokens="getMessageTokens(message.reasoning).value" :id="`msg-${message.id}-reasoning`" />
+                </div>
               </ElCollapseItem>
             </ElCollapse>
           </div>
           <div 
             class="word-wrap break-words chat-message-content"
-            v-if="message.content" 
-            v-html="marked(preprocessMathMarkdown(message.content))" 
+            v-if="message.content"
             :class="{ 'status-message': isStatusMessage(message.content) }"
-          ></div>
+          >
+            <MarkdownTokens :tokens="getMessageTokens(message.content).value" :id="`msg-${message.id}`" />
+          </div>
           <div v-else>思考中...</div>
           <div class="text-xs opacity-70 mt-2 text-right" :class="message.type === 'assistant' ? 'text-left' : 'text-right'">
             {{ formatTime(message.timestamp) }}

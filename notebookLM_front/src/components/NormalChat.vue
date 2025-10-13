@@ -1,22 +1,11 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, computed } from 'vue'
 import { ElInput, ElButton, ElMessage, ElIcon, ElSwitch, ElTooltip } from 'element-plus'
 import { Promotion, Edit, Check, Close, ArrowDown, ArrowUp, Tools, Download } from '@element-plus/icons-vue'
-import { marked } from 'marked'
-import katexExtension from 'marked-katex-extension'
 import type { Message } from '../stores/notebook'
 import { QueryType } from '../stores/types'
-
-// 启用 GitHub 风格 Markdown（GFM），支持表格等语法
-marked.use(
-  katexExtension({
-    throwOnError: false,
-  })
-)
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-})
+import { lexMarkdown, isStatusMessage } from '../utils/markdown'
+import MarkdownTokens from './markdown/MarkdownTokens.vue'
 
 // Props
 interface Props {
@@ -101,44 +90,9 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
-// 将 \[...\]、\(...\) 以及以单独方括号包围的公式块 [ ... ] 转为 KaTeX 可识别的 $...$ / $$...$$
-function preprocessMathMarkdown(input: string) {
-  if (!input) return ''
-
-  // 跳过代码块内容，仅处理非代码块片段
-  const codeFenceRegex = /```[\s\S]*?```/g
-  let lastIndex = 0
-  let result = ''
-  let match: RegExpExecArray | null
-
-  const transform = (text: string) => {
-    // \[ ... \] -> $$ ... $$
-    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, p1) => `$$${p1}$$`)
-    // \( ... \) -> $ ... $
-    text = text.replace(/\\\(([^\n]*?)\\\)/g, (_m, p1) => `$${p1}$`)
-    // 以单独一行 [ 开始、单独一行 ] 结束的显示公式块，转换为 $$...$$
-    text = text.replace(/(^|\n)\[\s*\n([\s\S]*?)\n\]\s*(?=\n|$)/g, (_m, lead, body) => `${lead}$$${body}$$`)
-    return text
-  }
-
-  while ((match = codeFenceRegex.exec(input)) !== null) {
-    const segment = input.slice(lastIndex, match.index)
-    result += transform(segment)
-    result += match[0] // 保留代码块原样
-    lastIndex = match.index + match[0].length
-  }
-  result += transform(input.slice(lastIndex))
-  return result
-}
-
-// 判断消息是否为状态消息
-function isStatusMessage(content: string) {
-  const statusPatterns = [
-    /正在思考\.\.\./,
-    /搜索中\.\.\./,
-    /再次思考中\.\.\./,
-  ]
-  return statusPatterns.some(pattern => pattern.test(content))
+// 为消息内容生成 tokens
+function getMessageTokens(content: string) {
+  return computed(() => lexMarkdown(content))
 }
 
 // 开始编辑消息
@@ -346,7 +300,9 @@ function exportToMarkdown() {
             </div>
             <!-- 普通显示模式 -->
             <div v-else @click="handleMessageClick(message.id)" class="cursor-pointer">
-              <div class="chat-message-content" v-html="marked(preprocessMathMarkdown(message.content))"></div>
+              <div class="chat-message-content">
+                <MarkdownTokens :tokens="getMessageTokens(message.content).value" :id="`msg-${message.id}`" />
+              </div>
               <div class="text-xs opacity-70 mt-2 text-right">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -354,10 +310,11 @@ function exportToMarkdown() {
           <!-- 助手消息：普通显示 -->
           <div v-else>
             <div 
-              v-if="message.content" 
-              v-html="marked(preprocessMathMarkdown(message.content))"
+              v-if="message.content"
               class="chat-message-content"
-              :class="{ 'status-message bg-gray-50': isStatusMessage(message.content) }">
+              :class="{ 'status-message bg-gray-50': isStatusMessage(message.content) }"
+            >
+              <MarkdownTokens :tokens="getMessageTokens(message.content).value" :id="`msg-${message.id}`" />
             </div>
             <div class="status-message" v-else>思考中...</div>
             <div class="text-xs opacity-70 mt-2 text-left">{{ formatTime(message.timestamp) }}</div>
