@@ -145,15 +145,11 @@ import {
   type IngestTaskStatus,
   TaskStatus 
 } from '../api/ingest'
-// 删除 import { useCollectionStore } from '../stores/useCollectionStore'
 
 // 响应式数据
 const tasks = ref<IngestTaskStatus[]>([])
 const expandedTasks = ref<Set<string>>(new Set())
 const eventSources = ref<Map<string, EventSource>>(new Map())
-// 防抖：记录已触发过刷新集合的任务，避免重复刷新
-const refreshedTasks = ref<Set<string>>(new Set())
-// 删除 const collectionStore = useCollectionStore()
 
 // 轮询定时器
 let pollTimer: number | null = null
@@ -245,16 +241,6 @@ async function updateTaskStatus(updatedTask: IngestTaskStatus) {
       if (eventSource) {
         eventSource.close()
         eventSources.value.delete(updatedTask.task_id)
-      }
-
-      // 首次完成时，自动刷新 Collection 列表
-      if (!refreshedTasks.value.has(updatedTask.task_id)) {
-        try {
-          // 移除 await collectionStore.loadCollections()
-          ElMessage.success('已自动刷新Collection列表')
-        } catch (e) {
-          console.error('自动刷新Collection列表失败:', e)
-        }
       }
     }
   }

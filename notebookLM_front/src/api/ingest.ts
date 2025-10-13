@@ -27,7 +27,6 @@ export interface IngestTaskStatus {
   task_id: string
   parent_url: string
   document_name: string
-  collection_name: string
   total_sub_docs: number
   completed_sub_docs: number
   failed_sub_docs: number
@@ -46,9 +45,7 @@ export interface AutoIngestRequest {
   model?: string
   embedding_model?: string
   embedding_dimensions?: number
-  webhook_url?: string
   recursive_depth?: number
-  webhook_fallback?: boolean
 }
 
 // Auto Ingest 响应
@@ -56,7 +53,6 @@ export interface AutoIngestResponse {
   success: boolean
   message: string
   document_name: string
-  collection_name: string
   total_chunks: number
   source_id: number
   sub_docs_task_id?: string

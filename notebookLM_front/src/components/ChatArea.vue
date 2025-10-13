@@ -4,18 +4,14 @@ import { useNotebookStore, QueryType } from '../stores/notebook'
 import { useSessionStore } from '../stores/session'
 import { useMessageStore } from '../stores/useMessageStore'
 import { ElSelect, ElOption, ElButton, ElIcon, ElMessage, ElTooltip } from 'element-plus'
-import { Refresh, Bell, ArrowUp, ArrowDown, Notification, MuteNotification } from '@element-plus/icons-vue'
+import { Refresh, Bell, ArrowUp, ArrowDown, MuteNotification } from '@element-plus/icons-vue'
 import NormalChat from './NormalChat.vue'
 import DocumentChat from './DocumentChat.vue'
-import WorkflowDialog from './WorkflowDialog.vue'
 import ThemeToggle from './ThemeToggle.vue'
 
 const store = useNotebookStore()
 const sessionStore = useSessionStore()
 const messageStore = useMessageStore()
-
-// 工作流对话框状态
-const workflowDialogVisible = ref(false)
 
 // 音频状态
 const audioEnabled = ref(true)
@@ -72,39 +68,6 @@ function handleClearMessages() {
   ElMessage.success('对话已清空')
 }
 
-// 显示工作流状态
-function handleShowWorkflows() {
-  workflowDialogVisible.value = true
-}
-
-// 触发Auto Ingest - Collection模式使用（已禁用）
-async function handleTriggerAutoIngest() {
-  try {
-    const result = await store.triggerAutoIngest()
-    if (result.success) {
-      ElMessage.success('成功触发Auto Ingest')
-    } else {
-      ElMessage.warning(result.message || 'Auto Ingest功能已禁用')
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || 'Auto Ingest失败')
-  }
-}
-
-// 删除Collection - Collection模式使用（已禁用）
-async function handleDeleteCollection(collectionId?: string) {
-  try {
-    const result = await store.deleteCollection(collectionId)
-    if (result.success) {
-      ElMessage.success(result.message)
-    } else {
-      ElMessage.warning(result.message || 'Collection功能已禁用')
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '删除Collection失败')
-  }
-}
-
 // 处理编辑消息重新发送
 async function handleResendEditedMessage(messageId: string) {
   try {
@@ -141,17 +104,13 @@ async function toggleAudio() {
   }
 }
 
-// 组件挂载时加载collection列表和模型列表
+// 组件挂载时加载模型列表
 onMounted(async () => {
   try {
     // 只有当模型列表为空时才加载模型，避免重复加载
-    const loadPromises = [store.loadCollections()]
-    
     if (store.models.length === 0) {
-      loadPromises.push(store.loadModels())
+      await store.loadModels()
     }
-    
-    await Promise.all(loadPromises)
     
     // 初始化音频状态
     try {
@@ -204,12 +163,6 @@ onMounted(async () => {
               <span class="action-text hidden md:inline">{{ audioEnabled ? '提示音' : '提示音' }}</span>
             </ElButton>
           </ElTooltip>
-          <ElButton text @click="handleShowWorkflows" class="px-3 py-2 min-h-8" >
-            <ElIcon>
-              <Notification />
-            </ElIcon>
-            <span class="action-text hidden md:inline">工作流状态</span>
-          </ElButton>
           <ElButton text @click="handleClearMessages" :disabled="store.messages.length === 0" class="px-3 py-2 min-h-8">
             <ElIcon>
               <Refresh />
@@ -296,36 +249,6 @@ onMounted(async () => {
         @update:topic-input="(value) => store.topicInput = value"
       />
     </div>
-
-    <!-- 查询类型选择器 -->
-    <!-- <div class="p-3 border-t border-gray-200 bg-white">
-      <div class="flex justify-center w-75">
-        <ElSelect
-          v-model="store.queryType"
-          placeholder="选择问答类型"
-          class="w-75"
-        >
-          <ElOption
-            label="普通问答"
-            :value="QueryType.NORMAL"
-          />
-          <ElOption
-            label="文档问答"
-            :value="QueryType.DOCUMENT"
-          />
-          <ElOption
-            label="Collection问答"
-            :value="QueryType.COLLECTION"
-          />
-        </ElSelect>
-      </div>
-    </div> -->
-
-    <!-- 工作流状态对话框 -->
-    <WorkflowDialog
-      v-model:visible="workflowDialogVisible"
-      :session-id="sessionStore.sessionId || ''"
-    />
   </div>
 </template>
 

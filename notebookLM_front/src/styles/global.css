@@ -698,17 +698,6 @@ html.dark .chat-message-content blockquote {
   border-color: var(--color-border);
 }
 
-/* Collection 项目 */
-.collection-item {
-  height: 160px;
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-.collection-item:hover {
-  background-color: var(--color-surface-light);
-}
-
 /* 候选 URL 项目 */
 .candidate-item {
   background-color: var(--color-surface);

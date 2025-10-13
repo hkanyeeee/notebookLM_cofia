@@ -8,7 +8,6 @@
 *   **向量存储 (Vector Storage):** 使用 Qdrant 向量数据库存储文档块及其嵌入，支持高效的相似性搜索。
 *   **检索增强生成 (RAG):** 根据用户查询，从向量库中检索最相关的文档片段，并将其作为上下文提供给大语言模型 (LLM) 以生成更精准的答案。
 *   **智能工具编排 (Tool Orchestration):** 实现了一个类 Agent 的工具调用框架 (ReAct/JSON FC)，允许 LLM 根据需要调用外部工具（如网络搜索）来弥补知识缺口或执行特定任务。
-*   **工作流集成 (n8n):** 通过 Webhook 与 n8n 工作流自动化平台集成，可以触发外部工作流或接收来自工作流的回调。
 
 ## 技术栈
 
@@ -62,7 +61,6 @@ pip install -r requirements.txt
 这些配置项都有合理的默认值，用户可根据需要调整：
 
 *   大部分配置项（如并发数、批处理大小、超时时间等）都有默认值
-*   `N8N`相关配置项（API密钥、认证信息等）
 *   `QDRANT_API_KEY` - Qdrant API密钥
 *   `RERANKER_SERVICE_URL` - 重排序服务地址
 
@@ -137,14 +135,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 *   `LLM_SERVICE_URL`: 大语言模型 (LLM) 服务地址。默认为 `http://host.docker.internal:1234/v1` (指向宿主机)。
 *   `RERANKER_SERVICE_URL`: (可选) 重排序服务地址。
 *   `SEARXNG_QUERY_URL`: Searxng 搜索引擎地址。默认为 `http://host.docker.internal:8080/search` (指向宿主机)。
-*   `WEBHOOK_PREFIX`: 后端服务提供给 n8n 的 Webhook 回调地址前缀。默认为 `http://n8n:5678/webhook` (Docker 服务名)。
-
-#### n8n 集成配置
-
-*   `N8N_BASE_URL`: n8n API 基础地址。默认为 `http://n8n:5678/api/v1` (Docker 服务名)。
-*   `N8N_API_KEY`: n8n API 密钥，用于认证。
-*   `N8N_USERNAME`: n8n 登录用户名 (备用认证方式)。
-*   `N8N_PASSWORD`: n8n 登录密码 (备用认证方式)。
 
 #### 嵌入与重排序配置
 
@@ -153,10 +143,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 *   `EMBEDDING_DIMENSIONS`: 嵌入向量的维度。默认为 `1024`。
 *   `RERANKER_MAX_TOKENS`: 重排序器处理的最大 token 数。默认为 `8192`。
 *   `RERANK_CLIENT_MAX_CONCURRENCY`: 重排序客户端的最大并发请求数。默认为 `4`。
-
-#### Webhook 配置
-
-*   `WEBHOOK_TIMEOUT`: Webhook 请求的超时时间（秒）。默认为 `30` 秒。
 
 #### 工具编排配置
 

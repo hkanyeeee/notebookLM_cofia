@@ -146,11 +146,6 @@ export const useNotebookStore = defineStore('notebook', () => {
       queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined // 仅普通问答传递工具启用状态
     ),
     
-    // Collection方法存根（保持API兼容性，但不实际使用）
-    triggerAutoIngest: async () => ({ success: false, message: 'Collection功能已禁用' }),
-    loadCollections: async () => {},
-    deleteCollection: async (_collectionId?: string) => ({ success: false, message: 'Collection功能已禁用' }),
-    
     // 模型方法
     loadModels: modelStore.loadModels,
     

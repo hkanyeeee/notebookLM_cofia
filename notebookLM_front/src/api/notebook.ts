@@ -115,7 +115,6 @@ export interface AutoIngestRequest {
   model?: string
   embedding_model?: string
   embedding_dimensions?: number
-  webhook_url?: string
   recursive_depth?: number
 }
 
@@ -123,44 +122,10 @@ export interface AutoIngestResponse {
   success: boolean
   message: string
   document_name: string
-  collection_name: string
   total_chunks: number
 }
 
 
-
-// Collection相关接口
-export interface AutoCollection {
-  collection_id: string
-  collection_name: string
-  document_title: string
-  url: string
-  created_at: string | null
-  display_name?: string | null
-}
-
-export interface CollectionQueryRequest {
-  collection_id: string
-  query: string
-  top_k?: number
-  model?: string  // 添加模型参数
-}
-
-export interface CollectionQueryResponse {
-  success: boolean
-  results: CollectionResult[]
-  total_found: number
-  message: string
-  llm_answer?: string  // LLM生成的智能回答
-}
-
-export interface CollectionResult {
-  chunk_id: string
-  content: string
-  score: number
-  source_url: string
-  source_title: string
-}
 
 // ModelInfo接口定义
 export interface ModelInfo {
@@ -338,62 +303,8 @@ export const notebookApi = {
         success: false,
         message: error.response?.data?.detail || error.message,
         document_name: '',
-        collection_name: '',
         total_chunks: 0
       }
-    }
-  },
-
-  // Collection相关API（已废弃 - 后端功能已移除）
-  // 以下方法保留以确保前端不会崩溃，但会返回错误信息
-  
-  // @deprecated Collection 功能已移除
-  async renameCollection(collectionId: string, displayName: string): Promise<{ success: boolean; message?: string }> {
-    console.warn('Collection 功能已移除，该 API 不再可用')
-    return {
-      success: false,
-      message: 'Collection 功能已移除'
-    }
-  },
-
-  // @deprecated Collection 功能已移除
-  async queryCollection(request: CollectionQueryRequest): Promise<CollectionQueryResponse> {
-    console.warn('Collection 功能已移除，该 API 不再可用')
-    return {
-      success: false,
-      results: [],
-      total_found: 0,
-      message: 'Collection 功能已移除'
-    }
-  },
-
-  // @deprecated Collection 功能已移除
-  async queryCollectionStream(
-    request: CollectionQueryRequest,
-    onData: (data: any) => void,
-    onComplete?: () => void,
-    onError?: (error: any) => void
-  ): Promise<void> {
-    console.warn('Collection 功能已移除，该 API 不再可用')
-    onError?.(new Error('Collection 功能已移除'))
-  },
-
-  // @deprecated Collection 功能已移除
-  async getCollectionDetail(collectionId: string): Promise<{ success: boolean; collection?: any }> {
-    console.warn('Collection 功能已移除，该 API 不再可用')
-    return {
-      success: false,
-      collection: null
-    }
-  },
-
-  // @deprecated Collection 功能已移除
-  async deleteCollection(collectionId: string): Promise<{ success: boolean; message: string; deleted_chunks_count?: number }> {
-    console.warn('Collection 功能已移除，该 API 不再可用')
-    return {
-      success: false,
-      message: 'Collection 功能已移除',
-      deleted_chunks_count: 0
     }
   },
 
@@ -569,7 +480,6 @@ export function cleanupSession(sessionId: string) {
  * 工具调用已整合到主要问答流程中：
  * - 普通问答：自动使用智能编排器进行问题拆解-思考-工具调用
  * - 文档问答：仅使用已上传文档，不启用工具
- * - Collection问答：仅使用collection内容，不启用工具
  */
 
 // 配置相关接口

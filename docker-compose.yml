@@ -7,7 +7,6 @@ networks:
     external: true  # 先手动创建：docker network create localnet
 
 volumes:
-  n8n_data:
   # qdrant_data:  # 如在 compose 内启用 qdrant，再打开
 
 services:
@@ -45,13 +44,6 @@ services:
       - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://llm-gateway:7995/v1}
       - RERANKER_SERVICE_URL=${RERANKER_SERVICE_URL:-}
       - SEARXNG_QUERY_URL=${SEARXNG_QUERY_URL:-http://host.docker.internal:8080/search}
-      # 后端给 n8n 回调时的地址，建议用容器名，避免写死宿主机 IP
-      - WEBHOOK_PREFIX=${WEBHOOK_PREFIX:-http://n8n:5678/webhook}
-      # N8N 配置 - 请在 .env 文件中设置这些敏感信息
-      - N8N_BASE_URL=${N8N_BASE_URL:-http://n8n:5678/api/v1}
-      - N8N_API_KEY=${N8N_API_KEY}
-      - N8N_USERNAME=${N8N_USERNAME}
-      - N8N_PASSWORD=${N8N_PASSWORD}
       
       # Qdrant 扩展配置
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
@@ -63,9 +55,6 @@ services:
       - EMBEDDING_MAX_CONCURRENCY=${EMBEDDING_MAX_CONCURRENCY:-4}
       - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-4}
       - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1024}
-      
-      # Webhook 配置
-      - WEBHOOK_TIMEOUT=${WEBHOOK_TIMEOUT:-30}
       
       # 工具相关配置
       - DEFAULT_TOOL_MODE=${DEFAULT_TOOL_MODE:-auto}
@@ -177,38 +166,3 @@ services:
       - localnet
     expose:
       - "7995"
-
-  # ============ 新增 n8n ============
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: n8n
-    restart: always
-    ports:
-      - "5678:5678"     # 局域网通过 http://<宿主机IP>:5678 访问
-    environment:
-      - TZ=Asia/Shanghai
-      # 把下行的默认值换成你的宿主机局域网 IP 或内网域名；也可在 .env 里设置 N8N_HOST
-      - N8N_HOST=${N8N_HOST:-192.168.31.125}
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://${N8N_HOST:-192.168.31.125}:5678
-      - N8N_EDITOR_BASE_URL=http://${N8N_HOST:-192.168.31.125}:5678
-      - N8N_SECURE_COOKIE=false
-      - N8N_DIAGNOSTICS_ENABLED=false
-      # 基础鉴权（建议开启，或日后放到反代后做更强鉴权）
-      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-change-me}
-      - N8N_EXECUTIONS_MODE=queue
-      - N8N_CONCURRENCY_PRODUCTION_LIMIT=1
-      - EXECUTIONS_TIMEOUT=-1
-      - EXECUTIONS_TIMEOUT_MAX=36000
-      - QUEUE_BULL_PREFIX=n8n
-    volumes:
-      - n8n_data:/home/node/.n8n
-    networks:
-      - localnet
-    depends_on:
-      - backend
-      - embedding-gateway
-      # - qdrant  # 如果在本 compose 内启用了 qdrant，则取消注释
