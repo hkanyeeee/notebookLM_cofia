@@ -6,7 +6,7 @@ networks:
     name: localnet
     external: true  # 先手动创建：docker network create localnet
 
-volumes:
+# volumes:
   # qdrant_data:  # 如在 compose 内启用 qdrant，再打开
 
 services:
@@ -120,7 +120,7 @@ services:
       context: ./notebookLM_front
       dockerfile: Dockerfile
       args:
-        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        # NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
