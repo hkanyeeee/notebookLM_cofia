@@ -73,12 +73,12 @@ export function exportTableToCSV(token: Token, id: string, tokenIdx: number): vo
   if (token.type !== 'table') return
 
   // 提取表头并转义 CSV
-  const header = token.header.map((headerCell: any) => `"${headerCell.text.replace(/"/g, '""')}"`)
+  const header = token.header.map((headerCell: any) => `"${(headerCell.text || '').replace(/"/g, '""')}"`)
 
   // 提取行数据
   const rows = token.rows.map((row: any[]) =>
     row.map((cell: any) => {
-      const cellContent = cell.tokens.map((token: Token) => token.text).join('')
+      const cellContent = cell.tokens.map((token: Token) => ('text' in token ? token.text : '')).join('')
       return `"${cellContent.replace(/"/g, '""')}"`
     })
   )

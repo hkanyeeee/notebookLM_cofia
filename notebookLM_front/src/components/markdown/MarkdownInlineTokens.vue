@@ -58,7 +58,7 @@ const props = defineProps<Props>()
     <!-- Strong (Bold) -->
     <strong v-else-if="token.type === 'strong'">
       <MarkdownInlineTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-strong-${idx}`"
       />
     </strong>
@@ -66,7 +66,7 @@ const props = defineProps<Props>()
     <!-- Em (Italic) -->
     <em v-else-if="token.type === 'em'">
       <MarkdownInlineTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-em-${idx}`"
       />
     </em>
@@ -85,7 +85,7 @@ const props = defineProps<Props>()
     <!-- Del (Strikethrough) -->
     <del v-else-if="token.type === 'del'">
       <MarkdownInlineTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-del-${idx}`"
       />
     </del>
@@ -104,12 +104,12 @@ const props = defineProps<Props>()
         :tokens="token.tokens"
         :id="`${id}-text-${idx}`"
       />
-      <template v-else>{{ unescapeHtml(token.text) }}</template>
+      <template v-else>{{ unescapeHtml('text' in token ? token.text : '') }}</template>
     </template>
 
     <!-- Fallback -->
     <template v-else>
-      {{ token.text || '' }}
+      {{ 'text' in token ? token.text : '' }}
     </template>
   </template>
 </template>

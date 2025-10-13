@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import type katex from 'katex'
 
 interface Props {
   content: string
@@ -12,15 +11,15 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const htmlContent = ref<string>('')
-const renderToString = ref<typeof katex.renderToString | null>(null)
+const renderToString = ref<((tex: string, options?: any) => string) | null>(null)
 
 onMounted(async () => {
   try {
     // 动态加载 KaTeX
     const [katexModule] = await Promise.all([
-      import('katex'),
-      import('katex/contrib/mhchem'),
-      import('katex/dist/katex.min.css')
+      import('katex') as Promise<any>,
+      import('katex/contrib/mhchem') as Promise<any>,
+      import('katex/dist/katex.min.css') as Promise<any>
     ])
     renderToString.value = katexModule.default.renderToString
     render()

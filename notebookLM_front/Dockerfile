@@ -18,11 +18,13 @@ RUN npm config set registry ${NPM_REGISTRY} \
  && npm i -g pnpm@9.12.0 \
  && pnpm config set registry ${NPM_REGISTRY}
 
+# 安装依赖，使用 shamefully-hoist 来扁平化依赖结构
+RUN pnpm install --frozen-lockfile --shamefully-hoist
+
 COPY . .
 # 允许通过构建参数覆盖，未传参时默认为空字符串（走同源反代）
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-""}
-RUN pnpm install --frozen-lockfile \
- && pnpm build
+RUN pnpm build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html

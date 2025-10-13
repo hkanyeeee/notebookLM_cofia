@@ -51,7 +51,7 @@ function handleExportTable(token: Token, tokenIdx: number) {
       dir="auto"
     >
       <MarkdownInlineTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-${tokenIdx}-h`"
       />
     </component>
@@ -136,7 +136,7 @@ function handleExportTable(token: Token, tokenIdx: number) {
       dir="auto"
     >
       <MarkdownTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-${tokenIdx}`"
         :top="false"
       />
@@ -202,7 +202,7 @@ function handleExportTable(token: Token, tokenIdx: number) {
       dir="auto"
     >
       <MarkdownInlineTokens
-        :tokens="token.tokens"
+        :tokens="token.tokens || []"
         :id="`${id}-${tokenIdx}-p`"
       />
     </p>
