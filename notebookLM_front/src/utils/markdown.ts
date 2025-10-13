@@ -1,12 +1,12 @@
 import { marked, type Token } from 'marked'
-import katexExtension from 'marked-katex-extension'
+import markedKatex from 'marked-katex-extension'
 
 // 配置 marked-katex-extension
 marked.use(
-  katexExtension({
+  markedKatex({
     throwOnError: false,
     // 非标准分隔符（用于 $...$ 和 $$...$$）
-    nonstandard: true
+    nonStandard: true
   })
 )
 

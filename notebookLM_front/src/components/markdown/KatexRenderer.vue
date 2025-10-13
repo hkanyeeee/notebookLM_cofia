@@ -15,11 +15,10 @@ const renderToString = ref<((tex: string, options?: any) => string) | null>(null
 
 onMounted(async () => {
   try {
-    // 动态加载 KaTeX
+    // 动态加载 KaTeX（CSS 已在全局引入）
     const [katexModule] = await Promise.all([
       import('katex') as Promise<any>,
-      import('katex/contrib/mhchem') as Promise<any>,
-      import('katex/dist/katex.min.css') as Promise<any>
+      import('katex/contrib/mhchem') as Promise<any>
     ])
     renderToString.value = katexModule.default.renderToString
     render()

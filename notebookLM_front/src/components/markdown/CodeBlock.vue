@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElIcon } from 'element-plus'
 import { DocumentCopy, Check } from '@element-plus/icons-vue'
 import hljs from 'highlight.js'
@@ -25,6 +25,11 @@ const displayLang = computed(() => {
 onMounted(() => {
   highlightCode()
 })
+
+// 监听 code 和 lang 的变化，重新高亮
+watch(() => [props.code, props.lang], () => {
+  highlightCode()
+}, { immediate: true })
 
 function highlightCode() {
   if (!props.code) {
@@ -82,9 +87,7 @@ async function copyCode() {
     </div>
     
     <!-- 代码内容 -->
-    <div class="code-content overflow-x-auto bg-gray-50 dark:bg-gray-800 rounded-b-lg">
-      <pre class="m-0 p-4"><code v-html="highlightedCode" class="hljs"></code></pre>
-    </div>
+    <pre class="code-content m-0 p-4 overflow-x-auto bg-gray-50 dark:bg-gray-800 rounded-b-lg"><code v-html="highlightedCode" class="hljs"></code></pre>
   </div>
 </template>
 
@@ -100,7 +103,7 @@ html.dark .code-block-wrapper {
   border-color: #374151;
 }
 
-.code-content pre {
+.code-content {
   margin: 0;
   padding: 1rem;
   overflow-x: auto;

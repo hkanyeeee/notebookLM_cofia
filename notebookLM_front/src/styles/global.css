@@ -653,6 +653,12 @@ html.dark .chat-message-content tbody tr:hover td {
   overflow-x: auto !important;
   /* 让显示公式与正文左对齐，且避免过宽时居中空白 */
   text-align: left !important;
+  /* 隐藏滚动条，但保留滚动功能 */
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+.chat-message-content .katex-display::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
 }
 .chat-message-content .katex-display > .katex {
   white-space: normal !important;
