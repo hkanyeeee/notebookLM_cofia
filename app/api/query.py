@@ -34,7 +34,6 @@ class QueryType(str, Enum):
     """查询类型枚举"""
     NORMAL = "normal"           # 普通问答模式，启用web search，需要问题定性、拆解和工具使用
     DOCUMENT = "document"       # 文档问答模式，不启用web search，使用当前查询逻辑
-    COLLECTION = "collection"   # collection问答模式，不启用web search，但针对特定向量库进行查询
 
 
 router = APIRouter()
@@ -47,6 +46,7 @@ async def query(
     data: dict = Body(...),
     session_id: str = Depends(get_session_id),
 ):
+    """统一处理 NORMAL 与 DOCUMENT 两种查询类型（已移除 COLLECTION 分支）。"""
     q = data.get("query", "")
     top_k = data.get("top_k", QUERY_TOP_K_BEFORE_RERANK)
     embedding_model = data.get("embedding_model", DEFAULT_EMBEDDING_MODEL)
@@ -66,13 +66,9 @@ async def query(
     try:
         query_type = QueryType(query_type_str.lower())
     except ValueError:
-        # 无效的查询类型，使用默认值
         query_type = QueryType.NORMAL
         
     conversation_history = data.get("conversation_history", [])  # 消息历史
-    
-    # Collection特定参数
-    collection_id = data.get("collection_id")  # 用于COLLECTION类型的特定collection ID
     
     source_ids_int = [int(id) for id in document_ids] if document_ids else None
 
@@ -92,11 +88,6 @@ async def query(
                 q, top_k, embedding_model, embedding_dimensions, source_ids_int,
                 use_hybrid, stream, llm_model, tool_mode, tools_data, max_steps,
                 conversation_history, session_id
-            )
-        elif query_type == QueryType.COLLECTION:
-            return await _handle_collection_query(
-                q, top_k, embedding_model, embedding_dimensions, collection_id,
-                use_hybrid, stream, llm_model, conversation_history, session_id
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported query type: {query_type}")
@@ -417,178 +408,6 @@ async def _handle_document_query(
             "sources": sources,
             "success": True,
             "query_type": "document"
-        }
-
-
-async def _handle_collection_query(
-    q: str, top_k: int, embedding_model: str, embedding_dimensions: int,
-    collection_id: str, use_hybrid: bool, stream: bool, llm_model: str,
-    conversation_history: List[dict], session_id: str
-):
-    """
-    处理COLLECTION类型查询：针对特定collection进行查询，不启用web search
-    """
-    if not collection_id:
-        raise HTTPException(status_code=400, detail="collection_id is required for COLLECTION query type")
-
-    try:
-        # 将collection_id转换为source_id用于查询
-        collection_source_id = int(collection_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid collection_id format")
-
-    # 使用固定的session_id与auto_ingest保持一致
-    FIXED_SESSION_ID = "fixed_session_id_for_auto_ingest"
-
-    query_embedding = (await embed_texts([q], model=embedding_model, dimensions=embedding_dimensions))[0]
-
-    # 针对特定collection查询
-    if use_hybrid:
-        from ..database import AsyncSessionLocal
-
-        async with AsyncSessionLocal() as db:
-            hits = await query_hybrid(
-                query_text=q,
-                query_embedding=query_embedding,
-                top_k=top_k,
-                session_id=FIXED_SESSION_ID,  # 使用固定session_id
-                source_ids=[collection_source_id],  # 只查询指定的collection
-                hnsw_ef=256,
-                k_dense=min(150, top_k),
-                k_sparse=min(50, top_k),
-                db=db,
-            )
-    else:
-        hits = await query_embeddings(
-            query_embedding,
-            top_k=top_k,
-            session_id=FIXED_SESSION_ID,  # 使用固定session_id
-            source_ids=[collection_source_id],  # 只查询指定的collection
-        )
-
-    final_hits = []
-    if RERANKER_SERVICE_URL and hits:
-        print(f"Reranking {len(hits)} hits for collection {collection_id}...")
-        try:
-            # 简化的reranking逻辑，为collection查询优化
-            encoding = tiktoken.get_encoding("cl100k_base")
-            documents = [hit[0].content for hit in hits]
-            
-            # 直接进行reranking
-            from ..config import RERANKER_SERVICE_URL
-            import httpx
-            
-            payload = {
-                "query": q,
-                "documents": documents,
-            }
-            
-            async with httpx.AsyncClient() as client:
-                api_url = f"{RERANKER_SERVICE_URL.rstrip('/')}/rerank"
-                response = await client.post(api_url, json=payload, timeout=300)
-                response.raise_for_status()
-                
-                data = response.json()
-                scores = data.get('scores')
-                
-                if scores and len(scores) == len(hits):
-                    original_chunks = [hit[0] for hit in hits]
-                    scored_chunks = list(zip(original_chunks, scores))
-                    scored_chunks.sort(key=lambda x: float(x[1]) if isinstance(x[1], (int, float)) else 0, reverse=True)
-                    final_hits = scored_chunks[:RAG_RERANK_TOP_K]
-                else:
-                    final_hits = hits[:RAG_RERANK_TOP_K]
-
-        except Exception as e:
-            print(f"Reranking failed for collection: {e}. Falling back to vector search results.")
-            final_hits = hits[:RAG_RERANK_TOP_K]
-    else:
-        final_hits = hits[:RAG_RERANK_TOP_K]
-
-    contexts = [chunk.content for chunk, _ in final_hits]
-    
-    # 检查是否找到相关内容
-    if not contexts:
-        # 没有找到相关内容，返回提示信息
-        error_message = f"在Collection中没有找到与查询 '{q}' 相关的内容。请尝试使用不同的关键词或确认Collection中包含相关数据。"
-        if stream:
-            async def error_event_generator():
-                yield "data: " + json.dumps({
-                    "type": "error",
-                    "message": error_message
-                }, ensure_ascii=False) + "\n\n"
-            return StreamingResponse(error_event_generator(), media_type="text/event-stream")
-        else:
-            return {
-                "answer": error_message,
-                "sources": [],
-                "success": False,
-                "query_type": "collection",
-                "collection_id": collection_id
-            }
-    
-    # COLLECTION模式不使用工具（不启用web search）
-    if stream:
-        # 流式响应
-        async def event_generator():
-            try:
-                # 使用传统流式问答，不传入对话历史
-                async for delta in stream_answer(q, contexts, model=llm_model):
-                    if delta["type"] == "reasoning":
-                        yield f"data: {{\"type\": \"reasoning\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
-                    elif delta["type"] == "content":
-                        yield f"data: {{\"type\": \"content\", \"content\": {json.dumps(delta['content'], ensure_ascii=False)} }}\n\n"
-                
-                # 输出 sources（防御性：chunk.source 可能为 None）
-                sources = []
-                for chunk, score in final_hits:
-                    src = getattr(chunk, "source", None)
-                    if not src:
-                        continue
-                    sources.append({
-                        "id": chunk.id,
-                        "chunk_id": chunk.chunk_id,
-                        "url": src.url,
-                        "title": src.title,
-                        "content": chunk.content,
-                        "score": score,
-                    })
-                yield "data: " + json.dumps({
-                    "type": "sources",
-                    "sources": sources,
-                }, ensure_ascii=False) + "\n\n"
-                # 完成
-                yield "data: {\"type\": \"complete\"}\n\n"
-            except Exception as e:
-                yield "data: " + json.dumps({
-                    "type": "error",
-                    "message": f"{e.__class__.__name__}: {str(e)}",
-                }, ensure_ascii=False) + "\n\n"
-
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
-    else:
-        # 非流式响应
-        # 使用传统问答，不传入对话历史
-        answer = await generate_answer(q, contexts, model=llm_model)
-        sources = []
-        for chunk, score in final_hits:
-            src = getattr(chunk, "source", None)
-            if not src:
-                continue
-            sources.append({
-                "id": chunk.id,
-                "chunk_id": chunk.chunk_id,
-                "url": src.url,
-                "title": src.title,
-                "content": chunk.content,
-                "score": score,
-            })
-        return {
-            "answer": answer,
-            "sources": sources,
-            "success": True,
-            "query_type": "collection",
-            "collection_id": collection_id
         }
 
 

@@ -7,7 +7,6 @@ import { ElSelect, ElOption, ElButton, ElIcon, ElMessage, ElTooltip } from 'elem
 import { Refresh, Bell, ArrowUp, ArrowDown, Notification, MuteNotification } from '@element-plus/icons-vue'
 import NormalChat from './NormalChat.vue'
 import DocumentChat from './DocumentChat.vue'
-import CollectionChat from './CollectionChat.vue'
 import WorkflowDialog from './WorkflowDialog.vue'
 import ThemeToggle from './ThemeToggle.vue'
 
@@ -51,21 +50,16 @@ onBeforeUnmount(() => {
 // 发送查询 - 统一处理所有子组件的查询
 async function handleSendQuery(query: string) {
   try {
-    const result = await store.sendQuery(query)
+    await store.sendQuery(query)
     
     // 根据问答类型显示不同的提示信息
-    if (result && result.success) {
-      switch (store.queryType) {
-        case QueryType.NORMAL:
-          ElMessage.success('正在为您生成回答...')
-          break
-        case QueryType.DOCUMENT:
-          ElMessage.success('正在基于文档生成回答...')
-          break
-        case QueryType.COLLECTION:
-          ElMessage.success(`找到 ${result.total_found || 0} 个相关结果`)
-          break
-      }
+    switch (store.queryType) {
+      case QueryType.NORMAL:
+        ElMessage.success('正在为您生成回答...')
+        break
+      case QueryType.DOCUMENT:
+        ElMessage.success('正在基于文档生成回答...')
+        break
     }
   } catch (error: any) {
     ElMessage.error(error.message || '查询失败，请重试')
@@ -83,24 +77,28 @@ function handleShowWorkflows() {
   workflowDialogVisible.value = true
 }
 
-// 触发Auto Ingest - Collection模式使用
+// 触发Auto Ingest - Collection模式使用（已禁用）
 async function handleTriggerAutoIngest() {
   try {
     const result = await store.triggerAutoIngest()
     if (result.success) {
-      ElMessage.success(`成功触发Auto Ingest：${result.document_name}`)
+      ElMessage.success('成功触发Auto Ingest')
+    } else {
+      ElMessage.warning(result.message || 'Auto Ingest功能已禁用')
     }
   } catch (error: any) {
     ElMessage.error(error.message || 'Auto Ingest失败')
   }
 }
 
-// 删除Collection - Collection模式使用
-async function handleDeleteCollection(collectionId: string) {
+// 删除Collection - Collection模式使用（已禁用）
+async function handleDeleteCollection(collectionId?: string) {
   try {
     const result = await store.deleteCollection(collectionId)
     if (result.success) {
-      ElMessage.success(`${result.message}`)
+      ElMessage.success(result.message)
+    } else {
+      ElMessage.warning(result.message || 'Collection功能已禁用')
     }
   } catch (error: any) {
     ElMessage.error(error.message || '删除Collection失败')
@@ -257,10 +255,6 @@ onMounted(async () => {
               label="文档问答"
               :value="QueryType.DOCUMENT"
             />
-            <ElOption
-              label="Collection问答"
-              :value="QueryType.COLLECTION"
-            />
           </ElSelect>
         </div>
       </div>
@@ -269,12 +263,12 @@ onMounted(async () => {
     </header>
 
     <!-- 主要内容区域 - 根据查询类型渲染不同的子组件 -->
-    <div class="flex-1 overflow-hidden">
-      <!-- 普通问答模式 -->
+    <div class="flex-1 flex flex-col">
+      <!-- Normal 问答模式 -->
       <NormalChat
         v-if="store.queryType === QueryType.NORMAL"
         :messages="store.messages"
-        :loading="store.loading.querying"
+        :loading="store.loadingWithQuery.querying"
         :query-type="store.queryType"
         :selected-model="store.selectedModel"
         :tools-enabled="store.toolsEnabled"
@@ -283,15 +277,15 @@ onMounted(async () => {
         @cancel-edit-message="store.cancelEditMessage"
         @update-editing-message="store.updateEditingMessage"
         @resend-edited-message="handleResendEditedMessage"
-        @update:tools-enabled="(enabled: boolean) => store.toolsEnabled = enabled"
+        @update:tools-enabled="(value) => store.toolsEnabled = value"
       />
-
-      <!-- 文档问答模式 -->
+      
+      <!-- Document 问答模式 -->
       <DocumentChat
         v-else-if="store.queryType === QueryType.DOCUMENT"
         :messages="store.messages"
         :documents="store.documents"
-        :loading="store.loading.querying"
+        :loading="store.loadingWithQuery.querying"
         :ingestion-status="store.ingestionStatus"
         :topic-input="store.topicInput"
         :generating="store.generating"
@@ -300,27 +294,6 @@ onMounted(async () => {
         @generate-candidates-from-topic="store.generateCandidatesFromTopic"
         @add-candidate="store.addCandidate"
         @update:topic-input="(value) => store.topicInput = value"
-      />
-
-      <!-- Collection问答模式 -->
-      <CollectionChat
-        v-else-if="store.queryType === QueryType.COLLECTION"
-        :messages="store.messages"
-        :collections="store.collections"
-        :selected-collection="store.selectedCollection"
-        :loading="store.loading.querying"
-        :loading-collections="store.loading.loadingCollections"
-        :auto-ingest-url="store.autoIngestUrl"
-        :triggering-auto-ingest="store.loading.triggeringAutoIngest"
-        :deleting-collection="store.loading.deletingCollection"
-        :should-use-web-search="store.shouldUseWebSearch"
-        @send-query="handleSendQuery"
-        @update:selected-collection="(value: string | null) => store.selectedCollection = value || ''"
-        @update:auto-ingest-url="(value) => store.autoIngestUrl = value"
-        @trigger-auto-ingest="handleTriggerAutoIngest"
-        @delete-collection="handleDeleteCollection"
-        @rename-collection="async (collectionId: string) => { const { ElMessageBox, ElMessage } = await import('element-plus'); try { const { value } = await ElMessageBox.prompt('输入新的名称', '重命名 Collection', { confirmButtonText: '确定', cancelButtonText: '取消', inputPlaceholder: '新的名称' }); await store.renameCollection(collectionId, value); ElMessage.success('重命名成功'); } catch (e) {} }"
-        @clear-collection-results="store.clearCollectionResults"
       />
     </div>
 

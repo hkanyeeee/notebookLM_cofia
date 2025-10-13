@@ -11,7 +11,7 @@ from . import get_session_id
 router = APIRouter()
 
 
-@router.delete("/api/documents/{document_id}", summary="Delete a single document and its associated data")
+@router.delete("/documents/{document_id}", summary="Delete a single document and its associated data")
 async def delete_document(
     document_id: int,
     session_id: str = Depends(get_session_id),
@@ -44,7 +44,7 @@ async def delete_document(
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {e}")
 
 
-@router.post("/api/session/cleanup", summary="Clean up all data for a given session")
+@router.post("/session/cleanup", summary="Clean up all data for a given session")
 async def cleanup_session(
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db),

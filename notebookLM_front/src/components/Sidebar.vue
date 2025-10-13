@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import { useNotebookStore, QueryType } from '../stores/notebook'
 import { ElButton, ElInput, ElMessage, ElDialog, ElIcon, ElTooltip, ElProgress } from 'element-plus'
 import { Plus, Document, Delete, Fold, Expand } from '@element-plus/icons-vue'
-import type { AutoCollection } from '../api/notebook'
 
 interface Props {
   collapsed: boolean
@@ -140,7 +139,7 @@ function handleRemoveFailedUrl(url: string) {
 
     <!-- 文档列表 -->
     <div class="flex-1 p-5 overflow-y-auto relative" v-if="!collapsed">
-      <div class="transition-opacity duration-300" :class="{ 'opacity-30': store.isCollectionQueryMode || isNormalQueryMode }">
+      <div class="transition-opacity duration-300" :class="{ 'opacity-30': isNormalQueryMode }">
         <h3 class="m-0 mb-4 text-base font-medium text-[var(--color-text-secondary)]">文档列表</h3>
         <div class="flex flex-col gap-3">
           <ElTooltip
@@ -175,15 +174,6 @@ function handleRemoveFailedUrl(url: string) {
             <p class="my-2">还没有添加任何文档</p>
             <p class="my-2 text-xs opacity-80">可在右侧输入课题，或点击上方按钮添加网址</p>
           </div>
-        </div>
-      </div>
-
-      <!-- Collection查询模式蒙版 -->
-      <div v-if="store.isCollectionQueryMode" class="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-10 bg-black/10 dark:bg-black/20">
-        <div class="rounded-xl p-6 text-center shadow-lg border max-w-[280px] bg-[var(--color-surface)] border-[var(--color-border)]">
-          <h4 class="m-0 mb-3 text-base font-semibold text-[var(--color-text)]">Collection查询模式</h4>
-          <p class="my-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">当前正在使用Collection进行查询</p>
-          <p class="font-medium py-2 px-3 rounded-md mt-4 text-xs text-primary-600 bg-primary-50 dark:text-primary-500 dark:bg-primary-200/20">{{ store.collections.find((c: AutoCollection) => c.collection_id === store.selectedCollection)?.document_title || '未知Collection' }}</p>
         </div>
       </div>
 

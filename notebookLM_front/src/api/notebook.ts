@@ -237,7 +237,7 @@ export const notebookApi = {
     embedding_dimensions: number = 1024
   ): Promise<IngestResponse> {
     try {
-      const response = await api.post<IngestResponse>('/ingest', {
+      const response = await api.post<IngestResponse>('/api/ingest', {
         url,
         embedding_model,
         embedding_dimensions
@@ -264,7 +264,7 @@ export const notebookApi = {
     }
   ): Promise<QueryResponse> {
     try {
-      const response = await api.post<QueryResponse>('/query', {
+      const response = await api.post<QueryResponse>('/api/query', {
         query,
         document_ids: documentIds,
         tool_mode: options?.tool_mode,
@@ -331,7 +331,7 @@ export const notebookApi = {
   // 触发auto ingest
   async triggerAutoIngest(request: AutoIngestRequest): Promise<AutoIngestResponse> {
     try {
-      const response = await api.post<AutoIngestResponse>('/auto-ingest', request)
+      const response = await api.post<AutoIngestResponse>('/api/auto-ingest', request)
       return response.data
     } catch (error: any) {
       return {
@@ -344,147 +344,56 @@ export const notebookApi = {
     }
   },
 
-  // Collection相关API
-  // 获取所有可用的collection列表
-  async getCollections(): Promise<{ success: boolean; collections: AutoCollection[]; total: number }> {
-    try {
-      const response = await api.get('/collections')
-      return response.data
-    } catch (error: any) {
-      return {
-        success: false,
-        collections: [],
-        total: 0
-      }
-    }
-  },
-
-  // 重命名指定 collection（设置 display_name）
+  // Collection相关API（已废弃 - 后端功能已移除）
+  // 以下方法保留以确保前端不会崩溃，但会返回错误信息
+  
+  // @deprecated Collection 功能已移除
   async renameCollection(collectionId: string, displayName: string): Promise<{ success: boolean; message?: string }> {
-    try {
-      const response = await api.post('/collections/rename', { collection_id: collectionId, display_name: displayName })
-      return response.data
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || error.message
-      }
+    console.warn('Collection 功能已移除，该 API 不再可用')
+    return {
+      success: false,
+      message: 'Collection 功能已移除'
     }
   },
 
-  // 基于指定collection进行查询
+  // @deprecated Collection 功能已移除
   async queryCollection(request: CollectionQueryRequest): Promise<CollectionQueryResponse> {
-    try {
-      const response = await api.post<CollectionQueryResponse>('/collections/query', request)
-      return response.data
-    } catch (error: any) {
-      return {
-        success: false,
-        results: [],
-        total_found: 0,
-        message: error.response?.data?.detail || error.message
-      }
+    console.warn('Collection 功能已移除，该 API 不再可用')
+    return {
+      success: false,
+      results: [],
+      total_found: 0,
+      message: 'Collection 功能已移除'
     }
   },
 
-  // 基于指定collection进行流式查询
+  // @deprecated Collection 功能已移除
   async queryCollectionStream(
     request: CollectionQueryRequest,
     onData: (data: any) => void,
     onComplete?: () => void,
     onError?: (error: any) => void
   ): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/collections/query-stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': useSessionStore().getSessionId() || ''
-        },
-        body: JSON.stringify(request)
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('无法创建流读取器')
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let lastActivity = Date.now()
-      const STREAM_TIMEOUT = 30000 // 30秒超时
-      let parseErrors = 0
-
-      while (true) {
-        // 检查超时
-        if (Date.now() - lastActivity > STREAM_TIMEOUT) {
-          console.warn('Collection流式响应超时，强制结束')
-          break
-        }
-        
-        const { done, value } = await reader.read()
-        if (done) break
-        
-        lastActivity = Date.now()
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // 保留最后一个不完整的行
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6).trim()
-            if (dataStr && dataStr !== '[DONE]') {
-              try {
-                const data = JSON.parse(dataStr)
-                onData(data)
-              } catch (e) {
-                console.warn('解析流式数据失败:', e, dataStr)
-                if (++parseErrors > 10) {
-                  console.error('Collection流式响应解析错误过多，强制结束')
-                  break
-                }
-              }
-            }
-          }
-        }
-      }
-
-      onComplete?.()
-    } catch (error: any) {
-      console.error('流式查询失败:', error)
-      onError?.(error)
-    }
+    console.warn('Collection 功能已移除，该 API 不再可用')
+    onError?.(new Error('Collection 功能已移除'))
   },
 
-  // 获取指定collection的详细信息
+  // @deprecated Collection 功能已移除
   async getCollectionDetail(collectionId: string): Promise<{ success: boolean; collection?: any }> {
-    try {
-      const response = await api.get(`/collections/${collectionId}`)
-      return response.data
-    } catch (error: any) {
-      return {
-        success: false,
-        collection: null
-      }
+    console.warn('Collection 功能已移除，该 API 不再可用')
+    return {
+      success: false,
+      collection: null
     }
   },
 
-  // 删除指定collection
+  // @deprecated Collection 功能已移除
   async deleteCollection(collectionId: string): Promise<{ success: boolean; message: string; deleted_chunks_count?: number }> {
-    try {
-      const response = await api.delete(`/collections/${collectionId}`)
-      return response.data
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || error.message,
-        deleted_chunks_count: 0
-      }
+    console.warn('Collection 功能已移除，该 API 不再可用')
+    return {
+      success: false,
+      message: 'Collection 功能已移除',
+      deleted_chunks_count: 0
     }
   },
 
@@ -497,7 +406,7 @@ export const notebookApi = {
     signal?: AbortSignal
   ): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/ingest`, {
+      const response = await fetch(`${API_BASE_URL}/api/ingest`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -559,7 +468,7 @@ export const notebookApi = {
     signal?: AbortSignal
   ): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/query`, {
+      const response = await fetch(`${API_BASE_URL}/api/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -628,7 +537,7 @@ export const notebookApi = {
   // 获取可用的LLM模型列表
   async getModels(): Promise<{ success: boolean; models?: ModelInfo[] }> {
     try {
-      const response = await api.get('/models')
+      const response = await api.get('/api/models')
       return response.data
     } catch (error: any) {
       return {
@@ -726,7 +635,7 @@ export interface ConfigValidationResponse {
 // 获取当前配置
 export const getAppConfig = async (): Promise<ConfigResponse> => {
   try {
-    const response = await api.get('/config/')
+    const response = await api.get('/api/config/')
     return response.data
   } catch (error: any) {
     console.error('获取配置失败:', error)
@@ -737,7 +646,7 @@ export const getAppConfig = async (): Promise<ConfigResponse> => {
 // 保存配置
 export const saveAppConfig = async (config: AppConfig): Promise<ConfigResponse> => {
   try {
-    const response = await api.post('/config/', { config })
+    const response = await api.post('/api/config/', { config })
     return response.data
   } catch (error: any) {
     console.error('保存配置失败:', error)
@@ -748,7 +657,7 @@ export const saveAppConfig = async (config: AppConfig): Promise<ConfigResponse> 
 // 重置配置
 export const resetAppConfig = async (): Promise<ConfigResponse> => {
   try {
-    const response = await api.delete('/config/')
+    const response = await api.delete('/api/config/')
     return response.data
   } catch (error: any) {
     console.error('重置配置失败:', error)
@@ -759,7 +668,7 @@ export const resetAppConfig = async (): Promise<ConfigResponse> => {
 // 验证配置
 export const validateAppConfig = async (): Promise<ConfigValidationResponse> => {
   try {
-    const response = await api.get('/config/validate')
+    const response = await api.get('/api/config/validate')
     return response.data
   } catch (error: any) {
     console.error('验证配置失败:', error)

@@ -27,8 +27,6 @@ RERANK_CLIENT_MAX_CONCURRENCY = int(get_config_value("RERANK_CLIENT_MAX_CONCURRE
 EMBEDDING_MAX_CONCURRENCY = int(get_config_value("EMBEDDING_MAX_CONCURRENCY", 4))
 EMBEDDING_BATCH_SIZE = int(get_config_value("EMBEDDING_BATCH_SIZE", 4))
 EMBEDDING_DIMENSIONS = int(get_config_value("EMBEDDING_DIMENSIONS", 1024))
-WEBHOOK_TIMEOUT = int(get_config_value("WEBHOOK_TIMEOUT", 30))
-WEBHOOK_PREFIX = get_config_value("WEBHOOK_PREFIX", "http://192.168.31.125:5678/webhook")
 
 # 工具相关配置
 DEFAULT_TOOL_MODE = get_config_value("DEFAULT_TOOL_MODE", "auto")
@@ -168,64 +166,67 @@ REDDIT_SCOPES = get_config_value("REDDIT_SCOPES", "read history identity")
 REDDIT_OTP = get_config_value("REDDIT_OTP")
 REDDIT_TIMEOUT = float(get_config_value("REDDIT_TIMEOUT", "15.0"))
 
-# N8N Configuration
-N8N_BASE_URL = get_config_value("N8N_BASE_URL", "http://localhost:5678/api/v1")
-N8N_API_KEY = get_config_value("N8N_API_KEY")
-N8N_USERNAME = get_config_value("N8N_USERNAME")
-N8N_PASSWORD = get_config_value("N8N_PASSWORD")
+# 配置打印控制（生产环境建议设置为 false）
+PRINT_CONFIG = get_config_value("PRINT_CONFIG", "true").lower() == "true"
 
-# 子文档提取/递归相关配置
-SUBDOC_USE_WEBHOOK_FALLBACK = get_config_value("SUBDOC_USE_WEBHOOK_FALLBACK", "true").lower() == "true"
-SUBDOC_MAX_CONCURRENCY = int(get_config_value("SUBDOC_MAX_CONCURRENCY", "10"))  # 子文档并发处理数量
-SUBDOC_MAX_RETRIES = int(get_config_value("SUBDOC_MAX_RETRIES", "2"))  # 子文档失败时的最大重试次数
-SUBDOC_RETRY_BACKOFF_BASE = float(get_config_value("SUBDOC_RETRY_BACKOFF_BASE", "1.0"))  # 初始退避秒数
-SUBDOC_RETRY_BACKOFF_FACTOR = float(get_config_value("SUBDOC_RETRY_BACKOFF_FACTOR", "2.0"))  # 指数退避因子
-SUBDOC_RETRY_JITTER = float(get_config_value("SUBDOC_RETRY_JITTER", "0.3"))  # 抖动上限（0~该值内随机）
+def mask_sensitive_url(url: str) -> str:
+    """脱敏处理 URL，隐藏密码和敏感信息"""
+    if not url:
+        return url
+    # 对于数据库 URL，隐藏密码部分
+    if '://' in url and '@' in url:
+        protocol, rest = url.split('://', 1)
+        if '@' in rest:
+            credentials, host_part = rest.split('@', 1)
+            if ':' in credentials:
+                user, _ = credentials.split(':', 1)
+                return f"{protocol}://{user}:****@{host_part}"
+    return url
 
-print("--- Application Configuration ---")
-print(f"DATABASE_URL: {DATABASE_URL}")
-print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
-print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
-print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
-print(f"RERANKER_MAX_TOKENS: {RERANKER_MAX_TOKENS}")
-print(f"RERANK_CLIENT_MAX_CONCURRENCY: {RERANK_CLIENT_MAX_CONCURRENCY}")
-
-print(f"EMBEDDING_MAX_CONCURRENCY: {EMBEDDING_MAX_CONCURRENCY}")
-print(f"EMBEDDING_BATCH_SIZE: {EMBEDDING_BATCH_SIZE}")
-
-print(f"QDRANT_URL: {QDRANT_URL}")
-print(f"PROXY_URL: {PROXY_URL}")
-print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
-print(f"WEBHOOK_PREFIX: {WEBHOOK_PREFIX}")
-print(f"SUBDOC_USE_WEBHOOK_FALLBACK: {SUBDOC_USE_WEBHOOK_FALLBACK}")
-print(f"REDDIT_USE_API: {REDDIT_USE_API}")
-
-# 工具相关配置
-print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")
-print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
-
-# Web 搜索相关配置
-print(f"WEB_SEARCH_RESULT_COUNT: {WEB_SEARCH_RESULT_COUNT}")
-print(f"WEB_SEARCH_MAX_QUERIES: {WEB_SEARCH_MAX_QUERIES}")
-print(f"WEB_SEARCH_MAX_RESULTS: {WEB_SEARCH_MAX_RESULTS}")
-print(f"MAX_KEYWORDS_PER_GAP: {MAX_KEYWORDS_PER_GAP}")
-print(f"GAP_RECALL_TOP_K: {GAP_RECALL_TOP_K}")
-print(f"MAX_WORDS_PER_QUERY: {MAX_WORDS_PER_QUERY}")
-print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
-print(f"PLAYWRIGHT_MAX_CONCURRENCY: {PLAYWRIGHT_MAX_CONCURRENCY}")
-print(f"PLAYWRIGHT_WAIT_FOR_FONTS: {PLAYWRIGHT_WAIT_FOR_FONTS}")
-print(f"PLAYWRIGHT_WAIT_FOR_DOM_STABLE: {PLAYWRIGHT_WAIT_FOR_DOM_STABLE}")
-print(f"PLAYWRIGHT_DOM_STABLE_MS: {PLAYWRIGHT_DOM_STABLE_MS}")
-print(f"PLAYWRIGHT_TEXT_STABLE_CHECKS: {PLAYWRIGHT_TEXT_STABLE_CHECKS}")
-print(f"PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS: {PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS}")
-print(f"PLAYWRIGHT_MIN_CHARS: {PLAYWRIGHT_MIN_CHARS}")
-print(f"PLAYWRIGHT_MAX_NODES_CHECK: {PLAYWRIGHT_MAX_NODES_CHECK}")
-print(f"HTTPX_HTTP2_ENABLED: {HTTPX_HTTP2_ENABLED}")
-print(f"HTTPX_MAX_KEEPALIVE_CONNECTIONS: {HTTPX_MAX_KEEPALIVE_CONNECTIONS}")
-print(f"HTTPX_MAX_CONNECTIONS: {HTTPX_MAX_CONNECTIONS}")
-print(f"TIKTOKEN_CACHE_DIR: {TIKTOKEN_CACHE_DIR}")
-print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
-print(f"CHUNK_SIZE: {CHUNK_SIZE}")
-print(f"RAG_TOP_K: {RAG_TOP_K}")
-print(f"NORMAL_MAX_SUB_QUERIES: {NORMAL_MAX_SUB_QUERIES}")
-print("-------------------------------")
+if PRINT_CONFIG:
+    # 打印非敏感配置信息（不包括密钥、密码等）
+    print("--- Application Configuration ---")
+    print(f"DATABASE_URL: {mask_sensitive_url(DATABASE_URL)}")
+    print(f"EMBEDDING_SERVICE_URL: {EMBEDDING_SERVICE_URL}")
+    print(f"LLM_SERVICE_URL: {LLM_SERVICE_URL}")
+    print(f"RERANKER_SERVICE_URL: {RERANKER_SERVICE_URL}")
+    print(f"RERANKER_MAX_TOKENS: {RERANKER_MAX_TOKENS}")
+    print(f"RERANK_CLIENT_MAX_CONCURRENCY: {RERANK_CLIENT_MAX_CONCURRENCY}")
+    
+    print(f"EMBEDDING_MAX_CONCURRENCY: {EMBEDDING_MAX_CONCURRENCY}")
+    print(f"EMBEDDING_BATCH_SIZE: {EMBEDDING_BATCH_SIZE}")
+    
+    print(f"QDRANT_URL: {QDRANT_URL}")
+    # 不打印 PROXY_URL 以避免泄露代理信息
+    print(f"SEARXNG_QUERY_URL: {SEARXNG_QUERY_URL}")
+    print(f"REDDIT_USE_API: {REDDIT_USE_API}")
+    
+    # 工具相关配置
+    print(f"DEFAULT_TOOL_MODE: {DEFAULT_TOOL_MODE}")
+    print(f"MAX_TOOL_STEPS: {MAX_TOOL_STEPS}")
+    
+    # Web 搜索相关配置
+    print(f"WEB_SEARCH_RESULT_COUNT: {WEB_SEARCH_RESULT_COUNT}")
+    print(f"WEB_SEARCH_MAX_QUERIES: {WEB_SEARCH_MAX_QUERIES}")
+    print(f"WEB_SEARCH_MAX_RESULTS: {WEB_SEARCH_MAX_RESULTS}")
+    print(f"MAX_KEYWORDS_PER_GAP: {MAX_KEYWORDS_PER_GAP}")
+    print(f"GAP_RECALL_TOP_K: {GAP_RECALL_TOP_K}")
+    print(f"MAX_WORDS_PER_QUERY: {MAX_WORDS_PER_QUERY}")
+    print(f"WEB_LOADER_ENGINE: {WEB_LOADER_ENGINE}")
+    print(f"PLAYWRIGHT_MAX_CONCURRENCY: {PLAYWRIGHT_MAX_CONCURRENCY}")
+    print(f"PLAYWRIGHT_WAIT_FOR_FONTS: {PLAYWRIGHT_WAIT_FOR_FONTS}")
+    print(f"PLAYWRIGHT_WAIT_FOR_DOM_STABLE: {PLAYWRIGHT_WAIT_FOR_DOM_STABLE}")
+    print(f"PLAYWRIGHT_DOM_STABLE_MS: {PLAYWRIGHT_DOM_STABLE_MS}")
+    print(f"PLAYWRIGHT_TEXT_STABLE_CHECKS: {PLAYWRIGHT_TEXT_STABLE_CHECKS}")
+    print(f"PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS: {PLAYWRIGHT_TEXT_STABLE_INTERVAL_MS}")
+    print(f"PLAYWRIGHT_MIN_CHARS: {PLAYWRIGHT_MIN_CHARS}")
+    print(f"PLAYWRIGHT_MAX_NODES_CHECK: {PLAYWRIGHT_MAX_NODES_CHECK}")
+    print(f"HTTPX_HTTP2_ENABLED: {HTTPX_HTTP2_ENABLED}")
+    print(f"HTTPX_MAX_KEEPALIVE_CONNECTIONS: {HTTPX_MAX_KEEPALIVE_CONNECTIONS}")
+    print(f"HTTPX_MAX_CONNECTIONS: {HTTPX_MAX_CONNECTIONS}")
+    print(f"TIKTOKEN_CACHE_DIR: {TIKTOKEN_CACHE_DIR}")
+    print(f"ENABLE_QUERY_GENERATION: {ENABLE_QUERY_GENERATION}")
+    print(f"CHUNK_SIZE: {CHUNK_SIZE}")
+    print(f"RAG_TOP_K: {RAG_TOP_K}")
+    print(f"NORMAL_MAX_SUB_QUERIES: {NORMAL_MAX_SUB_QUERIES}")
+    print("-------------------------------")

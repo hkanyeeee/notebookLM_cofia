@@ -2,7 +2,6 @@
 export enum QueryType {
   NORMAL = 'normal',      // 普通问答（启用web search）
   DOCUMENT = 'document',  // 文档问答（不启用web search）
-  COLLECTION = 'collection' // collection问答（不启用web search）
 }
 
 // Document interface

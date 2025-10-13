@@ -7,7 +7,7 @@ from ..config import SEARXNG_QUERY_URL, DEFAULT_SEARCH_MODEL, WEB_SEARCH_MAX_QUE
 router = APIRouter()
 
 
-@router.post("/api/search/generate", summary="Generate web search queries from a topic using LLM")
+@router.post("/search/generate", summary="Generate web search queries from a topic using LLM")
 async def generate_search_queries(
     data: dict = Body(...),
 ):
@@ -97,7 +97,7 @@ async def generate_search_queries(
         raise HTTPException(status_code=500, detail=f"Generate queries failed: {e}")
 
 
-@router.post("/api/search/searxng", summary="Search web via SearxNG for a given query")
+@router.post("/search/searxng", summary="Search web via SearxNG for a given query")
 async def search_searxng_api(data: dict = Body(...)):
     """调用 SearxNG /search 接口，按 Open WebUI 行为对齐：
     - 语言固定 en-US

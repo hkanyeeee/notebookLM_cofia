@@ -12,14 +12,14 @@ export const n8nApi = {
     status?: string
     limit?: number
   }) {
-    const response = await axios.get(`${API_BASE_URL}/workflow-executions`, { params })
+    const response = await axios.get(`${API_BASE_URL}/api/workflow-executions`, { params })
     return response.data
   },
 
   // 获取正在运行的工作流
   async getRunningWorkflows(sessionId?: string) {
     const params = sessionId ? { session_id: sessionId } : {}
-    const response = await axios.get(`${API_BASE_URL}/workflow-executions/running`, { params })
+    const response = await axios.get(`${API_BASE_URL}/api/workflow-executions/running`, { params })
     return response.data
   },
 
@@ -30,7 +30,7 @@ export const n8nApi = {
     workflow_id?: string
     session_id: string
   }) {
-    const response = await axios.post(`${API_BASE_URL}/workflow-execution`, data)
+    const response = await axios.post(`${API_BASE_URL}/api/workflow-execution`, data)
     return response.data
   },
 
@@ -39,7 +39,7 @@ export const n8nApi = {
     status: 'success' | 'error' | 'stopped'
     stopped_at?: string
   }) {
-    const response = await axios.put(`${API_BASE_URL}/workflow-execution/${executionId}/status`, data)
+    const response = await axios.put(`${API_BASE_URL}/api/workflow-execution/${executionId}/status`, data)
     return response.data
   }
 }

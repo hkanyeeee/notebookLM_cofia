@@ -47,11 +47,11 @@ services:
       - SEARXNG_QUERY_URL=${SEARXNG_QUERY_URL:-http://host.docker.internal:8080/search}
       # 后端给 n8n 回调时的地址，建议用容器名，避免写死宿主机 IP
       - WEBHOOK_PREFIX=${WEBHOOK_PREFIX:-http://n8n:5678/webhook}
-      # N8N 配置
+      # N8N 配置 - 请在 .env 文件中设置这些敏感信息
       - N8N_BASE_URL=${N8N_BASE_URL:-http://n8n:5678/api/v1}
-      - N8N_API_KEY="${N8N_API_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZmZhZDY5OC03ZjI3LTQ3NGUtYjIxMy0zYzc5MWNmYjUzZDciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU1ODUzMTAwfQ.9uNlOMHCh49lvxMybMv_BJy76-ptqp48FIsfwCBX4NM}"
-      - N8N_USERNAME="${N8N_USERNAME:-hkanyeeee@gmail.com}"
-      - N8N_PASSWORD="${N8N_PASSWORD:-m63m3kuMMgXTqWw}"
+      - N8N_API_KEY=${N8N_API_KEY}
+      - N8N_USERNAME=${N8N_USERNAME}
+      - N8N_PASSWORD=${N8N_PASSWORD}
       
       # Qdrant 扩展配置
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}

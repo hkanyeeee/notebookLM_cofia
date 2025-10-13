@@ -2,7 +2,6 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useDocumentStore } from './useDocumentStore'
 import { useMessageStore } from './useMessageStore'
-import { useCollectionStore } from './useCollectionStore'
 import { useModelStore } from './useModelStore'
 import { QueryType } from './types'
 
@@ -45,12 +44,6 @@ export const useNotebookStore = defineStore('notebook', () => {
   const modelStore = useModelStore()
   const documentStore = useDocumentStore(modelStore.selectedModel.value)
   const messageStore = useMessageStore()
-  const collectionStore = useCollectionStore()
-
-  // 计算属性：是否处于Collection查询模式（当问答类型为COLLECTION或选择了collection时）
-  const isCollectionQueryMode = computed(() => 
-    queryType.value === QueryType.COLLECTION || !!collectionStore.selectedCollection.value
-  )
   
   // 计算属性：当前模式是否应该启用web search工具
   const shouldUseWebSearch = computed(() => 
@@ -61,10 +54,6 @@ export const useNotebookStore = defineStore('notebook', () => {
   const loading = computed(() => ({
     querying: false, // 这个状态会在sendQuery中动态管理
     addingDocument: false,
-    triggeringAutoIngest: collectionStore.loading.triggeringAutoIngest,
-    loadingCollections: collectionStore.loading.loadingCollections,
-    queryingCollection: collectionStore.loading.queryingCollection,
-    deletingCollection: collectionStore.loading.deletingCollection,
     loadingModels: modelStore.loading.loadingModels
   }))
 
@@ -76,31 +65,13 @@ export const useNotebookStore = defineStore('notebook', () => {
     queryingState.value = true
     
     try {
-      // 如果问答类型为COLLECTION，执行Collection查询
-      if (queryType.value === QueryType.COLLECTION) {
-        return await collectionStore.performCollectionQuery(
-          query, 
-          queryType.value,
-          false, // Collection问答不使用web search
-          messageStore.messages.value,
-          (messageIndex: number, messageUpdate: any) => {
-            messageStore.messages.value[messageIndex] = {
-              ...messageStore.messages.value[messageIndex],
-              ...messageUpdate
-            }
-          },
-          modelStore.selectedModel.value  // 传递当前选择的模型
-        )
-      }
-      
-      // 否则执行普通/文档查询
-      return await messageStore.sendQuery(
+      // 直接执行普通/文档查询
+      await messageStore.sendQuery(
         query,
         queryType.value,
         modelStore.selectedModel.value,
         documentStore.documents.value.map(doc => doc.id),
-        undefined, // performCollectionQuery参数
-        queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined // 仅普通问答传递工具启用状态
+        queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined
       )
     } finally {
       queryingState.value = false
@@ -114,40 +85,23 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
-  // 监听collection添加成功，自动切换问答类型  
-  function handleCollectionAdded() {
-    if (queryType.value === QueryType.NORMAL) {
-      queryType.value = QueryType.DOCUMENT
-    }
-  }
-
   // 重写loading的getter，包含实际的查询状态
   const loadingWithQuery = computed(() => ({
     ...loading.value,
     querying: queryingState.value
   }))
 
-  // 监听问答类型切换，自动清空聊天历史和候选网址
-  watch(queryType, (newType, oldType) => {
-    if (oldType !== undefined && newType !== oldType) {
-      messageStore.clearMessages()
-      // 当切换到非文档问答模式时，清空候选网址和课题输入
-      if (newType !== QueryType.DOCUMENT) {
-        documentStore.candidateUrls.value = []
-        documentStore.topicInput.value = ''
-      }
-      // 当切换到非Collection模式时，清空选中的collection
-      if (newType !== QueryType.COLLECTION) {
-        collectionStore.selectedCollection.value = ''
-      }
-      console.log(`问答类型从 ${oldType} 切换到 ${newType}，已清空聊天历史`)
+  // 监听问答类型切换，移除 COLLECTION
+  watch(queryType, (newType) => {
+    if (newType === QueryType.DOCUMENT || newType === QueryType.NORMAL) { // 仅这些
+      messageStore.messages.value = []
+      documentStore.candidateUrls.value = []
     }
   })
 
   return {
     // 问答类型相关
     queryType,
-    isCollectionQueryMode,
     shouldUseWebSearch,
     
     // 工具配置
@@ -163,18 +117,13 @@ export const useNotebookStore = defineStore('notebook', () => {
     // 消息相关 (来自 messageStore)
     messages: messageStore.messages,
     
-    // Collection相关 (来自 collectionStore)  
-    autoIngestUrl: collectionStore.autoIngestUrl,
-    collections: collectionStore.collections,
-    selectedCollection: collectionStore.selectedCollection,
-    collectionQueryInput: collectionStore.collectionQueryInput,
-    
     // 模型相关 (来自 modelStore)
     models: modelStore.models,
     selectedModel: modelStore.selectedModel,
     
     // 加载状态
     loading: loadingWithQuery,
+    loadingWithQuery,
     
     // 文档方法
     addDocument: documentStore.addDocument,
@@ -194,31 +143,13 @@ export const useNotebookStore = defineStore('notebook', () => {
       queryType.value,
       modelStore.selectedModel.value,
       documentStore.documents.value.map(doc => doc.id),
-      queryType.value === QueryType.COLLECTION ? 
-        ((query: string) => collectionStore.performCollectionQuery(
-          query,
-          queryType.value,
-          false,
-          messageStore.messages.value,
-          (messageIndex: number, messageUpdate: any) => {
-            messageStore.messages.value[messageIndex] = {
-              ...messageStore.messages.value[messageIndex],
-              ...messageUpdate
-            }
-          },
-          modelStore.selectedModel.value  // 传递当前选择的模型
-        )) : undefined,
       queryType.value === QueryType.NORMAL ? toolsEnabled.value : undefined // 仅普通问答传递工具启用状态
     ),
     
-    // Collection方法
-    triggerAutoIngest: collectionStore.triggerAutoIngest,
-    loadCollections: collectionStore.loadCollections,
-    performCollectionQuery: collectionStore.performCollectionQuery,
-    queryCollection: collectionStore.queryCollection,
-    clearCollectionResults: collectionStore.clearCollectionResults,
-    deleteCollection: collectionStore.deleteCollection,
-    renameCollection: collectionStore.renameCollection,
+    // Collection方法存根（保持API兼容性，但不实际使用）
+    triggerAutoIngest: async () => ({ success: false, message: 'Collection功能已禁用' }),
+    loadCollections: async () => {},
+    deleteCollection: async (_collectionId?: string) => ({ success: false, message: 'Collection功能已禁用' }),
     
     // 模型方法
     loadModels: modelStore.loadModels,

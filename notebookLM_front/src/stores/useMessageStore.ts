@@ -15,15 +15,10 @@ export function useMessageStore() {
     queryType: QueryType, 
     selectedModel: string,
     documentIds?: string[],
-    performCollectionQuery?: (query: string) => Promise<any>,
-    toolsEnabled?: boolean  // 新增工具启用参数，仅对普通问答有效
+    // 移除 performCollectionQuery 参数
+    toolsEnabled?: boolean
   ) {
-    // 如果问答类型为COLLECTION，执行Collection查询
-    if (queryType === QueryType.COLLECTION && performCollectionQuery) {
-      return await performCollectionQuery(query)
-    }
-    
-    // 否则执行普通/文档查询
+    // 其余逻辑保持
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -323,8 +318,8 @@ export function useMessageStore() {
     queryType: QueryType, 
     selectedModel: string,
     documentIds?: string[],
-    performCollectionQuery?: (query: string) => Promise<any>,
-    toolsEnabled?: boolean  // 新增工具启用参数，仅对普通问答有效
+    // 移除 performCollectionQuery 参数
+    toolsEnabled?: boolean
   ) {
     const messageIndex = messages.value.findIndex(m => m.id === messageId)
     if (messageIndex === -1) return
@@ -342,7 +337,7 @@ export function useMessageStore() {
     messages.value = messages.value.slice(0, messageIndex)
 
     // 重新发送查询
-    await sendQuery(queryContent, queryType, selectedModel, documentIds, performCollectionQuery, toolsEnabled)
+    await sendQuery(queryContent, queryType, selectedModel, documentIds, toolsEnabled)
   }
 
   return {
