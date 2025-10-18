@@ -142,7 +142,7 @@ services:
       - "7998:7998"   # 如需从宿主/局域网调用保留；仅容器内互访其实不必映射
     command: ["python", "embedding_gateway.py"]
     environment:
-      - EMBEDDING_BACKENDS=${EMBEDDING_BACKENDS:-http://192.168.31.98:7998/v1,http://192.168.31.231:7998/v1}
+      - EMBEDDING_BACKENDS=${EMBEDDING_BACKENDS:-http://192.168.31.98:7998/v1,http://192.168.31.231:7998/v1,http://host.docker.internal:7988/v1}
     networks:
       - localnet
     expose:
