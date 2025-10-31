@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 # 后端实例列表（逗号分隔），均为 OpenAI 风格基址（通常以 /v1 结尾）
 LLM_BACKENDS: List[str] = os.getenv(
     "LLM_BACKENDS",
-    "http://192.168.31.98:1234/v1,http://192.168.31.231:1234/v1",
+    "http://192.168.31.231:1234/v1,http://192.168.31.98:1234/v1",
 ).split(",")
 
 # 公共前缀：保持 OpenAI 风格 /v1/*
