@@ -135,7 +135,7 @@ async def pick_backend() -> Optional[BackendState]:
         # 选择等待队列最短的后端
         return min(
             healthy_backends,
-            key=lambda b: len(b.semaphore._waiters) if hasattr(b.semaphore, '_waiters') else 0
+            key=lambda b: len(b.semaphore._waiters) if (hasattr(b.semaphore, '_waiters') and b.semaphore._waiters is not None) else 0
         )
     
     # 第四轮：所有后端都是错误状态，强制重试第一个
@@ -257,7 +257,7 @@ async def health():
             "status": state.status.value,
             "error_count": state.error_count,
             "is_busy": state.semaphore.locked(),
-            "waiting_queue_length": len(state.semaphore._waiters) if hasattr(state.semaphore, '_waiters') else 0,
+            "waiting_queue_length": len(state.semaphore._waiters) if (hasattr(state.semaphore, '_waiters') and state.semaphore._waiters is not None) else 0,
             "last_error_time": state.last_error_time if state.last_error_time > 0 else None
         }
         for url, state in backend_states.items()
