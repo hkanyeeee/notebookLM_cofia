@@ -100,6 +100,17 @@ def init_backend_states():
         )
 
 
+def _semaphore_waiting_queue_length(sem: asyncio.Semaphore) -> int:
+    """安全获取 semaphore 等待队列长度，避免不同 Python 版本下 _waiters 为 None 的情况"""
+    waiters = getattr(sem, "_waiters", None)
+    if waiters is None:
+        return 0
+    try:
+        return len(waiters)
+    except Exception:
+        return 0
+
+
 async def pick_backend() -> Optional[BackendState]:
     """
     选择一个可用的后端
@@ -132,10 +143,10 @@ async def pick_backend() -> Optional[BackendState]:
     ]
     
     if healthy_backends:
-        # 选择等待队列最短的后端
+        # 选择等待队列最短的后端（使用安全方法获取等待队列长度）
         return min(
             healthy_backends,
-            key=lambda b: len(b.semaphore._waiters) if (hasattr(b.semaphore, '_waiters') and b.semaphore._waiters is not None) else 0
+            key=lambda b: _semaphore_waiting_queue_length(b.semaphore)
         )
     
     # 第四轮：所有后端都是错误状态，强制重试第一个
@@ -257,7 +268,7 @@ async def health():
             "status": state.status.value,
             "error_count": state.error_count,
             "is_busy": state.semaphore.locked(),
-            "waiting_queue_length": len(state.semaphore._waiters) if (hasattr(state.semaphore, '_waiters') and state.semaphore._waiters is not None) else 0,
+            "waiting_queue_length": _semaphore_waiting_queue_length(state.semaphore),
             "last_error_time": state.last_error_time if state.last_error_time > 0 else None
         }
         for url, state in backend_states.items()
