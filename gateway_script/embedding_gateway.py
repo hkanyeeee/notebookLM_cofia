@@ -44,15 +44,24 @@ class BackendState:
     status: BackendStatus = BackendStatus.HEALTHY
     error_count: int = 0  # 连续错误计数
     last_error_time: float = 0.0  # 最后一次错误时间
+    total_requests: int = 0  # 总请求数
+    success_requests: int = 0  # 成功请求数
+    total_response_time: float = 0.0  # 累计响应时间
+    last_used_time: float = 0.0  # 最后使用时间（用于轮询）
     
-    def mark_success(self):
+    def mark_success(self, response_time: float = 0.0):
         """标记请求成功（返回200）"""
         self.status = BackendStatus.HEALTHY
         self.error_count = 0
+        self.total_requests += 1
+        self.success_requests += 1
+        self.total_response_time += response_time
+        self.last_used_time = time.time()
         
     def mark_error(self):
         """标记请求失败"""
         self.error_count += 1
+        self.total_requests += 1
         self.last_error_time = time.time()
         if self.error_count >= ERROR_THRESHOLD:
             self.status = BackendStatus.ERROR
@@ -69,6 +78,12 @@ class BackendState:
         if self.should_recover():
             self.status = BackendStatus.HEALTHY
             self.error_count = 0
+            
+    def avg_response_time(self) -> float:
+        """平均响应时间（秒）"""
+        if self.success_requests == 0:
+            return 0.0
+        return self.total_response_time / self.success_requests
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,51 +126,53 @@ def _semaphore_waiting_queue_length(sem: asyncio.Semaphore) -> int:
         return 0
 
 
+def _semaphore_available_count(sem: asyncio.Semaphore) -> int:
+    """安全获取 semaphore 可用许可数"""
+    value = getattr(sem, "_value", 0)
+    return max(0, value)
+
+
 async def pick_backend() -> Optional[BackendState]:
     """
     选择一个可用的后端
-    策略（最少连接数负载均衡）：
-    1. 优先选择健康且空闲的后端中，等待队列最短的
-    2. 尝试恢复错误状态的后端
+    改进策略（针对不支持并发的后端）：
+    1. 尝试恢复错误状态的后端
+    2. 优先选择健康且空闲的后端（按最久未使用轮询）
     3. 如果所有后端都忙碌，选择等待队列最短的健康后端
-    4. 如果所有后端都错误且无法恢复，返回 None
+    4. 如果所有后端都错误，返回 None
     """
-    # 第一轮：尝试恢复错误后端
+    # 第一步：尝试恢复错误后端
     for backend in backend_states.values():
         backend.try_recover()
     
-    # 第二轮：找到健康且空闲的后端，选择等待队列最短的（_value 越小越好）
+    # 第二步：找到健康且空闲的后端
     idle_healthy_backends = [
         b for b in backend_states.values()
         if b.status == BackendStatus.HEALTHY and not b.semaphore.locked()
     ]
     
     if idle_healthy_backends:
-        # 如果有多个空闲后端，选择 semaphore._value 最大的（说明最近使用最少）
-        # 注意：_value 是内部属性，但这是获取等待队列长度的标准方式
-        return min(idle_healthy_backends, key=lambda b: -b.semaphore._value)
+        # 选择最久未使用的后端（轮询策略）
+        # 如果有响应时间统计，优先选择响应快的；否则按最久未使用
+        return min(
+            idle_healthy_backends,
+            key=lambda b: (b.last_used_time, b.avg_response_time())
+        )
     
-    # 第三轮：所有后端都忙碌，选择等待队列最短的健康后端
-    # 通过 semaphore._waiters 队列长度来判断
+    # 第三步：所有后端都忙碌，选择等待队列最短的健康后端
     healthy_backends = [
         b for b in backend_states.values() 
         if b.status == BackendStatus.HEALTHY
     ]
     
     if healthy_backends:
-        # 选择等待队列最短的后端（使用安全方法获取等待队列长度）
+        # 选择等待队列最短的后端，等待队列相同时选择响应时间短的
         return min(
             healthy_backends,
-            key=lambda b: _semaphore_waiting_queue_length(b.semaphore)
+            key=lambda b: (_semaphore_waiting_queue_length(b.semaphore), b.avg_response_time())
         )
     
-    # 第四轮：所有后端都是错误状态，强制重试第一个
-    if backend_states:
-        first_backend = list(backend_states.values())[0]
-        first_backend.try_recover()  # 强制恢复
-        first_backend.status = BackendStatus.HEALTHY  # 强制标记为健康
-        return first_backend
-    
+    # 第四步：所有后端都是错误状态，返回 None
     return None
 
 
@@ -172,6 +189,7 @@ async def try_forward(body: bytes, headers: dict, backend_state: BackendState) -
     """
     转发请求到指定后端，并根据结果更新后端状态
     """
+    start_time = time.time()
     try:
         resp = await client.post(
             backend_state.url.rstrip("/") + FORWARD_ENDPOINT,
@@ -179,9 +197,11 @@ async def try_forward(body: bytes, headers: dict, backend_state: BackendState) -
             headers=_forward_headers(headers),
         )
         
+        response_time = time.time() - start_time
+        
         # 根据状态码更新后端状态
         if resp.status_code == 200:
-            backend_state.mark_success()
+            backend_state.mark_success(response_time)
         else:
             backend_state.mark_error()
         
@@ -268,7 +288,13 @@ async def health():
             "status": state.status.value,
             "error_count": state.error_count,
             "is_busy": state.semaphore.locked(),
+            "available_capacity": _semaphore_available_count(state.semaphore),
             "waiting_queue_length": _semaphore_waiting_queue_length(state.semaphore),
+            "total_requests": state.total_requests,
+            "success_requests": state.success_requests,
+            "success_rate": round(state.success_requests / state.total_requests * 100, 2) if state.total_requests > 0 else 0,
+            "avg_response_time": round(state.avg_response_time(), 3),
+            "last_used_time": state.last_used_time if state.last_used_time > 0 else None,
             "last_error_time": state.last_error_time if state.last_error_time > 0 else None
         }
         for url, state in backend_states.items()
@@ -281,7 +307,7 @@ async def health():
     
     return {
         "ok": all_healthy,
-        "strategy": "least_connections_with_semaphore",
+        "strategy": "round_robin_with_least_connections",
         "backends": backends_info,
         "config": {
             "error_threshold": ERROR_THRESHOLD,
