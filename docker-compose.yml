@@ -1,52 +1,30 @@
 version: "3.9"
 
 networks:
-  # 统一把所有相关容器放进同一个自定义网络
   localnet:
     name: localnet
-    external: true  # 先手动创建：docker network create localnet
-
-# volumes:
-  # qdrant_data:  # 如在 compose 内启用 qdrant，再打开
+    driver: bridge
 
 services:
-  # -------------------
-  # 可选：如你想把 Qdrant 也放进同一个 compose，就取消下面整段注释
-  # -------------------
-  # qdrant:
-  #   image: qdrant/qdrant:latest
-  #   container_name: qdrant
-  #   restart: unless-stopped
-  #   networks: [localnet]
-  #   expose:
-  #     - "6333"           # 供容器内访问，不对外暴露
-  #   # 如需要从宿主或局域网访问，再映射端口
-  #   # ports:
-  #   #   - "6333:6333"
-  #   # volumes:
-  #   #   - qdrant_data:/qdrant/storage
-
   embedding-gateway:
     restart: always
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.gateway
     container_name: embedding-gateway
     ports:
-      - "7998:7998"   # 如需从宿主/局域网调用保留；仅容器内互访其实不必映射
+      - "7998:7998"
     command: ["python", "embedding_gateway.py"]
     environment:
       - EMBEDDING_BACKENDS=${EMBEDDING_BACKENDS:-http://192.168.31.98:7998/v1,http://192.168.31.231:7998/v1,http://host.docker.internal:7988/v1}
     networks:
       - localnet
-    expose:
-      - "7998"
 
   llm-gateway:
     restart: always
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.gateway
     container_name: llm-gateway
     ports:
       - "7995:7995"
@@ -58,5 +36,3 @@ services:
       - LLM_TIMEOUT=${LLM_TIMEOUT:-600}
     networks:
       - localnet
-    expose:
-      - "7995"
