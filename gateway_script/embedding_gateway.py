@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 # 后端实例列表（逗号分隔）
 EMBEDDING_BACKENDS: List[str] = os.getenv(
     "EMBEDDING_BACKENDS",
-    "http://192.168.31.98:7998/v1,http://192.168.31.231:7998/v1,http://host.docker.internal:7988/v1",
+    "http://192.168.31.231:7998/v1,http://192.168.31.98:7998/v1,http://host.docker.internal:7988/v1",
 ).split(",")
 
 PUBLIC_ENDPOINTS = ["/embeddings", "/v1/embeddings"]
