@@ -63,7 +63,7 @@ LLM_BACKENDS: List[str] = _split_backends(
 
 # 可配置的后端权重（按算力/优先级），比值示例：1.35:1，表示 192.168.31.231 更快
 _RAW_BACKEND_WEIGHTS = {
-    "http://192.168.31.231:1234/v1": 1.35,
+    "http://192.168.31.231:1234/v1": 1.5,
     "http://192.168.31.98:1234/v1": 1.0,
 }
 BACKEND_WEIGHTS = {normalize_backend_url(k): float(v) for k, v in _RAW_BACKEND_WEIGHTS.items()}
