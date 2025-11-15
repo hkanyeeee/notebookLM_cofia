@@ -292,10 +292,10 @@ def _backend_relative_capacity_score(state: BackendState) -> float:
 async def pick_backend() -> Optional[BackendState]:
     """
     选择一个可用的后端
-    改进策略（针对不支持并发的后端）：
+    智能负载均衡策略：
     1. 尝试恢复错误状态的后端
-    2. 优先选择健康且空闲的后端（按最久未使用轮询）
-    3. 如果所有后端都忙碌，选择等待队列最短的健康后端
+    2. 优先选择容量得分最高的健康后端（容量比例×权重）
+    3. 如果所有后端都忙碌，选择等待队列权重代价最低的健康后端
     4. 如果所有后端都错误，返回 None
     """
     # 第一步：尝试恢复错误后端
@@ -388,10 +388,12 @@ async def try_forward(body: bytes, headers: dict, backend_state: BackendState) -
 async def embeddings_proxy(req: Request):
     """
     代理 embedding 请求到后端
-    使用基于回调的任务分配：
-    - 每个后端同时只能处理1个请求
-    - 只有返回200的后端才继续可用
-    - 非200或异常的后端会被标记为错误状态
+    使用智能负载均衡的任务分配：
+    - 每个后端按权重配置不同的并发数（5/3/1并发）
+    - 2xx状态码：后端保持健康状态
+    - 4xx状态码：不影响后端健康状态
+    - 5xx状态码或异常：后端标记为错误状态
+    - 所有后端都不可用时返回502错误
     """
     body = await req.body()
     headers = dict(req.headers)
@@ -411,7 +413,7 @@ async def embeddings_proxy(req: Request):
             await asyncio.sleep(0.1)
             continue
         
-        # 获取后端的并发锁（确保同时只有一个请求）
+        # 获取后端的并发槽位（确保不超过该后端的最大并发数）
         async with _acquire_backend_slot(backend_state):
             tried.append(backend_state.url)
             try:
@@ -476,7 +478,7 @@ async def health():
     
     return {
         "ok": all_healthy,
-        "strategy": "round_robin_with_least_connections",
+        "strategy": "capacity_score_based_load_balancing",
         "backends": backends_info,
         "config": {
             "error_threshold": ERROR_THRESHOLD,
