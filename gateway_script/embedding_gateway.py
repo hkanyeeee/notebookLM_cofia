@@ -227,7 +227,7 @@ def init_backend_states():
         weight = BACKEND_WEIGHTS.get(url, 1.0)
         backend_states[url] = BackendState(
             url=url,
-            semaphore=asyncio.Semaphore(1),  # 每个后端最多1个并发请求
+            semaphore=asyncio.Semaphore(5),  # 每个后端最多5个并发请求
             weight=float(weight),
             last_used_time=now + idx * 0.001,
         )
