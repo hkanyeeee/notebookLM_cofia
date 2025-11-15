@@ -277,6 +277,18 @@ def _backend_available_capacity(state: BackendState) -> int:
     return max(0, state.max_concurrency - state.inflight_requests)
 
 
+def _backend_capacity_ratio(state: BackendState) -> float:
+    """剩余容量占最大并发的比例"""
+    max_concurrency = state.max_concurrency if state.max_concurrency > 0 else 1
+    return _backend_available_capacity(state) / max_concurrency
+
+
+def _backend_relative_capacity_score(state: BackendState) -> float:
+    """结合权重与容量比例的优先级得分"""
+    weight = state.weight if state.weight > 0 else 1.0
+    return _backend_capacity_ratio(state) * weight
+
+
 async def pick_backend() -> Optional[BackendState]:
     """
     选择一个可用的后端
@@ -297,13 +309,16 @@ async def pick_backend() -> Optional[BackendState]:
     ]
     
     if idle_healthy_backends:
-        # 使用权重优先选择：按 weight 降序，然后按最久未使用、响应时间作为次级排序
-        # 更高的 weight（算力/优先级）会被优先选中
-        sorted_backends = sorted(
+        # 结合剩余容量比例与权重进行选择：容量越充裕且权重越高，得分越高
+        return max(
             idle_healthy_backends,
-            key=lambda b: (-b.weight, b.last_used_time if b.last_used_time > 0 else 0.0, b.avg_response_time())
+            key=lambda b: (
+                _backend_relative_capacity_score(b),
+                b.weight if b.weight > 0 else 0.0,
+                -(b.last_used_time if b.last_used_time > 0 else 0.0),
+                -b.avg_response_time(),
+            ),
         )
-        return sorted_backends[0]
     
     # 第三步：所有后端都忙碌，选择等待队列最短的健康后端
     healthy_backends = [
