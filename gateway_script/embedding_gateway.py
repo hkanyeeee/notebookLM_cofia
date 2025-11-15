@@ -118,8 +118,9 @@ class BackendStatus(Enum):
 class BackendState:
     """后端状态管理"""
     url: str
-    semaphore: asyncio.Semaphore  # 并发控制（限制为1）
+    semaphore: asyncio.Semaphore
     weight: float = 1.0
+    max_concurrency: int = 1
     status: BackendStatus = BackendStatus.HEALTHY
     error_count: int = 0  # 连续错误计数
     last_error_time: float = 0.0  # 最后一次错误时间
@@ -128,6 +129,7 @@ class BackendState:
     total_response_time: float = 0.0  # 累计响应时间
     last_used_time: float = field(default_factory=lambda: time.time())  # 最后使用时间（用于轮询）
     waiting_count: int = 0  # 自定义等待队列长度
+    inflight_requests: int = 0  # 当前正在处理的请求数
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     
     async def mark_success(self, response_time: float = 0.0, completed_at: Optional[float] = None):
@@ -197,7 +199,10 @@ async def lifespan(app: FastAPI):
     init_backend_states()
     print(f"Initialized {len(backend_states)} backend(s)")
     for url, state in backend_states.items():
-        print(f"  - {url}: {state.status.value} (weight={state.weight})")
+        print(
+            f"  - {url}: {state.status.value} "
+            f"(weight={state.weight}, max_concurrency={state.max_concurrency})"
+        )
     yield
     # 关闭时清理资源
     await client.aclose()
@@ -225,17 +230,19 @@ def init_backend_states():
     for idx, url in enumerate(EMBEDDING_BACKENDS):
         # 从 BACKEND_WEIGHTS 中读取权重（默认为 1.0）
         weight = BACKEND_WEIGHTS.get(url, 1.0)
+        max_concurrency = max(1, int(weight + 0.5))
         backend_states[url] = BackendState(
             url=url,
-            semaphore=asyncio.Semaphore(5),  # 每个后端最多5个并发请求
+            semaphore=asyncio.Semaphore(max_concurrency),
             weight=float(weight),
+            max_concurrency=int(max_concurrency),
             last_used_time=now + idx * 0.001,
         )
 
 
 @asynccontextmanager
 async def _acquire_backend_slot(state: BackendState):
-    """自定义上下文管理器，跟踪 semaphore 等待队列，避免访问私有属性"""
+    """自定义上下文管理器，跟踪 semaphore 等待/执行状态"""
     waiting_tracked = False
     acquired = False
     try:
@@ -246,6 +253,8 @@ async def _acquire_backend_slot(state: BackendState):
         try:
             await state.semaphore.acquire()
             acquired = True
+            async with state._lock:
+                state.inflight_requests += 1
         finally:
             if waiting_tracked:
                 async with state._lock:
@@ -254,6 +263,8 @@ async def _acquire_backend_slot(state: BackendState):
     finally:
         if acquired:
             state.semaphore.release()
+            async with state._lock:
+                state.inflight_requests = max(0, state.inflight_requests - 1)
 
 
 def _semaphore_waiting_queue_length(state: BackendState) -> int:
@@ -261,9 +272,9 @@ def _semaphore_waiting_queue_length(state: BackendState) -> int:
     return max(0, state.waiting_count)
 
 
-def _semaphore_available_count(sem: asyncio.Semaphore) -> int:
-    """安全获取 semaphore 可用许可数（并发限制为1时可通过 locked 状态推断）"""
-    return 0 if sem.locked() else 1
+def _backend_available_capacity(state: BackendState) -> int:
+    """根据最大并发与当前执行数计算剩余容量"""
+    return max(0, state.max_concurrency - state.inflight_requests)
 
 
 async def pick_backend() -> Optional[BackendState]:
@@ -282,7 +293,7 @@ async def pick_backend() -> Optional[BackendState]:
     # 第二步：找到健康且空闲的后端
     idle_healthy_backends = [
         b for b in backend_states.values()
-        if b.status == BackendStatus.HEALTHY and not b.semaphore.locked()
+        if b.status == BackendStatus.HEALTHY and _backend_available_capacity(b) > 0
     ]
     
     if idle_healthy_backends:
@@ -429,9 +440,10 @@ async def health():
             "status": state.status.value,
             "error_count": state.error_count,
             "is_busy": state.semaphore.locked(),
-            "available_capacity": _semaphore_available_count(state.semaphore),
+            "available_capacity": _backend_available_capacity(state),
             "waiting_queue_length": _semaphore_waiting_queue_length(state),
             "weight": state.weight,
+            "max_concurrency": state.max_concurrency,
             "total_requests": state.total_requests,
             "success_requests": state.success_requests,
             "success_rate": round(state.success_requests / state.total_requests * 100, 2) if state.total_requests > 0 else 0,
@@ -454,7 +466,8 @@ async def health():
         "config": {
             "error_threshold": ERROR_THRESHOLD,
             "recovery_time_s": RECOVERY_TIME_S,
-            "max_concurrent_per_backend": 1
+            "concurrency_strategy": "round(weight)",
+            "total_configured_concurrency": sum(state.max_concurrency for state in backend_states.values())
         }
     }
 
