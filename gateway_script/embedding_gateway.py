@@ -67,7 +67,7 @@ TIMEOUT_S = _get_env_float("EMBEDDING_TIMEOUT", 300.0, min_value=1.0)
 # 优先按字面 URL 匹配；如果需要更灵活的匹配，可改为基于 host:port 或正则
 _RAW_BACKEND_WEIGHTS = {
     "http://192.168.31.231:7998/v1": 4.064,
-    "http://192.168.31.98:7998/v1": 2.547,
+    "http://192.168.31.98:7998/v1": 2.616,
     "http://host.docker.internal:7988/v1": 1.0,
 }
 BACKEND_WEIGHTS = {k.strip(): float(v) for k, v in _RAW_BACKEND_WEIGHTS.items()}
