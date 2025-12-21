@@ -1,6 +1,7 @@
 import os
 import asyncio
 import time
+import json
 from typing import List, Dict, Optional
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -60,6 +61,14 @@ DEFAULT_LLM_BACKENDS = "http://192.168.31.231:1234/v1,http://192.168.31.98:1234/
 LLM_BACKENDS: List[str] = _split_backends(
     os.getenv("LLM_BACKENDS", DEFAULT_LLM_BACKENDS)
 )
+
+# 允许针对某个后端的模型名进行映射（直接在脚本里配置）：
+# 例如：{"http://192.168.31.231:1234/v1": {"alias-model": "real-model"}}
+MODEL_NAME_MAP: Dict[str, Dict[str, str]] = {
+    # "http://192.168.31.231:1234/v1": {"alias-model": "real-model"},
+    # "*": {"alias-model": "real-model"},  # 全局默认映射
+    "http://192.168.31.98:1234/v1": {"qwen3-30b-a3b-thinking-2507-mlx": "qwen3-30b-a3b-thinking-2507"},
+}
 
 # 可配置的后端权重（按算力/优先级），比值示例：1.35:1，表示 192.168.31.231 更快
 _RAW_BACKEND_WEIGHTS = {
@@ -289,6 +298,38 @@ def _build_upstream_url(base: str, path: str, query: str) -> str:
     return url
 
 
+def _resolve_model_alias(backend_base: str, model: str) -> Optional[str]:
+    backend_map = MODEL_NAME_MAP.get(backend_base)
+    if backend_map and model in backend_map:
+        return backend_map[model]
+    default_map = MODEL_NAME_MAP.get("*") or MODEL_NAME_MAP.get("default")
+    if default_map and model in default_map:
+        return default_map[model]
+    return None
+
+
+def _maybe_map_model(backend_base: str, body: bytes, headers: dict) -> bytes:
+    if not MODEL_NAME_MAP or not body:
+        return body
+    content_type = headers.get("content-type", "")
+    if "application/json" not in content_type.lower():
+        return body
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return body
+    if not isinstance(payload, dict):
+        return body
+    model = payload.get("model")
+    if not model:
+        return body
+    mapped_model = _resolve_model_alias(backend_base, str(model))
+    if not mapped_model or mapped_model == model:
+        return body
+    payload["model"] = mapped_model
+    return json.dumps(payload).encode("utf-8")
+
+
 async def _record_backend_result(
     status_code: int,
     backend_state: Optional[BackendState],
@@ -342,6 +383,7 @@ async def _forward(req: Request, backend_base: str) -> Response:
     raw_query = req.url.query
     body = await req.body()
     headers = _filter_request_headers(dict(req.headers))
+    body = _maybe_map_model(backend_base, body, headers)
 
     upstream_url = _build_upstream_url(backend_base, raw_path, raw_query)
     backend_state = backend_states.get(backend_base)
