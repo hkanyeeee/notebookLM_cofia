@@ -67,6 +67,9 @@ LLM_BACKENDS: List[str] = _split_backends(
 MODEL_NAME_MAP: Dict[str, Dict[str, str]] = {
     # "http://192.168.31.231:1234/v1": {"alias-model": "real-model"},
     # "*": {"alias-model": "real-model"},  # 全局默认映射
+    "http://192.168.31.231:1234/v1": {
+        "qwen/qwen3-vl-30b": "qwen3-vl-30b-a3b-instruct",
+    },
     "http://192.168.31.98:1234/v1": {
         "qwen/qwen3-vl-30b": "unsloth/qwen3-vl-30b-a3b-instruct",
         "qwen3-30b-a3b-thinking-2507-mlx": "qwen3-30b-a3b-thinking-2507",
