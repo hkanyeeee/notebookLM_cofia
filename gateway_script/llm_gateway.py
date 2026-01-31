@@ -55,7 +55,7 @@ def _is_client_error(status_code: int) -> bool:
     return 400 <= status_code < 500
 
 
-DEFAULT_LLM_BACKENDS = "http://192.168.31.231:1234/v1,http://192.168.31.98:1234/v1,http://192.168.31.60:1234/v1"
+DEFAULT_LLM_BACKENDS = "http://192.168.31.231:1234/v1,http://192.168.31.98:1234/v1"
 
 # 后端实例列表（逗号分隔），均为 OpenAI 风格基址（通常以 /v1 结尾）
 LLM_BACKENDS: List[str] = _split_backends(
@@ -76,9 +76,6 @@ MODEL_NAME_MAP: Dict[str, Dict[str, str]] = {
         "qwen/qwen3-coder-30b": "unsloth/qwen3-coder-30b-a3b-instruct",
         "qwen/qwen3-30b-a3b-2507": "unsloth/qwen3-30b-a3b-instruct-2507"
     },
-    "http://192.168.31.60:1234/v1": {
-        "qwen/qwen3-vl-30b": "qwen/qwen3-vl-8b",
-    },
     "http://192.168.31.174:1234/v1": {
         "qwen/qwen3-vl-30b": "qwen/qwen3-vl-8b",
     },
@@ -88,7 +85,6 @@ MODEL_NAME_MAP: Dict[str, Dict[str, str]] = {
 _RAW_BACKEND_WEIGHTS = {
     "http://192.168.31.231:1234/v1": 2.0,
     "http://192.168.31.98:1234/v1": 1.0,
-    "http://192.168.31.60:1234/v1": 1.0,
     # "http://192.168.31.174:1234/v1": 1.0,
 }
 BACKEND_WEIGHTS = {normalize_backend_url(k): float(v) for k, v in _RAW_BACKEND_WEIGHTS.items()}
