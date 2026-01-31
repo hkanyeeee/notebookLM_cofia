@@ -30,7 +30,7 @@ services:
       - "7995:7995"
     command: ["python", "llm_gateway.py"]
     environment:
-      - LLM_BACKENDS=${LLM_BACKENDS:-http://192.168.31.231:1234/v1,http://192.168.31.60:1234/v1,http://192.168.31.98:1234/v1}
+      - LLM_BACKENDS=${LLM_BACKENDS:-http://192.168.31.231:1234/v1,http://192.168.31.98:1234/v1,http://192.168.31.60:1234/v1}
       - LLM_GATEWAY_HOST=0.0.0.0
       - LLM_GATEWAY_PORT=7995
       - LLM_TIMEOUT=${LLM_TIMEOUT:-600}
