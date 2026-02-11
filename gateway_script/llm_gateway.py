@@ -88,7 +88,7 @@ MODEL_NAME_MAP: Dict[str, Dict[str, str]] = {
 _RAW_BACKEND_WEIGHTS = {
     "http://192.168.31.231:1234/v1": 1.7,
     "http://192.168.31.98:1234/v1": 1.0,
-    "http://192.168.31.60:1234/v1": 1.7,
+    "http://192.168.31.60:1234/v1": 1.6,
     # "http://192.168.31.174:1234/v1": 1.0,
 }
 BACKEND_WEIGHTS = {normalize_backend_url(k): float(v) for k, v in _RAW_BACKEND_WEIGHTS.items()}
